@@ -1,0 +1,17 @@
+{
+  "train_batch_size": 32,
+  "gradient_accumulation_steps": 1,
+  "fp16": {
+    "enabled": false
+  },
+  "zero_optimization": {
+    "stage": 1
+  },
+  "checkpoint": {
+    "tag_validation_enabled": false,
+    "partition_activations": false,
+    "save_optimizer_states": false,
+    "save_fp16_master_weights": false
+  }
+}
+

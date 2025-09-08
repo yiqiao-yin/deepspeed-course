@@ -1,0 +1,5567 @@
+{
+  "messages": [
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $42 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 42,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $42 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-31"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-31."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-31. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-20."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-20"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-20. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-20."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $52 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 52,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $52 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $91 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 91,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $91 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $32 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 32,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $32 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-21."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-21"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-21. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-21."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-31"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-31."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-31. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $97 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 97,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $97 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $32 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 32,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $32 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $36 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 36,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $36 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-30. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $91 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 91,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $91 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-26."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-26"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-26. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-26."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-19."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-19"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-19. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-19."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-28."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-28"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-28. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-28."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-26."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-26"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-26. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-26."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $97 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 97,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $97 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $62 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 62,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $62 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $99 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 99,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $99 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $58 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 58,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $58 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-21."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-21"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-21. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-21."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-30. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $70 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 70,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $70 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $96 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 96,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $96 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $32 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 32,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $32 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-25."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-25"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-25. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-25."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $48 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 48,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $48 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-31"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-31."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-31. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $48 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 48,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $48 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $81 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 81,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $81 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $87 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 87,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $87 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $69 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 69,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $69 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-20."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-20"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-20. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-20."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $70 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 70,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $70 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $35 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 35,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $35 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-22."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-22"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-22. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-22."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $33 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 33,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $33 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-20."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-20"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-20. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-20."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-31. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Monday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-29. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-19."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-19"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-19. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-19."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-22."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-22"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-22. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-22."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-26."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-26"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-26. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-26."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $100 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 100,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $100 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-25."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-25"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-25. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-25."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $45 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 45,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $45 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-22."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-22"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-22. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-22."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $77 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 77,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $77 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-22."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-22"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-22. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-22."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-30. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $58 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 58,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $58 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-31. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $78 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 78,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $78 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-20."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-20"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-20. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-20."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $77 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 77,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $77 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $38 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 38,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $38 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $74 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 74,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $74 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $72 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 72,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $72 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $67 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 67,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $67 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-31"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-31."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-31. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $61 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 61,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $61 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-25."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-25"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-25. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-25."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-31"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-31."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-31. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Monday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-29. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $62 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 62,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $62 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $50 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 50,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $50 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Wednesday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-31. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-27."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-27"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-27. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-27."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-25."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-25"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-25. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-25."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $100 on 2025-07-28."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 100,
+                "paidDate": "2025-07-28"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $100 on 2025-07-28. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $100 on 2025-07-28."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $82 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 82,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $82 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-26."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-26"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-26. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-26."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-24."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-24"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-24. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-24."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-21."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-21"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-21. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-21."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-28."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-28"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-28. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-28."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-25."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-25"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-25. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-25."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Monday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-29. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-22."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-22"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-22. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-22."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $44 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 44,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $44 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $81 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 81,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $81 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-21."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-21"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-21. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-21."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $25 next Monday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 25,
+                "promiseDate": "2025-07-29"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $25 by 2025-07-29."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $25 by 2025-07-29. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $50 on 2025-07-28."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 50,
+                "paidDate": "2025-07-28"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $50 on 2025-07-28. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $50 on 2025-07-28."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $78 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 78,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $78 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-28."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-28"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-28. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-28."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I already paid $75 on 2025-07-19."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Already_Paid",
+              "arguments": {
+                "paidAmount": 75,
+                "paidDate": "2025-07-19"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Already_Paid",
+        "content": "Thank you for letting us know you already made a payment of $75 on 2025-07-19. We will update your records accordingly."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks for the update! I've noted your payment of $75 on 2025-07-19."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $99 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 99,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $99 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $10 next Monday."
+      },
+      {
+        "role": "assistant",
+        "content": "I understand you'd like to promise $10 for 2025-07-29. However, the minimum amount for a promise to pay is $25. Would you like to promise $25 for that date?"
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can\u2019t pay anything this month. I lost my job."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Hardship",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Hardship",
+        "content": "You\u2019ve requested to claim hardship."
+      },
+      {
+        "role": "assistant",
+        "content": "I'm sorry to hear that. I\u2019ve noted that you're experiencing financial hardship. An agent will follow up with options that may help."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $55 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 55,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $55 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can promise to pay $50 next Tuesday."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Promise_Payment",
+              "arguments": {
+                "promiseAmount": 50,
+                "promiseDate": "2025-07-30"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Promise_Payment",
+        "content": "Thank you, I\u2019ve noted on your account you\u2019ll make a payment of $50 by 2025-07-30."
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you, I\u2019ve noted your promise to pay $50 by 2025-07-30. Please make sure to keep this promise."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I can pay $31 today using my card."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Pay_Now",
+              "arguments": {
+                "payNowAmount": 31,
+                "paymentMethod": "voice_call"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Pay_Now",
+        "content": "Thank you for confirming that you'll make a payment today."
+      },
+      {
+        "role": "assistant",
+        "content": "Thanks! I've noted your intent to pay $31 today. Please stay on the line to complete the payment."
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "I want to talk to someone."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "Speak_With_An_Agent",
+              "arguments": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "Speak_With_An_Agent",
+        "content": "Connecting you to an agent now."
+      },
+      {
+        "role": "assistant",
+        "content": "Please hold while I connect you with an agent."
+      }
+    ]
+  ]
+}
