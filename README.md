@@ -1,5 +1,8 @@
 # DeepSpeed Course 🚀
 
+**Author:** Yiqiao Yin  
+[LinkedIn](https://www.linkedin.com/in/yiqiaoyin/) | [YouTube](https://youtube.com/YiqiaoYin/)
+
 ## Situation Today 🐢
 
 Training and inference for deep learning models are often slow and resource-intensive, especially as model sizes and dataset complexity grow. This bottleneck impacts productivity and limits experimentation, making it difficult to iterate quickly or deploy models efficiently.
