@@ -31,3 +31,31 @@ deepspeed-course/
 ```
 
 Explore each folder for step-by-step guides and code samples to accelerate your deep learning projects with DeepSpeed!
+
+### On Runpod
+
+For language models or vision-language models, it is recommended to use the Runpod image: **Runpod Pytorch 2.8.0**
+
+`runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04`
+
+**Pricing Summary**
+- GPU Cost: $30.32 / hr
+- Running Pod Disk Cost: $0.011 / hr
+- Stopped Pod Disk Cost: $0.014 / hr
+
+**Pod Summary**
+- 8x H200 SXM (1128 GB VRAM)
+- 2008 GB RAM • 224 vCPU
+- Total Disk: 80 GB
+
+For single GPU usage with long training times, it is recommended to use the following Runpod configuration:
+
+**Pricing Summary**
+- GPU Cost: $4 / hr
+- Running Pod Disk Cost: $0.011 / hr
+- Stopped Pod Disk Cost: $0.014 / hr
+
+**Pod Summary**
+- 10x A40 (480 GB VRAM)
+- 500 GB RAM • 90 vCPU
+- Total Disk: 80 GB
