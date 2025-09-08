@@ -22,8 +22,8 @@ deepspeed-course/
 ├── 01_basic_neuralnet
 ├── 02_basic_convnet
 ├── 02_basic_convnet_cifar10_examples
-├── 03_basic_rnn
-├── 04_transferlearning
+├── 03_basic_rnn (tbd)
+├── 04_transferlearning (tbd)
 ├── 05_huggingface
 ├── 05_huggingface_trl
 ├── 06_huggingface_grpo
