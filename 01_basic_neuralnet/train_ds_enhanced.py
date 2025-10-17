@@ -8,6 +8,12 @@ Improvements over train_ds.py:
 5. Early stopping with patience
 6. Gradient norm tracking
 7. More frequent parameter monitoring
+8. FP32 precision (FP16 causes numerical instability for simple problems)
+
+IMPORTANT: This script uses ds_config_fp32.json instead of ds_config.json.
+For simple linear regression, FP16's limited precision range can cause gradient
+underflow, preventing any parameter updates. FP32 provides the numerical stability
+needed for small gradients typical in simple problems like y = 2x + 1.
 """
 
 import torch
@@ -141,10 +147,11 @@ def main() -> None:
     print(f"   - Bias error from true: {abs(init_bias - TRUE_BIAS):.6f}")
 
     print(f"\n⚙️  Initializing DeepSpeed...")
+    print(f"   - Using FP32 precision (FP16 causes numerical instability for simple linear regression)")
     model_engine, optimizer, _, _ = deepspeed.initialize(
         model=model,
         model_parameters=model.parameters(),
-        config="ds_config.json"
+        config="ds_config_fp32.json"
     )
     print(f"✅ DeepSpeed initialized successfully")
 
