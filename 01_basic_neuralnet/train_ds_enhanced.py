@@ -62,17 +62,19 @@ def get_data_loader(batch_size: int) -> DataLoader:
     x_data = torch.randn(1000, 1)
     y_data = 2 * x_data + 1
     dataset = TensorDataset(x_data, y_data)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    # Don't shuffle for more stable gradients in simple linear regression
+    return DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 
-def get_lr_schedule(epoch: int, initial_lr: float = 1e-3, warmup_epochs: int = 5) -> float:
+def get_lr_schedule(epoch: int, initial_lr: float = 0.01, warmup_epochs: int = 10, total_epochs: int = 100) -> float:
     """
-    Learning rate schedule with warmup and cosine decay.
+    Learning rate schedule with warmup and slow cosine decay.
 
     Args:
         epoch: Current epoch
-        initial_lr: Initial learning rate
-        warmup_epochs: Number of warmup epochs
+        initial_lr: Initial learning rate (higher for faster convergence)
+        warmup_epochs: Number of warmup epochs (more warmup for stability)
+        total_epochs: Total training epochs
 
     Returns:
         Adjusted learning rate
@@ -81,8 +83,8 @@ def get_lr_schedule(epoch: int, initial_lr: float = 1e-3, warmup_epochs: int = 5
         # Linear warmup
         return initial_lr * (epoch + 1) / warmup_epochs
     else:
-        # Cosine decay after warmup
-        progress = (epoch - warmup_epochs) / (30 - warmup_epochs)
+        # Slow cosine decay after warmup (keeps LR higher for longer)
+        progress = (epoch - warmup_epochs) / (total_epochs - warmup_epochs)
         return initial_lr * 0.5 * (1 + torch.cos(torch.tensor(progress * 3.14159)).item())
 
 
@@ -95,12 +97,15 @@ def main() -> None:
     print("=" * 80)
     print("\n✨ Enhancements in this version:")
     print("   1. Xavier/Glorot weight initialization")
-    print("   2. Learning rate warmup (5 epochs)")
-    print("   3. Cosine learning rate decay")
-    print("   4. Gradient clipping with monitoring")
+    print("   2. Learning rate warmup (10 epochs)")
+    print("   3. Slow cosine learning rate decay")
+    print("   4. Gradient norm monitoring")
     print("   5. Loss plateau detection")
     print("   6. Early stopping with patience")
     print("   7. More frequent progress updates")
+    print("   8. Higher learning rate (0.01) for faster convergence")
+    print("   9. Longer training (100 epochs) for better convergence")
+    print("  10. Non-shuffled data for stable gradients")
 
     # Check for Weights & Biases configuration
     wandb_api_key = os.environ.get("WANDB_API_KEY")
@@ -162,10 +167,10 @@ def main() -> None:
     print(f"   - Device: {device}")
     print(f"   - Batch size: {model_engine.train_micro_batch_size_per_gpu()}")
     print(f"   - Total batches per epoch: {len(data_loader)}")
-    print(f"   - Number of epochs: 30")
-    print(f"   - Initial learning rate: 1e-3")
-    print(f"   - Warmup epochs: 5")
-    print(f"   - LR schedule: Warmup → Cosine decay")
+    print(f"   - Number of epochs: 100")
+    print(f"   - Initial learning rate: 0.01")
+    print(f"   - Warmup epochs: 10")
+    print(f"   - LR schedule: Warmup → Slow Cosine decay")
 
     model_dtype = next(model_engine.module.parameters()).dtype
     print(f"   - Model dtype: {model_dtype}")
@@ -180,12 +185,12 @@ def main() -> None:
                 "dataset": "synthetic",
                 "true_weight": TRUE_WEIGHT,
                 "true_bias": TRUE_BIAS,
-                "epochs": 30,
+                "epochs": 100,
                 "batch_size": model_engine.train_micro_batch_size_per_gpu(),
                 "optimizer": "Adam",
-                "initial_lr": 1e-3,
-                "warmup_epochs": 5,
-                "lr_schedule": "warmup_cosine",
+                "initial_lr": 0.01,
+                "warmup_epochs": 10,
+                "lr_schedule": "warmup_slow_cosine",
                 "initialization": "xavier",
                 "framework": "DeepSpeed",
                 "enhancements": [
@@ -208,22 +213,23 @@ def main() -> None:
     epoch_losses = []
     best_loss = float('inf')
     patience_counter = 0
-    patience_limit = 10
-    min_improvement = 1e-6
+    patience_limit = 20  # Increased patience for 100 epochs
+    min_improvement = 1e-7  # More sensitive to small improvements
+    total_epochs = 100
 
-    for epoch in range(30):
+    for epoch in range(total_epochs):
         epoch_loss_sum = 0.0
         num_batches = 0
         epoch_grad_norms = []
 
         # Get learning rate for this epoch
-        current_lr = get_lr_schedule(epoch)
+        current_lr = get_lr_schedule(epoch, initial_lr=0.01, warmup_epochs=10, total_epochs=100)
 
         # Update optimizer learning rate
         for param_group in optimizer.param_groups:
             param_group['lr'] = current_lr
 
-        print(f"\n📚 Epoch {epoch:2d}/30 - Learning Rate: {current_lr:.6e}")
+        print(f"\n📚 Epoch {epoch:3d}/100 - Learning Rate: {current_lr:.6e}")
 
         for step, (x_batch, y_batch) in enumerate(data_loader):
             x_batch = x_batch.to(device).to(model_dtype)
@@ -273,22 +279,25 @@ def main() -> None:
             weight_error = abs(current_weight - TRUE_WEIGHT)
             bias_error = abs(current_bias - TRUE_BIAS)
 
-        # Print epoch summary
-        print(f"\n📈 Epoch {epoch:2d} Summary:")
-        print(f"   - Avg Loss: {avg_epoch_loss:.6f}")
-        print(f"   - Avg Grad Norm: {avg_grad_norm:.6f}")
-        print(f"   - Learning Rate: {current_lr:.6e}")
-        print(f"   - Parameters: W={current_weight:.6f}, b={current_bias:.6f}")
-        print(f"   - Errors: ΔW={weight_error:.6f}, Δb={bias_error:.6f}")
+        # Print epoch summary every 10 epochs or at the end
+        if epoch % 10 == 0 or epoch == total_epochs - 1:
+            print(f"\n📈 Epoch {epoch:3d} Summary:")
+            print(f"   - Avg Loss: {avg_epoch_loss:.6f}")
+            print(f"   - Avg Grad Norm: {avg_grad_norm:.6f}")
+            print(f"   - Learning Rate: {current_lr:.6e}")
+            print(f"   - Parameters: W={current_weight:.6f}, b={current_bias:.6f}")
+            print(f"   - Errors: ΔW={weight_error:.6f}, Δb={bias_error:.6f}")
 
         # Check for improvement
         if avg_epoch_loss < best_loss - min_improvement:
             best_loss = avg_epoch_loss
             patience_counter = 0
-            print(f"   ✅ New best loss! Patience reset.")
+            if epoch % 10 == 0 or epoch == total_epochs - 1:
+                print(f"   ✅ New best loss! Patience reset.")
         else:
             patience_counter += 1
-            print(f"   ⏳ No improvement. Patience: {patience_counter}/{patience_limit}")
+            if epoch % 10 == 0 or epoch == total_epochs - 1:
+                print(f"   ⏳ No improvement. Patience: {patience_counter}/{patience_limit}")
 
         # Log epoch metrics to W&B
         if use_wandb:
