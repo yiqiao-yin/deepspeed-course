@@ -9,6 +9,9 @@ Train a simple linear regression model using DeepSpeed for distributed training 
 - ⚡ **DeepSpeed Integration**: Demonstrates core DeepSpeed initialization and training loop
 - 🔧 **FP16 Training**: Mixed precision training for faster computation
 - 💻 **Multi-GPU Ready**: Supports distributed training across multiple GPUs
+- 📈 **Comprehensive Logging**: Detailed training progress with parameter convergence tracking
+- 🎯 **Ground Truth Validation**: Automatic comparison of learned parameters vs. true values
+- 🔄 **Optional W&B Tracking**: Seamless Weights & Biases integration (never crashes if not configured)
 
 ## Quick Start on RunPod
 
@@ -27,6 +30,9 @@ cd basic-neuralnet-ds
 # Add core dependencies
 uv add "torch>=2.0.0"
 uv add "deepspeed>=0.12.0"
+
+# Optional: Weights & Biases for experiment tracking
+uv add "wandb"
 
 # Development dependencies
 uv add --dev "black" "isort" "flake8"
@@ -69,23 +75,48 @@ Create `ds_config.json`:
 
 Copy your `train_ds.py` script to the project directory.
 
-## Running the Training
+### 5. (Optional) Configure Weights & Biases
 
-### Single GPU Training
+If you want to track experiments with W&B:
 
 ```bash
-uv run deepspeed --num_gpus=1 train_ds.py
+# Get your API key from https://wandb.ai/authorize
+export WANDB_API_KEY="your_api_key_here"
 ```
 
-### Multi-GPU Training with DeepSpeed
+**Note**: The script will work perfectly fine without W&B configured. It will simply show a helpful message and continue training.
+
+## Running the Training
+
+### Basic Training (without W&B)
 
 ```bash
-# For 2 GPUs
+# Single GPU
+uv run deepspeed --num_gpus=1 train_ds.py
+
+# Multi-GPU (2 GPUs)
 uv run deepspeed --num_gpus=2 train_ds.py
 
-# For 4 GPUs
+# Multi-GPU (4 GPUs)
 uv run deepspeed --num_gpus=4 train_ds.py
+```
 
+### Training with Weights & Biases Tracking
+
+```bash
+# Set your W&B API key
+export WANDB_API_KEY="your_api_key_here"
+
+# Run training (single GPU)
+uv run deepspeed --num_gpus=1 train_ds.py
+
+# Or multi-GPU
+uv run deepspeed --num_gpus=4 train_ds.py
+```
+
+### Multi-Node Training
+
+```bash
 # For multi-node training
 uv run deepspeed --num_gpus=8 --num_nodes=2 --node_rank=0 --master_addr="10.0.0.1" train_ds.py
 ```
@@ -148,19 +179,142 @@ The training loop uses DeepSpeed's `backward()` and `step()` methods instead of 
 
 ## Monitoring Training
 
+### Training Output
+
+The script provides comprehensive logging with detailed progress information:
+
+```
+================================================================================
+🚀 Starting DeepSpeed Linear Regression Training
+================================================================================
+
+✅ Weights & Biases: Enabled
+   - API key detected and configured
+
+📊 Dataset Information:
+   - Synthetic data: y = 2.0x + 1.0
+   - Training samples: 1000
+   - True Weight (W): 2.0
+   - True Bias (b): 1.0
+
+🎲 Initial Model Parameters (random):
+   - Weight: 0.456789
+   - Bias: -0.123456
+
+⚙️  Initializing DeepSpeed...
+✅ DeepSpeed initialized successfully
+
+💻 Training Configuration:
+   - Device: cuda
+   - Batch size: 32
+   - Total batches per epoch: 32
+   - Number of epochs: 30
+   - Model dtype: torch.float16
+
+📈 W&B Run initialized: simple-linear-model
+   - Project: deepspeed-linear-regression
+   - View at: https://wandb.ai/your-username/deepspeed-linear-regression/runs/abc123
+
+================================================================================
+🏋️  Training Started...
+================================================================================
+
+Epoch  0/30 | Step   0 | Loss: 5.234567
+Epoch  0/30 | Step  10 | Loss: 2.345678
+Epoch  0/30 | Step  20 | Loss: 1.234567
+Epoch  0/30 | Step  30 | Loss: 0.654321
+
+📈 Epoch  0 Summary: Avg Loss = 1.567890
+   Current Parameters: W = 1.678901, b = 0.789012
+   Parameter Errors: ΔW = 0.321099, Δb = 0.210988
+
+...
+
+📈 Epoch 29 Summary: Avg Loss = 0.000123
+   Current Parameters: W = 1.999876, b = 1.000234
+   Parameter Errors: ΔW = 0.000124, Δb = 0.000234
+
+================================================================================
+✅ Training Completed!
+================================================================================
+
+📊 Training Summary:
+   - Initial Loss: 1.567890
+   - Final Loss: 0.000123
+   - Loss Reduction: 99.99%
+
+🎯 Final Model Parameters:
+   - Learned Weight: 1.999876
+   - Learned Bias: 1.000234
+
+🎓 Ground Truth Parameters:
+   - True Weight: 2.000000
+   - True Bias: 1.000000
+
+📏 Parameter Estimation Errors:
+   - Weight Error: 0.000124 (0.01%)
+   - Bias Error: 0.000234 (0.02%)
+
+🏆 Model Quality Assessment:
+   ✨ Excellent! Parameters match ground truth within 1% error
+
+📊 W&B Summary logged
+   - View results at: https://wandb.ai/your-username/deepspeed-linear-regression/runs/abc123
+   - W&B run finished successfully
+
+================================================================================
+🎉 Training Script Finished Successfully!
+================================================================================
+```
+
+### GPU Monitoring
+
 Watch GPU usage during training:
 
 ```bash
 watch -n 0.1 nvidia-smi
 ```
 
-Expected output shows decreasing loss values:
-```
-Epoch 0 | Step 0 | Loss: 1.234567
-Epoch 0 | Step 10 | Loss: 0.654321
-Epoch 1 | Step 0 | Loss: 0.234567
-...
-```
+### Training Metrics Tracked
+
+The script automatically tracks and displays:
+
+**During Training:**
+- Step-by-step loss (every 10 steps)
+- Epoch summaries (every 5 epochs)
+- Current parameter estimates
+- Parameter errors vs. ground truth
+
+**Final Summary:**
+- Total loss reduction
+- Learned parameters vs. true parameters
+- Absolute and percentage errors
+- Quality assessment (Excellent/Good/Fair/Poor)
+
+### Weights & Biases Dashboard
+
+When W&B is enabled, you can view:
+
+**Real-time Metrics:**
+- `step_loss`: Loss at each logged step
+- `epoch_avg_loss`: Average loss per epoch
+- `learned_weight`: Weight parameter over time
+- `learned_bias`: Bias parameter over time
+- `weight_error`: Absolute error in weight
+- `bias_error`: Absolute error in bias
+- `weight_error_pct`: Percentage error in weight
+- `bias_error_pct`: Percentage error in bias
+
+**Final Summary:**
+- Loss reduction percentage
+- Final learned parameters
+- Final parameter errors
+- Quality score
+
+**Project Info:**
+- Project: `deepspeed-linear-regression`
+- Run name: `simple-linear-model`
+- Access at: https://wandb.ai/your-username/deepspeed-linear-regression
 
 ## Model Usage After Training
 
@@ -225,6 +379,48 @@ export NCCL_DEBUG=INFO
 # Test with single GPU first
 uv run deepspeed --num_gpus=1 train_ds.py
 ```
+
+#### Weights & Biases Issues
+
+**W&B not installed:**
+```bash
+# Install wandb
+uv add "wandb"
+
+# Or with pip
+pip install wandb
+```
+
+**W&B login issues:**
+```bash
+# Get your API key from https://wandb.ai/authorize
+export WANDB_API_KEY="your_api_key_here"
+
+# Verify it's set
+echo $WANDB_API_KEY
+
+# Or login interactively
+wandb login
+```
+
+**Script works without W&B:**
+The script is designed to never crash if W&B is not configured. You'll see one of these messages:
+
+```
+📊 Weights & Biases: Not installed
+   - To enable tracking: pip install wandb
+   - Then: export WANDB_API_KEY=your_api_key
+```
+
+Or:
+
+```
+📊 Weights & Biases: Not configured
+   - To enable: export WANDB_API_KEY=your_api_key
+   - To install: pip install wandb
+```
+
+Training will continue normally without W&B tracking.
 
 ### Performance Optimization
 
