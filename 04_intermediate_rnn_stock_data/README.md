@@ -15,6 +15,94 @@ This project trains a SimpleRNN model to predict stock price deltas (price - mov
 5. **Visualizes Results**: Generates time series, distribution, and prediction plots
 6. **Tracks Experiments**: Logs all metrics and visualizations to Weights & Biases
 
+## Prerequisites
+
+- CUDA-capable GPU(s) recommended (stock data training benefits from GPU acceleration)
+- Python 3.8+
+- Linux/macOS (Windows with WSL2)
+- Internet connection (required for downloading stock data via yfinance)
+
+## Quick Start
+
+### 1. Install uv (Python Package Manager)
+
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or using pip
+pip install uv
+
+# Restart terminal or source your shell config
+```
+
+### 2. Initialize Project
+
+```bash
+# Create and navigate to project directory
+uv init stock-rnn-deepspeed
+cd stock-rnn-deepspeed
+```
+
+### 3. Install Dependencies
+
+```bash
+# Add core dependencies
+uv add "torch>=2.0.0" "deepspeed>=0.12.0" "numpy>=1.24.0"
+
+# Add Weights & Biases for experiment tracking
+uv add "wandb"
+
+# Add stock data and visualization dependencies
+uv add "yfinance>=0.2.0" "pandas>=2.0.0" "matplotlib>=3.7.0" "seaborn>=0.12.0"
+
+# Add ML utilities
+uv add "scikit-learn>=1.3.0"
+
+# Add optional dependencies
+uv add "scipy>=1.10.0" "tqdm>=4.65.0"
+
+# Add development tools (optional)
+uv add --dev "black" "isort" "pytest" "jupyter"
+```
+
+### 4. Configure Weights & Biases (Optional)
+
+To enable experiment tracking with W&B:
+
+```bash
+# Set your W&B API key (get from https://wandb.ai/authorize)
+export WANDB_API_KEY=your_api_key_here
+
+# Or configure it interactively
+wandb login
+```
+
+**If you don't configure W&B**, the script will continue training without tracking (fully optional).
+
+### 5. Add Training Files
+
+Copy the following files to your project directory:
+- `train_rnn_stock_data.py` - Original single-machine training script
+- `train_rnn_stock_data_ds.py` - DeepSpeed-enhanced version with W&B
+- `train_rnn_stock_data_config.json` - DeepSpeed configuration
+
+### 6. Run Training
+
+```bash
+# Single GPU training
+uv run deepspeed --num_gpus=1 train_rnn_stock_data_ds.py
+
+# Multi-GPU training (recommended for ZeRO-2)
+uv run deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
+
+# Multi-GPU with explicit config
+uv run deepspeed --num_gpus=2 --deepspeed_config=train_rnn_stock_data_config.json train_rnn_stock_data_ds.py
+
+# Run original script (without DeepSpeed)
+uv run python train_rnn_stock_data.py
+```
+
 ## Files in This Folder
 
 ```
@@ -249,19 +337,28 @@ Final Test RMSE: 2.3456
 # Set W&B API key
 export WANDB_API_KEY=your-api-key-here
 
-# Run with DeepSpeed (single GPU)
+# Run with DeepSpeed (single GPU) using uv
+uv run deepspeed --num_gpus=1 train_rnn_stock_data_ds.py
+
+# Or with standard deepspeed command (if installed globally)
 deepspeed --num_gpus=1 train_rnn_stock_data_ds.py
 ```
 
 ### Multiple GPUs
 ```bash
-# Run with DeepSpeed (2 GPUs)
+# Run with DeepSpeed (2 GPUs) using uv
+uv run deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
+
+# Or with standard deepspeed command
 deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
 ```
 
 ### Without DeepSpeed (Original Script)
 ```bash
-# Run original script (single machine, no DeepSpeed)
+# Run original script (single machine, no DeepSpeed) using uv
+uv run python train_rnn_stock_data.py
+
+# Or with standard python command
 python train_rnn_stock_data.py
 ```
 
@@ -450,6 +547,55 @@ cat logs/stock_rnn_<job_id>.err
 # - No internet access on compute node
 ```
 
+## Project Structure
+
+After following the Quick Start, your project should look like:
+
+```
+stock-rnn-deepspeed/
+├── .python-version                  # Python version specification
+├── pyproject.toml                   # Project dependencies and metadata (uv)
+├── train_rnn_stock_data.py          # Original single-machine script
+├── train_rnn_stock_data_ds.py       # DeepSpeed-enhanced script
+├── train_rnn_stock_data_config.json # DeepSpeed configuration
+├── README.md                        # Documentation
+├── .venv/                           # Virtual environment (auto-created)
+├── wandb/                           # W&B logs (auto-created)
+├── time_series_plots.png            # Generated visualization
+├── distribution_plots.png           # Generated visualization
+├── training_history.png             # Generated visualization
+├── prediction_results.png           # Generated visualization
+└── stock_delta_rnn_model.pth        # Saved model checkpoint
+```
+
+## Dependencies Reference
+
+### Core Dependencies
+- `torch>=2.0.0`: PyTorch framework for deep learning
+- `deepspeed>=0.12.0`: Distributed training optimization
+- `numpy>=1.24.0`: Numerical computations
+- `wandb`: Experiment tracking and visualization (optional)
+
+### Stock Data & Visualization
+- `yfinance>=0.2.0`: Yahoo Finance API for stock data download
+- `pandas>=2.0.0`: Data manipulation and analysis
+- `matplotlib>=3.7.0`: Plotting and visualization
+- `seaborn>=0.12.0`: Statistical data visualization
+
+### ML Utilities
+- `scikit-learn>=1.3.0`: MinMaxScaler, train/test split, RMSE metrics
+
+### Optional Dependencies
+- `scipy>=1.10.0`: Scientific computing utilities
+- `tqdm>=4.65.0`: Progress bars for training loops
+
+### Development Tools
+- `black`: Code formatting (PEP 8)
+- `isort`: Import sorting
+- `pytest`: Testing framework
+- `jupyter`: Interactive notebooks for experimentation
+- `ipython`: Enhanced Python shell
+
 ## Next Steps
 
 ### Experimentation Ideas
@@ -475,6 +621,8 @@ cat logs/stock_rnn_<job_id>.err
 - [DeepSpeed ZeRO Paper](https://arxiv.org/abs/1910.02054)
 - [Weights & Biases Documentation](https://docs.wandb.ai/)
 - [Yahoo Finance API (yfinance)](https://github.com/ranaroussi/yfinance)
+- [uv Documentation](https://docs.astral.sh/uv/)
+- [PyTorch RNN Documentation](https://pytorch.org/docs/stable/generated/torch.nn.RNN.html)
 - [SLURM Documentation](https://slurm.schedmd.com/)
 - [RNN Best Practices](https://arxiv.org/abs/1503.04069)
 
