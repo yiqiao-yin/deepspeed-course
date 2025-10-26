@@ -256,6 +256,22 @@ def main() -> None:
     )
     print(f"✅ DeepSpeed initialized successfully")
 
+    # Verify model weights are finite after initialization
+    print(f"\n🔍 Verifying model initialization...")
+    has_nan = False
+    for name, param in model_engine.module.named_parameters():
+        if not torch.isfinite(param).all():
+            print(f"   ❌ ERROR: Non-finite values found in {name}")
+            has_nan = True
+
+    if has_nan:
+        print(f"\n❌ CRITICAL ERROR: Model has non-finite weights after initialization!")
+        print(f"   This should not happen with Kaiming initialization.")
+        print(f"   Please report this issue.")
+        return
+    else:
+        print(f"   ✅ All model weights are finite")
+
     batch_size = model_engine.train_micro_batch_size_per_gpu()
     train_loader, test_loader = get_cifar10_dataloaders(batch_size=batch_size)
     device = model_engine.device
@@ -397,9 +413,19 @@ def main() -> None:
                     })
 
         # Calculate average metrics for the epoch
+        if num_batches == 0:
+            print(f"\n❌ ERROR: All batches were skipped due to non-finite values!")
+            print(f"   This indicates severe training instability. Stopping training.")
+            print(f"\n💡 Troubleshooting steps:")
+            print(f"   1. Delete ./data directory and re-download CIFAR-10")
+            print(f"   2. Verify gradient clipping is enabled in ds_config.json")
+            print(f"   3. Ensure FP16 is disabled (use FP32)")
+            print(f"   4. Check model weights are properly initialized")
+            break
+
         avg_epoch_loss = epoch_loss_sum / num_batches
-        avg_grad_norm = sum(epoch_grad_norms) / len(epoch_grad_norms)
-        epoch_accuracy = (epoch_correct / epoch_total) * 100.0
+        avg_grad_norm = sum(epoch_grad_norms) / len(epoch_grad_norms) if epoch_grad_norms else 0.0
+        epoch_accuracy = (epoch_correct / epoch_total) * 100.0 if epoch_total > 0 else 0.0
         epoch_losses.append(avg_epoch_loss)
         epoch_accuracies.append(epoch_accuracy)
 
