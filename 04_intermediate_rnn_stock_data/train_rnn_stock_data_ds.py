@@ -193,7 +193,8 @@ def create_visualizations(analysis_df, ticker, ma_periods, use_wandb):
     plt.savefig('time_series_plots.png', dpi=150)
     plt.close()
 
-    if use_wandb:
+    # Only log to wandb if it's initialized
+    if use_wandb and wandb.run is not None:
         wandb.log({"time_series_plots": wandb.Image('time_series_plots.png')})
 
     # Plot 2: Distribution
@@ -209,7 +210,8 @@ def create_visualizations(analysis_df, ticker, ma_periods, use_wandb):
     plt.savefig('distribution_plots.png', dpi=150)
     plt.close()
 
-    if use_wandb:
+    # Only log to wandb if it's initialized
+    if use_wandb and wandb.run is not None:
         wandb.log({"distribution_plots": wandb.Image('distribution_plots.png')})
 
     print("   ✅ Visualizations created and saved")
@@ -264,9 +266,6 @@ def main():
     X_train, y_train, X_val, y_val, X_test, y_test, scaler, analysis_df = download_and_prepare_stock_data(
         ticker, start_date, end_date, ma_periods, sequence_length
     )
-
-    # Create visualizations
-    create_visualizations(analysis_df, ticker, ma_periods, use_wandb)
 
     # Initialize model
     input_size = 1
@@ -330,8 +329,9 @@ def main():
     print(f"   - Mixed precision: FP16 enabled")
     print(f"   - ZeRO optimization: Stage 2")
 
-    # Initialize W&B run
-    if use_wandb:
+    # Initialize W&B run (only on rank 0)
+    local_rank = model_engine.local_rank
+    if use_wandb and local_rank == 0:
         wandb.init(
             project="stock-delta-rnn-deepspeed",
             name=f"rnn-{ticker}-deepspeed",
@@ -354,6 +354,10 @@ def main():
         print(f"\n📈 W&B Run initialized: {wandb.run.name}")
         print(f"   - Project: stock-delta-rnn-deepspeed")
         print(f"   - View at: {wandb.run.url}")
+
+    # Create visualizations (only on rank 0, after wandb.init)
+    if local_rank == 0:
+        create_visualizations(analysis_df, ticker, ma_periods, use_wandb)
 
     print(f"\n{'='*80}")
     print("🏋️  Enhanced Training Started...")
@@ -423,7 +427,7 @@ def main():
             if step % 10 == 0:
                 print(f"   Step {step:3d} | Loss: {loss.item():.6f} | Grad Norm: {total_norm:.6f}")
 
-                if use_wandb:
+                if use_wandb and local_rank == 0 and wandb.run is not None:
                     wandb.log({
                         "step_loss": loss.item(),
                         "gradient_norm": total_norm,
@@ -477,8 +481,8 @@ def main():
             patience_counter += 1
             print(f"   ⏳ No improvement. Patience: {patience_counter}/{patience_limit}")
 
-        # Log to W&B
-        if use_wandb:
+        # Log to W&B (only on rank 0)
+        if use_wandb and local_rank == 0 and wandb.run is not None:
             wandb.log({
                 "epoch": epoch,
                 "epoch_train_loss": avg_train_loss,
@@ -558,8 +562,8 @@ def main():
     plt.savefig('training_history.png', dpi=150)
     plt.close()
 
-    # Log final results
-    if use_wandb:
+    # Log final results (only on rank 0)
+    if use_wandb and local_rank == 0 and wandb.run is not None:
         wandb.log({
             "final/train_loss": train_losses[-1],
             "final/best_val_loss": best_val_loss,
