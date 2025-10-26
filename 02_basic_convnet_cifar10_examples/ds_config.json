@@ -3,9 +3,10 @@
   "train_micro_batch_size_per_gpu": 32,
   "gradient_accumulation_steps": 1,
   "optimizer": {
-    "type": "Adam",
+    "type": "SGD",
     "params": {
-      "lr": 1e-4
+      "lr": 0.01,
+      "momentum": 0.9
     }
   },
   "gradient_clipping": 1.0,

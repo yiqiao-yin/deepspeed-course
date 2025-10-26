@@ -36,48 +36,51 @@ except ImportError:
 
 class CIFAR10CNNEnhanced(nn.Module):
     """
-    Enhanced CNN for CIFAR-10 classification with better initialization.
-    Architecture adapted for 32x32 RGB images (3 channels).
+    Simplified and stabilized CNN for CIFAR-10 classification.
+    Architecture: Smaller channels + BatchNorm for numerical stability.
     """
 
     def __init__(self):
         super().__init__()
-        # CIFAR-10 has 3 color channels (RGB) instead of 1 (grayscale)
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        # Simplified architecture with batch normalization for stability
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(16)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
         # After 2 pooling layers: 32x32 -> 16x16 -> 8x8
-        self.fc1 = nn.Linear(64 * 8 * 8, 512)
-        self.fc2 = nn.Linear(512, 10)
+        self.fc1 = nn.Linear(32 * 8 * 8, 128)
+        self.fc2 = nn.Linear(128, 10)
 
-        # Kaiming/He initialization for ReLU networks (better for deep networks)
+        # Conservative Kaiming initialization
         self._initialize_weights()
 
     def _initialize_weights(self):
-        """Initialize weights using Kaiming/He initialization for ReLU activations."""
+        """Initialize weights using Kaiming/He initialization with conservative scaling."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # Use fan_in mode for more conservative initialization
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # Scale down linear layer init for stability
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                m.weight.data.mul_(0.5)  # Scale down by 50% for extra stability
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for CNN.
+        Forward pass for CNN with batch normalization.
         Input: [batch, 3, 32, 32]
         Output: [batch, 10] (logits)
         """
-        x = self.pool(F.relu(self.conv1(x)))  # [batch, 32, 16, 16]
-        x = self.pool(F.relu(self.conv2(x)))  # [batch, 64, 8, 8]
-        x = F.relu(self.conv3(x))             # [batch, 64, 8, 8]
-        x = torch.flatten(x, 1)               # [batch, 64*8*8 = 4096]
-        x = F.relu(self.fc1(x))               # [batch, 512]
-        x = self.fc2(x)                       # [batch, 10]
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))  # [batch, 16, 16, 16]
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))  # [batch, 32, 8, 8]
+        x = torch.flatten(x, 1)                          # [batch, 32*8*8 = 2048]
+        x = F.relu(self.fc1(x))                          # [batch, 128]
+        x = self.fc2(x)                                  # [batch, 10]
         return x
 
 
@@ -136,7 +139,7 @@ def get_cifar10_dataloaders(batch_size: int = 32):
     return train_loader, test_loader
 
 
-def get_lr_schedule(epoch: int, initial_lr: float = 0.0001, warmup_epochs: int = 5, total_epochs: int = 50) -> float:
+def get_lr_schedule(epoch: int, initial_lr: float = 0.01, warmup_epochs: int = 5, total_epochs: int = 50) -> float:
     """
     Learning rate schedule with warmup and cosine decay.
 
@@ -232,14 +235,14 @@ def main() -> None:
 
     model = CIFAR10CNNEnhanced()
 
-    print(f"\n🏗️  Model Architecture:")
-    print(f"   - Conv1: 3 → 32 channels (3x3 kernel)")
+    print(f"\n🏗️  Model Architecture (Simplified for Stability):")
+    print(f"   - Conv1: 3 → 16 channels (3x3 kernel) + BatchNorm")
     print(f"   - MaxPool: 2x2")
-    print(f"   - Conv2: 32 → 64 channels (3x3 kernel)")
+    print(f"   - Conv2: 16 → 32 channels (3x3 kernel) + BatchNorm")
     print(f"   - MaxPool: 2x2")
-    print(f"   - Conv3: 64 → 64 channels (3x3 kernel)")
-    print(f"   - FC1: 4096 → 512")
-    print(f"   - FC2: 512 → 10 (output)")
+    print(f"   - FC1: 2048 → 128")
+    print(f"   - FC2: 128 → 10 (output)")
+    print(f"   - Stability: BatchNorm + Smaller channels + Conservative init")
 
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
@@ -281,10 +284,12 @@ def main() -> None:
     print(f"   - Batch size: {batch_size}")
     print(f"   - Total batches per epoch: {len(train_loader)}")
     print(f"   - Number of epochs: 50")
-    print(f"   - Initial learning rate: 0.0001")
+    print(f"   - Optimizer: SGD with momentum=0.9")
+    print(f"   - Initial learning rate: 0.01")
     print(f"   - Warmup epochs: 5")
     print(f"   - LR schedule: Warmup → Cosine decay")
     print(f"   - Gradient clipping: 1.0 (prevents gradient explosion)")
+    print(f"   - Stability features: BatchNorm, smaller model, SGD optimizer")
 
     model_dtype = next(model_engine.module.parameters()).dtype
     print(f"   - Model dtype: {model_dtype}")
@@ -304,8 +309,8 @@ def main() -> None:
                 "num_classes": 10,
                 "epochs": 50,
                 "batch_size": batch_size,
-                "optimizer": "Adam",
-                "initial_lr": 0.0001,
+                "optimizer": "SGD",
+                "initial_lr": 0.01,
                 "warmup_epochs": 5,
                 "lr_schedule": "warmup_cosine",
                 "initialization": "kaiming",
@@ -349,7 +354,7 @@ def main() -> None:
         epoch_grad_norms = []
 
         # Get learning rate for this epoch
-        current_lr = get_lr_schedule(epoch, initial_lr=0.0001, warmup_epochs=5, total_epochs=total_epochs)
+        current_lr = get_lr_schedule(epoch, initial_lr=0.01, warmup_epochs=5, total_epochs=total_epochs)
 
         # Update optimizer learning rate
         for param_group in optimizer.param_groups:
@@ -480,11 +485,12 @@ def main() -> None:
         print(f"\n🔧 Required Actions:")
         print(f"   1. Delete ./data directory: rm -rf ./data")
         print(f"   2. Verify ds_config.json has:")
+        print(f"      - optimizer: SGD (type: 'SGD')")
+        print(f"      - lr: 0.01 with momentum: 0.9")
         print(f"      - gradient_clipping: 1.0")
         print(f"      - fp16 enabled: false")
-        print(f"      - lr: 1e-4 (0.0001)")
         print(f"   3. Re-run training")
-        print(f"\n💡 The learning rate has been lowered to 0.0001 to improve stability.")
+        print(f"\n💡 Model simplified: Smaller channels + BatchNorm + SGD for stability.")
         return
 
     # Final results
