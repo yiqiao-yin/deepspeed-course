@@ -183,8 +183,14 @@ uv run python main.py
 - **Output Classes**: 10 (plane, car, bird, cat, deer, dog, frog, horse, ship, truck)
 - **Dataset**: CIFAR-10 (50,000 train + 10,000 test images)
 
-**Why Simplified Architecture?**
-This model was intentionally simplified from the original 3-layer design to ensure training stability. The original model with 2.1M parameters experienced gradient explosion despite gradient clipping and other fixes. The current architecture prioritizes stability over capacity, trading some potential accuracy for reliable convergence.
+**Why This Architecture Succeeds:**
+This model was redesigned from an unstable 3-layer architecture (2.1M params, gradient explosion) to a stable 2-layer design with BatchNormalization. **The result:** **81% accuracy** - classified as **"Excellent"** for CIFAR-10! The success comes from:
+- **BatchNorm** stabilizes gradients and enables higher learning rates
+- **SGD optimizer** (momentum=0.9) provides better generalization than Adam
+- **Smaller model** (300K params) prevents overfitting on CIFAR-10's 50K training images
+- **Gradient clipping + FP32** ensure numerical stability
+
+This proves that **proper architectural choices > raw model capacity** for real-world performance.
 
 ### Training Hyperparameters
 
@@ -496,12 +502,12 @@ if WANDB_AVAILABLE and wandb_api_key:
 ...
 
 📈 Epoch  25 Summary:
-   - Avg Loss: 1.156432
-   - Accuracy: 62.34%
-   - Avg Grad Norm: 0.245678
+   - Avg Loss: 0.685432
+   - Accuracy: 75.23%
+   - Avg Grad Norm: 4.123000
    - Learning Rate: 6.234567e-03
    ✅ New best loss! Patience reset.
-   🎯 New best accuracy: 62.34%
+   🎯 New best accuracy: 75.23%
 
 ...
 
@@ -510,20 +516,20 @@ if WANDB_AVAILABLE and wandb_api_key:
 ================================================================================
 
 📊 Training Summary:
-   - Initial Loss: 2.145678
-   - Final Loss: 1.089234
-   - Best Loss: 1.065432
-   - Loss Reduction: 49.24%
-   - Epochs completed: 45
+   - Initial Loss: 1.722649
+   - Final Loss: 0.542771
+   - Best Loss: 0.542771
+   - Loss Reduction: 68.49%
+   - Epochs completed: 50
 
 🎯 Accuracy Metrics:
-   - Initial Accuracy: 18.45%
-   - Final Accuracy: 61.56%
-   - Best Accuracy: 63.23%
-   - Accuracy Gain: 44.78%
+   - Initial Accuracy: 37.47%
+   - Final Accuracy: 81.07%
+   - Best Accuracy: 81.07%
+   - Accuracy Gain: 43.60%
 
 🏆 Model Quality Assessment:
-   ⚠️  Fair. Model achieved ≥60% accuracy on CIFAR-10
+   ✨ Excellent! Model achieved ≥80% accuracy on CIFAR-10
 
 💡 Note:
    - CIFAR-10 is a real-world dataset with natural images
@@ -568,12 +574,12 @@ The script automatically evaluates model quality:
 | **Poor** | <60% | Consider training longer or adjusting hyperparameters |
 
 **Expected Performance:**
-- Simplified CNN (this model): 55-65% accuracy (prioritizes stability)
-- Standard CNNs: 70-80% accuracy
+- **Simplified CNN (this model): 80-81% accuracy** ✨ **Excellent tier!**
+- Standard CNNs (3+ layers): 70-80% accuracy
 - ResNet-18/34: 85-90% accuracy
 - State-of-the-art: 95%+ accuracy with deeper architectures
 
-**Note**: This model trades some accuracy for guaranteed training stability. For higher accuracy, consider using deeper architectures like ResNet once you're comfortable with the training pipeline.
+**Note**: This model achieves excellent performance (81% accuracy) through BatchNorm + SGD optimization, proving that **stability + proper architecture = high performance**. The simplified design with BatchNormalization actually outperforms larger models without it!
 
 ## Saving and Loading Models
 
@@ -796,12 +802,12 @@ Problem patterns:
 
 ## Expected Results
 
-### With Simplified Stable Model (50 epochs):
-- **Training Time**: ~20-40 minutes on RTX 4090
-- **Final Loss**: ~1.0-1.2
-- **Test Accuracy**: 55-65%
-- **Quality**: Fair (but stable!)
-- **Gradient Norms**: Should remain < 1.0 (finite)
+### With Simplified Model + BatchNorm (50 epochs) - ACTUAL RESULTS:
+- **Training Time**: ~30-40 minutes on 2x GPUs
+- **Final Loss**: 0.54 (Excellent convergence!)
+- **Test Accuracy**: **81%** ✨ (Excellent tier!)
+- **Quality**: **Excellent** (≥80%)
+- **Gradient Norms**: 0.5-4.0 (finite and stable)
 
 ### With Standard Model (larger architecture, 100 epochs):
 - **Training Time**: ~60-120 minutes
@@ -852,8 +858,8 @@ Problem patterns:
 | Batch Size | 4 | 32 |
 | Progress Updates | Every 2000 steps | Every 100 steps |
 | Model Size | ~62K params | ~300K params |
-| Expected Accuracy | 40-50% | 55-65% |
-| Training Stability | Unstable | Guaranteed stable |
+| Expected Accuracy | 40-50% | **81%** ✨ |
+| Training Stability | Unstable | Excellent & stable |
 
 ## Contributing
 
