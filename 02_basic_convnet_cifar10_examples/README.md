@@ -121,6 +121,42 @@ uv run deepspeed --num_gpus=8 --num_nodes=2 --node_rank=0 --master_addr="10.0.0.
 
 **Note**: The script automatically uses `ds_config.json` from the same directory. No need to pass config file arguments.
 
+### Optional: Python Launcher Script
+
+If you prefer to launch training with a Python script instead of command line, you can create a simple launcher (e.g., `main.py`):
+
+```python
+# main.py - Optional convenience launcher
+import subprocess
+
+def main():
+    """
+    Launches DeepSpeed training with 2 GPUs.
+    Equivalent to: uv run deepspeed --num_gpus=2 cifar10_deepspeed.py
+    """
+    cmd = [
+        "deepspeed",
+        "--num_gpus=2",
+        "cifar10_deepspeed.py"
+    ]
+    subprocess.run(cmd, check=True)
+
+if __name__ == "__main__":
+    main()
+```
+
+Then run with:
+```bash
+uv run python main.py
+```
+
+**When to use this approach:**
+- You want to script multiple training runs with different configurations
+- You're integrating training into a larger automation pipeline
+- You prefer Python scripting over shell commands
+
+**Note**: This is purely optional - the direct `deepspeed` command is simpler and recommended for most use cases.
+
 ## Configuration Options
 
 ### Model Settings
