@@ -12,6 +12,13 @@
   - [Problem Statement](#problem-statement-)
   - [Solution](#solution-)
 - [Folder Structure](#folder-structure-)
+- [CoreWeave vs RunPod: Understanding the Architectures](#coreweave-vs-runpod-understanding-the-architectures)
+  - [CoreWeave: Shared Multi-User HPC Cluster](#coreweave-shared-multi-user-hpc-cluster)
+  - [RunPod: Single-User Pod Model](#runpod-single-user-pod-model)
+  - [Key Differences](#key-differences-table)
+  - [Why CoreWeave Uses SLURM](#why-coreweave-uses-this-model)
+  - [Interactive Access on CoreWeave](#can-you-get-interactive-access-on-coreweave)
+  - [When to Use Each](#when-to-use-each)
 - [Getting Started](#getting-started)
   - [SLURM Batch Jobs (CoreWeave)](#slurm-batch-jobs-coreweave-)
     - [Quick Start Guide](#quick-start-guide)
@@ -85,6 +92,173 @@ deepspeed-course/
 ├── 08_vtt/                            # Vision-Text-Text models
 └── README.md                          # This file
 ```
+
+---
+
+## CoreWeave vs RunPod: Understanding the Architectures
+
+Before diving into the workflows, it's essential to understand the fundamental differences between these two platforms. This will help you choose the right environment for your needs.
+
+### CoreWeave: Shared Multi-User HPC Cluster
+
+**Architecture:**
+```
+Login Nodes (where you SSH)
+    ↓
+SLURM Scheduler (resource manager)
+    ↓
+Compute Nodes (where jobs run)
+    ↓
+Your GPU workload
+```
+
+**Why you need SLURM:**
+1. **Shared Resources**: Hundreds of users competing for GPUs
+2. **Fair Scheduling**: SLURM ensures fair allocation based on priority/quota
+3. **Resource Isolation**: Prevents users from hogging all GPUs
+4. **Queue System**: Your job waits if resources aren't available
+5. **Accounting**: Tracks who uses what (billing, quotas)
+
+**What happens when you SSH:**
+- You land on a **login node** (no GPUs attached)
+- Login nodes are for: submitting jobs, editing files, light tasks
+- **Cannot run GPU code directly** - no GPUs available on login nodes
+- Must use `sbatch` to request GPU time on compute nodes
+
+---
+
+### RunPod: Single-User Pod Model
+
+**Architecture:**
+```
+You SSH directly into YOUR pod
+    ↓
+Pod has dedicated GPU(s)
+    ↓
+Run code immediately
+```
+
+**Why no SLURM needed:**
+1. **Pre-allocated**: You rent the entire pod upfront
+2. **Dedicated Resources**: Those GPUs are YOURS for the rental period
+3. **Single User**: No competition - it's like renting a whole server
+4. **Pay-per-use**: You're billed for the entire time pod is running
+5. **No scheduling**: Run whatever, whenever - you own the resources
+
+---
+
+### Key Differences Table
+
+| Aspect | CoreWeave (SLURM) | RunPod |
+|--------|-------------------|--------|
+| **Access Model** | Shared cluster | Dedicated pod |
+| **GPU Access** | Request via scheduler | Always available |
+| **When you pay** | Only when job runs | Entire pod lifetime |
+| **Multi-user** | Yes, hundreds | No, just you |
+| **Resource competition** | Yes, queue if busy | No, yours alone |
+| **Can run commands directly** | ❌ No (login node only) | ✅ Yes |
+| **Best for** | Batch jobs, research clusters | Interactive work, development |
+
+---
+
+### Why CoreWeave Uses This Model
+
+#### **Efficiency Example:**
+
+```bash
+# ❌ Bad: Everyone gets dedicated GPUs (RunPod style)
+User A: GPU idle 80% of time (editing code)
+User B: GPU idle 90% of time (debugging)
+User C: GPU idle 70% of time (reading papers)
+Total: 3 GPUs, mostly wasted
+
+# ✅ Good: Shared cluster with scheduler (CoreWeave style)
+User A: Submit job when ready → GPU used 100%
+User B: Submit job when ready → GPU used 100%
+User C: Submit job when ready → GPU used 100%
+Total: 1 GPU, fully utilized, serves 3 users
+```
+
+#### **Cost Model:**
+- **CoreWeave**: Pay only for GPU hours used (like AWS Lambda)
+- **RunPod**: Pay for entire rental period (like renting a car)
+
+#### **Scale:**
+- **SLURM** can manage 10,000+ GPUs across 1000+ nodes
+- **RunPod** model would require 1000+ separate pods
+
+---
+
+### Can You Get Interactive Access on CoreWeave?
+
+**Yes!** Use `srun` for interactive sessions:
+
+```bash
+# Request interactive shell with 1 GPU for 2 hours
+srun --gres=gpu:1 --mem=32G --time=02:00:00 --pty bash
+
+# Now you're on a compute node with GPU access!
+nvidia-smi
+python
+
+# Run code interactively
+python train.py
+```
+
+This gives you RunPod-like experience, but:
+- ⏱️ You wait in queue if GPUs busy
+- ⏰ Session ends after time limit
+- 💰 You're charged for the entire interactive session
+
+---
+
+### Analogies
+
+#### **CoreWeave = Airport 🛫**
+- You can't just walk onto any plane (login node)
+- Need a ticket and boarding pass (SLURM job)
+- Wait in line if flights full (queue)
+- Efficient: planes stay full
+
+#### **RunPod = Private Jet ✈️**
+- You own/rent the jet for the day
+- Board anytime, no waiting
+- More expensive per person
+- Jet might sit idle while you're at lunch
+
+---
+
+### When to Use Each
+
+**Use SLURM/CoreWeave when:**
+- ✅ Running batch training jobs (submit and forget)
+- ✅ Need massive scale (100+ GPUs)
+- ✅ Want cost efficiency (only pay for actual compute)
+- ✅ Research/academic environment
+- ✅ Jobs can wait in queue
+- ✅ Training runs for hours/days
+
+**Use RunPod/Direct Access when:**
+- ✅ Need interactive development
+- ✅ Debugging code frequently
+- ✅ Prototyping/experimenting
+- ✅ Can't wait in queue
+- ✅ Want simplicity (no SLURM learning curve)
+- ✅ Jupyter notebooks for exploration
+
+---
+
+### Bottom Line
+
+You **can** SSH into CoreWeave, but you're on a **login node without GPUs**. To use GPUs, you must:
+1. **Batch jobs**: `sbatch script.sh` (submit and check later)
+2. **Interactive**: `srun --gres=gpu:1 --pty bash` (wait for GPU, then interactive)
+
+RunPod gives you the GPU immediately because you're **renting the entire pod**. CoreWeave makes you **request GPU time** because it's a **shared cluster**.
+
+**Think of it like:**
+- **RunPod** = Renting a whole Airbnb 🏠 (dedicated, always available)
+- **CoreWeave** = Using a hotel room 🏨 (book when you need it, efficient)
 
 ---
 
