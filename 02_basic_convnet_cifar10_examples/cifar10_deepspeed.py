@@ -22,7 +22,6 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import deepspeed
-import argparse
 import sys
 import os
 
@@ -164,19 +163,10 @@ def calculate_accuracy(outputs: torch.Tensor, targets: torch.Tensor) -> float:
     return (correct / total) * 100.0
 
 
-def add_argument():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Enhanced CIFAR-10 with DeepSpeed')
-    parser.add_argument('--local_rank', type=int, default=-1, help='Local rank for distributed training')
-    parser = deepspeed.add_config_arguments(parser)
-    return parser.parse_args()
-
-
 def main() -> None:
     """
     Enhanced CIFAR-10 training with multiple convergence strategies.
     """
-    args = add_argument()
 
     print("=" * 80)
     print("🚀 Starting ENHANCED DeepSpeed CIFAR-10 Training")
@@ -245,7 +235,6 @@ def main() -> None:
 
     print(f"\n⚙️  Initializing DeepSpeed...")
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        args=args,
         model=model,
         model_parameters=model.parameters(),
         config="ds_config.json"
