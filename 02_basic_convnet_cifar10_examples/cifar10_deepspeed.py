@@ -268,9 +268,14 @@ def main() -> None:
     print(f"   - Initial learning rate: 0.001")
     print(f"   - Warmup epochs: 5")
     print(f"   - LR schedule: Warmup → Cosine decay")
+    print(f"   - Gradient clipping: 1.0 (prevents gradient explosion)")
 
     model_dtype = next(model_engine.module.parameters()).dtype
     print(f"   - Model dtype: {model_dtype}")
+
+    if model_dtype == torch.float16:
+        print(f"   ⚠️  Note: FP16 can cause numerical instability with CIFAR-10")
+        print(f"   - Consider disabling fp16 in ds_config.json if training is unstable")
 
     # Initialize W&B run if enabled
     if use_wandb:
@@ -344,15 +349,27 @@ def main() -> None:
             outputs = model_engine(x_batch)
             loss = loss_fn(outputs, y_batch)
 
+            # Check for NaN/Inf loss
+            if not torch.isfinite(loss):
+                print(f"   ⚠️  Warning: Non-finite loss detected at step {step}, skipping batch")
+                continue
+
             model_engine.backward(loss)
 
-            # Compute gradient norm before stepping
+            # Compute gradient norm before stepping (after gradient clipping by DeepSpeed)
             total_norm = 0.0
             for p in model_engine.module.parameters():
                 if p.grad is not None:
                     param_norm = p.grad.data.norm(2)
                     total_norm += param_norm.item() ** 2
             total_norm = total_norm ** 0.5
+
+            # Check for non-finite gradients
+            if not torch.isfinite(torch.tensor(total_norm)):
+                print(f"   ⚠️  Warning: Non-finite gradients detected at step {step}, skipping batch")
+                model_engine.module.zero_grad()
+                continue
+
             epoch_grad_norms.append(total_norm)
 
             model_engine.step()

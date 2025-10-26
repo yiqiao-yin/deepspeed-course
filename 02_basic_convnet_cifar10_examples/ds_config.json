@@ -8,7 +8,8 @@
       "lr": 1e-3
     }
   },
+  "gradient_clipping": 1.0,
   "fp16": {
-    "enabled": true
+    "enabled": false
   }
 }
