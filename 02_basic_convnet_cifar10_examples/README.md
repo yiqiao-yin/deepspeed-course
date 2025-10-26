@@ -119,11 +119,7 @@ uv run deepspeed --num_gpus=4 cifar10_deepspeed.py
 uv run deepspeed --num_gpus=8 --num_nodes=2 --node_rank=0 --master_addr="10.0.0.1" cifar10_deepspeed.py
 ```
 
-### With Explicit Config File
-
-```bash
-uv run deepspeed --num_gpus=1 cifar10_deepspeed.py --deepspeed_config ds_config.json
-```
+**Note**: The script automatically uses `ds_config.json` from the same directory. No need to pass config file arguments.
 
 ## Configuration Options
 
