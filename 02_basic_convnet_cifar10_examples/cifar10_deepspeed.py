@@ -81,6 +81,18 @@ class CIFAR10CNNEnhanced(nn.Module):
         return x
 
 
+def download_cifar10():
+    """
+    Download CIFAR-10 dataset once before distributed training.
+    This prevents multiple processes from downloading simultaneously.
+    """
+    print(f"\n📥 Downloading CIFAR-10 dataset...")
+    # Download without transforms (faster)
+    torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
+    torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
+    print(f"✅ CIFAR-10 dataset ready")
+
+
 def get_cifar10_dataloaders(batch_size: int = 32):
     """
     Load CIFAR-10 dataset with standard transforms.
@@ -107,14 +119,14 @@ def get_cifar10_dataloaders(batch_size: int = 32):
     trainset = torchvision.datasets.CIFAR10(
         root='./data',
         train=True,
-        download=True,
+        download=False,  # Already downloaded
         transform=transform_train
     )
 
     testset = torchvision.datasets.CIFAR10(
         root='./data',
         train=False,
-        download=True,
+        download=False,  # Already downloaded
         transform=transform_test
     )
 
@@ -203,6 +215,9 @@ def main() -> None:
     elif not WANDB_AVAILABLE:
         print(f"\n📊 Weights & Biases: Not installed")
         print(f"   - To enable tracking: pip install wandb")
+
+    # Download CIFAR-10 dataset once before distributed training
+    download_cifar10()
 
     # CIFAR-10 classes
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
