@@ -136,7 +136,7 @@ def get_cifar10_dataloaders(batch_size: int = 32):
     return train_loader, test_loader
 
 
-def get_lr_schedule(epoch: int, initial_lr: float = 0.001, warmup_epochs: int = 5, total_epochs: int = 50) -> float:
+def get_lr_schedule(epoch: int, initial_lr: float = 0.0001, warmup_epochs: int = 5, total_epochs: int = 50) -> float:
     """
     Learning rate schedule with warmup and cosine decay.
 
@@ -281,7 +281,7 @@ def main() -> None:
     print(f"   - Batch size: {batch_size}")
     print(f"   - Total batches per epoch: {len(train_loader)}")
     print(f"   - Number of epochs: 50")
-    print(f"   - Initial learning rate: 0.001")
+    print(f"   - Initial learning rate: 0.0001")
     print(f"   - Warmup epochs: 5")
     print(f"   - LR schedule: Warmup → Cosine decay")
     print(f"   - Gradient clipping: 1.0 (prevents gradient explosion)")
@@ -305,7 +305,7 @@ def main() -> None:
                 "epochs": 50,
                 "batch_size": batch_size,
                 "optimizer": "Adam",
-                "initial_lr": 0.001,
+                "initial_lr": 0.0001,
                 "warmup_epochs": 5,
                 "lr_schedule": "warmup_cosine",
                 "initialization": "kaiming",
@@ -349,7 +349,7 @@ def main() -> None:
         epoch_grad_norms = []
 
         # Get learning rate for this epoch
-        current_lr = get_lr_schedule(epoch, initial_lr=0.001, warmup_epochs=5, total_epochs=total_epochs)
+        current_lr = get_lr_schedule(epoch, initial_lr=0.0001, warmup_epochs=5, total_epochs=total_epochs)
 
         # Update optimizer learning rate
         for param_group in optimizer.param_groups:
@@ -474,6 +474,19 @@ def main() -> None:
     print("✅ Training Completed!")
     print(f"{'='*80}\n")
 
+    # Check if we have any training data
+    if not epoch_losses:
+        print(f"❌ CRITICAL: Training failed - no epochs completed successfully!")
+        print(f"\n🔧 Required Actions:")
+        print(f"   1. Delete ./data directory: rm -rf ./data")
+        print(f"   2. Verify ds_config.json has:")
+        print(f"      - gradient_clipping: 1.0")
+        print(f"      - fp16 enabled: false")
+        print(f"      - lr: 1e-4 (0.0001)")
+        print(f"   3. Re-run training")
+        print(f"\n💡 The learning rate has been lowered to 0.0001 to improve stability.")
+        return
+
     # Final results
     final_loss = epoch_losses[-1]
     final_accuracy = epoch_accuracies[-1]
@@ -487,7 +500,7 @@ def main() -> None:
     print(f"   - Final Loss: {final_loss:.6f}")
     print(f"   - Best Loss: {best_loss:.6f}")
     print(f"   - Loss Reduction: {loss_reduction:.2f}%")
-    print(f"   - Epochs completed: {epoch + 1}")
+    print(f"   - Epochs completed: {len(epoch_losses)}")
 
     print(f"\n🎯 Accuracy Metrics:")
     print(f"   - Initial Accuracy: {initial_accuracy:.2f}%")

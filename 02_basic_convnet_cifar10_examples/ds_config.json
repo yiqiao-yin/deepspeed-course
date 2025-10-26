@@ -5,7 +5,7 @@
   "optimizer": {
     "type": "Adam",
     "params": {
-      "lr": 1e-3
+      "lr": 1e-4
     }
   },
   "gradient_clipping": 1.0,
