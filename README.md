@@ -19,19 +19,71 @@ This repository provides a collection of basic frameworks and examples demonstra
 
 ```
 deepspeed-course/
-├── 01_basic_neuralnet
-├── 02_basic_convnet
-├── 02_basic_convnet_cifar10_examples
-├── 03_basic_rnn (tbd)
-├── 04_transferlearning (tbd)
-├── 05_huggingface
-├── 05_huggingface_trl
-├── 06_huggingface_grpo
-├── 07_huggingface_openai_gpt_oss_finetune_sft
-├── 07_huggingface_trl_multi_agency
-├── 08_vtt
-└── README.md
+├── 01_basic_neuralnet/
+│   ├── train_ds.py                    # Basic neural network training
+│   ├── train_ds_enhanced.py           # Enhanced with W&B tracking
+│   ├── ds_config.json                 # DeepSpeed configuration
+│   ├── run_deepspeed.sh              # SLURM batch script
+│   └── README.md                      # Documentation
+│
+├── 02_basic_convnet/
+│   ├── train_ds.py                    # CNN training on synthetic MNIST
+│   ├── ds_config.json                 # DeepSpeed configuration
+│   ├── run_deepspeed.sh              # SLURM batch script
+│   └── README.md                      # Documentation
+│
+├── 02_basic_convnet_cifar10_examples/
+│   ├── cifar10_deepspeed.py          # CIFAR-10 CNN (81% accuracy!)
+│   ├── ds_config.json                 # DeepSpeed config (SGD + BatchNorm)
+│   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
+│   ├── MODEL_IMPROVEMENT_STRATEGY.md  # Technical deep dive
+│   └── README.md                      # Comprehensive guide
+│
+├── 03_basic_rnn/
+│   ├── train_rnn_deepspeed.py        # LSTM time series prediction
+│   ├── ds_config_rnn.json            # DeepSpeed config (ZeRO-2 + FP16)
+│   ├── run_deepspeed.sh              # SLURM batch script
+│   └── README.md                      # Documentation with W&B guide
+│
+├── 04_transferlearning/               # (TBD)
+├── 05_huggingface/                    # HuggingFace examples
+├── 05_huggingface_trl/                # TRL (Transformer Reinforcement Learning)
+├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
+├── 07_huggingface_openai_gpt_oss_finetune_sft/  # SFT examples
+├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
+├── 08_vtt/                            # Vision-Text-Text models
+└── README.md                          # This file
 ```
+
+### Quick Start with SLURM Batch Jobs 🚀
+
+Each training folder (01-03) includes a `run_deepspeed.sh` SLURM batch script for running on HPC clusters like CoreWeave. To use:
+
+```bash
+# 1. Navigate to desired folder
+cd 02_basic_convnet_cifar10_examples
+
+# 2. Edit the SLURM script to configure:
+#    - WANDB_API_KEY (get from https://wandb.ai/authorize)
+#    - Virtual environment path
+nano run_deepspeed.sh
+
+# 3. Submit to SLURM queue
+sbatch run_deepspeed.sh
+
+# 4. Monitor job status
+squeue -u $USER
+
+# 5. Check logs
+tail -f logs/cifar10_cnn_<job_id>.out
+```
+
+**Script Features:**
+- ✅ Pre-configured GPU/CPU/memory resources per workload
+- ✅ Automatic log directory creation
+- ✅ Job information printing (ID, node, GPUs, timestamps)
+- ✅ W&B API key integration with placeholder
+- ✅ Optimized for CoreWeave/SLURM clusters
 
 Explore each folder for step-by-step guides and code samples to accelerate your deep learning projects with DeepSpeed!
 
