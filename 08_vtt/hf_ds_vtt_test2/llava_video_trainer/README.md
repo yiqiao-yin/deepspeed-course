@@ -28,7 +28,7 @@ cd llava_video_trainer
 uv init .
 
 # 4. Add all dependencies (including deepspeed)
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 
 # 5. Set credentials
 export HF_USER_ID=eagle0504
@@ -155,7 +155,7 @@ cd llava_video_trainer
 # Step 1: Install uv and setup project
 pip install uv
 uv init .
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 
 # Step 2: Set required environment variables
 export HF_USER_ID=eagle0504
@@ -177,7 +177,7 @@ uv run deepspeed --num_gpus=2 video_training_script.py
 cd llava_video_trainer
 
 # Install dependencies with pip
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 
 # Required environment variables
 export HF_USER_ID=eagle0504
@@ -221,7 +221,7 @@ Output:
 # (Optional) Setup with uv first
 pip install uv
 uv init .
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 
 # Set environment variables
 export HF_USER_ID=your_username
@@ -255,13 +255,13 @@ cd llava_video_trainer
 uv init .
 
 # Add dependencies (updates pyproject.toml and creates uv.lock)
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 ```
 
 ### Option 2: Using `pip`
 
 ```bash
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
 ```
 
 **Key dependencies:**
@@ -271,6 +271,7 @@ pip install torch datasets transformers trl huggingface_hub accelerate deepspeed
 - `wandb` - (Optional) For experiment tracking
 - `torch` - PyTorch deep learning framework
 - `deepspeed` - Distributed training optimization
+- `hf_transfer` - Fast HuggingFace Hub uploads/downloads (Rust-based)
 
 ## 🎓 Training Configuration
 
