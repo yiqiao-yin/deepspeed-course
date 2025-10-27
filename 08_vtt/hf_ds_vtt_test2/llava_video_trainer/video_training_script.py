@@ -1,16 +1,17 @@
 """
 Fine-tune a LLaVA video-text model using DeepSpeed for multi-GPU training.
 
-This script fine-tunes a LLaVA model on video samples and pushes both 
-model and dataset to Hugging Face Hub. Uses TRL's SFTTrainer with DeepSpeed 
-and Accelerate for efficient multi-GPU training.
+This script fine-tunes a LLaVA model on video samples and pushes the trained
+model to Hugging Face Hub. Uses TRL's SFTTrainer with DeepSpeed and Accelerate
+for efficient multi-GPU training.
 
 Requirements:
-    pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests
+    pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 Environment Variables:
     HF_USER_ID: Hugging Face username
     HF_TOKEN: Hugging Face API token
+    WANDB_API_KEY: (Optional) Weights & Biases API key for tracking
 """
 
 import os
@@ -18,19 +19,27 @@ import json
 import time
 import requests
 import shutil
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import torch
 from PIL import Image
 from datasets import Dataset, DatasetDict
 from transformers import (
-    AutoProcessor, 
-    LlavaForConditionalGeneration, 
+    AutoProcessor,
+    LlavaForConditionalGeneration,
     TrainingArguments,
     DataCollatorForSeq2Seq
 )
 from trl import SFTTrainer
 from huggingface_hub import HfApi, create_repo, upload_file, delete_repo
 from huggingface_hub.errors import HfHubHTTPError
+
+# Optional wandb import
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("⚠️  wandb not installed. Install with: pip install wandb")
 
 
 def check_disk_space() -> None:
@@ -141,6 +150,17 @@ class RetryHandler:
                         continue
                     else:
                         print("❌ Max retries reached for rate limiting")
+                        raise
+                elif e.response.status_code == 409:  # Conflict (concurrent operation)
+                    if attempt < max_retries:
+                        print(f"⚠️  Concurrent operation in progress (409). Waiting {delay:.1f}s...")
+                        print(f"   Another commit is happening. Retrying (attempt {attempt + 2}/{max_retries + 1})")
+                        time.sleep(delay)
+                        delay = min(delay * backoff_factor, max_delay)
+                        continue
+                    else:
+                        print(f"❌ HTTP Error 409: Concurrent operation timeout.")
+                        print(f"   Try again later or check: https://huggingface.co/{repo_id}")
                         raise
                 elif e.response.status_code == 412:  # Precondition Failed (conflict)
                     if attempt < max_retries and repo_id and repo_type and self.hf_token:
@@ -491,31 +511,31 @@ This dataset is designed for LLaVA models that support video input through multi
         return tokenized
 
     def create_model_readme(
-        self, 
-        model_repo_id: str, 
-        dataset_repo_id: str, 
-        base_model: str
+        self,
+        model_repo_id: str,
+        base_model: str,
+        num_samples: int = 4
     ) -> str:
         """
         Create README content for LLaVA model.
-        
+
         Args:
             model_repo_id: Repository ID for the model
-            dataset_repo_id: Repository ID for the dataset
             base_model: Base model name
-            
+            num_samples: Number of training samples
+
         Returns:
             README content as string
         """
         return f"""# {model_repo_id}
 
-Fine-tuned **LLaVA model** on video-text dataset using DeepSpeed.
+Fine-tuned **LLaVA model** on video-text data using DeepSpeed.
 
 ## Model Details
 
 - **Base model**: {base_model}
 - **Architecture**: LLaVA (Large Language and Vision Assistant)
-- **Dataset**: [{dataset_repo_id}](https://huggingface.co/datasets/{dataset_repo_id})
+- **Training samples**: {num_samples} videos
 - **Training**: Multi-GPU with DeepSpeed ZeRO Stage 2
 - **Task**: Video-text conversation generation
 - **Video frames**: {self.num_frames} frames per video
@@ -581,16 +601,32 @@ This model expects {self.num_frames} frames extracted from each video. For best 
 
     def get_training_arguments(self, deepspeed_config_path: str) -> TrainingArguments:
         """
-        Create training arguments with DeepSpeed configuration.
-        
+        Create training arguments with DeepSpeed configuration and optional W&B.
+
         Args:
             deepspeed_config_path: Path to DeepSpeed config file
-            
+
         Returns:
             TrainingArguments configured for DeepSpeed
         """
+        # Check if wandb is available and configured
+        use_wandb = WANDB_AVAILABLE and os.environ.get("WANDB_API_KEY") is not None
+
+        if use_wandb:
+            report_to = ["wandb"]
+            run_name = f"llava-video-{time.strftime('%Y%m%d-%H%M%S')}"
+            print(f"✅ Weights & Biases enabled. Run: {run_name}")
+        else:
+            report_to = []
+            run_name = None
+            if os.environ.get("WANDB_API_KEY"):
+                print("⚠️  WANDB_API_KEY set but wandb not installed. Install: pip install wandb")
+            else:
+                print("ℹ️  Weights & Biases disabled (WANDB_API_KEY not set)")
+
         return TrainingArguments(
             output_dir="./llava_video_finetune",
+            run_name=run_name,
             per_device_train_batch_size=1,
             per_device_eval_batch_size=1,
             num_train_epochs=3,
@@ -599,7 +635,7 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             # evaluation_strategy="epoch",
             logging_dir="./logs",
             logging_steps=1,
-            report_to=[],
+            report_to=report_to,
             deepspeed=deepspeed_config_path,
             bf16=True,
             dataloader_pin_memory=False,
@@ -614,29 +650,27 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         )
 
     def train_model(
-        self, 
-        video_urls: List[str], 
+        self,
+        video_urls: List[str],
         base_model: str = "llava-hf/llava-interleave-qwen-7b-hf",
         deepspeed_config_path: str = "ds_config.json"
     ) -> None:
         """
-        Main training pipeline with proper rate limiting.
-        
+        Main training pipeline - download videos, train model, save to Hub.
+
         Args:
             video_urls: List of video URLs for training
             base_model: Base LLaVA model to fine-tune
             deepspeed_config_path: Path to DeepSpeed configuration
         """
         print("🚀 Starting LLaVA video-text model training with DeepSpeed...")
-        
-        # Create and push dataset
-        print("📊 Creating LLaVA dataset...")
+
+        # Create dataset locally (no upload)
+        print("📊 Creating LLaVA dataset from video URLs...")
         dataset_dict = self.create_dataset_dict(video_urls)
-        print(f"Dataset created with {len(dataset_dict['train'])} train samples")
-        
-        dataset_repo_id = f"{self.hf_user_id}/llava-video-text-dataset"
-        print(f"📤 Pushing dataset to {dataset_repo_id}...")
-        self.push_dataset_to_hub(dataset_dict, dataset_repo_id)
+        print(f"✅ Dataset created with {len(dataset_dict['train'])} train samples")
+        print(f"   - Train: {len(dataset_dict['train'])} samples")
+        print(f"   - Validation: {len(dataset_dict['validation'])} samples")
         
         # Load LLaVA model and processor
         print(f"🤖 Loading LLaVA model: {base_model}")
@@ -734,22 +768,36 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         try:
             trainer.train()
             print("✅ Training completed successfully!")
-            
+
             # Monitor disk space after training
             check_disk_space()
-            
+
         except Exception as e:
             print(f"❌ Training failed: {e}")
             # Check if it's a disk space issue
             check_disk_space()
             raise
-        
+
+        # Save model directly to HuggingFace Hub (bypass local checkpoints)
+        model_repo_id = f"{self.hf_user_id}/llava-video-text-model"
+        print(f"\n💾 Saving trained model to {model_repo_id}...")
+
+        self.save_model_directly_to_hub(
+            trainer.model,
+            model_repo_id,
+            base_model,
+            num_samples=len(video_urls)
+        )
+
+        print("✅ LLaVA training and upload completed successfully!")
+        print(f"🤗 Model available at: https://huggingface.co/{model_repo_id}")
+
     def save_model_directly_to_hub(
         self,
         model,
         model_repo_id: str,
-        dataset_repo_id: str,
-        base_model: str
+        base_model: str,
+        num_samples: int = 4
     ) -> None:
         """
         Save model directly to HuggingFace Hub without local checkpoint.
@@ -757,8 +805,8 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         Args:
             model: Trained model to save
             model_repo_id: Repository ID for the model
-            dataset_repo_id: Repository ID for the dataset
             base_model: Base model name
+            num_samples: Number of training samples
         """
         print(f"💾 Saving LLaVA model directly to {model_repo_id}...")
 
@@ -821,8 +869,8 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             # Upload model README with retry logic
             model_readme = self.create_model_readme(
                 model_repo_id,
-                dataset_repo_id,
-                base_model
+                base_model,
+                num_samples
             )
 
             readme_path = "/workspace/model_README.md"  # Save to workspace
@@ -849,17 +897,6 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             print(f"❌ Error saving model: {e}")
             check_disk_space()
             raise
-        
-        # Save model directly to HuggingFace Hub (bypass local checkpoints)
-        model_repo_id = f"{self.hf_user_id}/llava-video-text-model"
-        self.save_model_directly_to_hub(
-            trainer.model,
-            model_repo_id,
-            dataset_repo_id,
-            base_model
-        )
-        
-        print("✅ LLaVA training completed successfully!")
 
 
 def create_deepspeed_config(config_path: str = "ds_config.json") -> None:
