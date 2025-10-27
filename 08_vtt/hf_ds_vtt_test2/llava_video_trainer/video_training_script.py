@@ -73,7 +73,7 @@ def cleanup_cache_files() -> None:
         import subprocess
         subprocess.run(["pip", "cache", "purge"], capture_output=True)
         print("🧹 Cleared pip cache")
-        
+
         # Clear any temporary files in /tmp
         temp_dirs = ["/tmp", "/var/tmp"]
         for temp_dir in temp_dirs:
@@ -88,7 +88,17 @@ def cleanup_cache_files() -> None:
                     except Exception:
                         pass
         print("🧹 Cleared temporary files")
-        
+
+        # Clean up wandb cache and checkpoints
+        wandb_dirs = ["./wandb", "./llava_video_finetune", "./.cache"]
+        for wdir in wandb_dirs:
+            if os.path.exists(wdir):
+                try:
+                    shutil.rmtree(wdir)
+                    print(f"🧹 Cleared {wdir}")
+                except Exception as e:
+                    print(f"Warning: Could not remove {wdir}: {e}")
+
     except Exception as e:
         print(f"Warning: Could not clean cache: {e}")
 
@@ -616,6 +626,10 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             report_to = ["wandb"]
             run_name = f"llava-video-{time.strftime('%Y%m%d-%H%M%S')}"
             print(f"✅ Weights & Biases enabled. Run: {run_name}")
+            # Disable W&B model checkpointing to save disk space
+            os.environ["WANDB_DISABLE_CODE"] = "true"
+            os.environ["WANDB_LOG_MODEL"] = "false"
+            print("ℹ️  W&B model checkpointing disabled to save disk space")
         else:
             report_to = []
             run_name = None
@@ -631,20 +645,20 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             per_device_eval_batch_size=1,
             num_train_epochs=3,
             learning_rate=5e-5,
-            # save_strategy="epoch",
-            # evaluation_strategy="epoch",
+            save_strategy="no",  # Disable all local checkpoints to save disk space
+            evaluation_strategy="no",  # Disable evaluation checkpoints
             logging_dir="./logs",
-            logging_steps=1,
+            logging_steps=10,  # Reduced logging frequency
             report_to=report_to,
             deepspeed=deepspeed_config_path,
             bf16=True,
             dataloader_pin_memory=False,
-            save_total_limit=2,
+            save_total_limit=0,  # Don't keep any checkpoints locally
             warmup_steps=100,
             weight_decay=0.01,
             remove_unused_columns=False,  # Important for multimodal data
             dataloader_num_workers=0,  # Avoid multiprocessing issues
-            do_eval=True,  # Explicitly enable evaluation
+            do_eval=False,  # Disable evaluation to avoid checkpoint creation
             logging_first_step=True,
             seed=42,
         )
@@ -664,6 +678,11 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             deepspeed_config_path: Path to DeepSpeed configuration
         """
         print("🚀 Starting LLaVA video-text model training with DeepSpeed...")
+
+        # Clean up disk space before starting
+        print("🧹 Cleaning up disk space before training...")
+        cleanup_cache_files()
+        check_disk_space()
 
         # Create dataset locally (no upload)
         print("📊 Creating LLaVA dataset from video URLs...")
@@ -769,13 +788,20 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             trainer.train()
             print("✅ Training completed successfully!")
 
-            # Monitor disk space after training
+            # Clean up disk space after training, before upload
+            print("\n🧹 Cleaning up disk space after training...")
+            cleanup_cache_files()
             check_disk_space()
 
         except Exception as e:
             print(f"❌ Training failed: {e}")
             # Check if it's a disk space issue
             check_disk_space()
+            # Try cleanup even on failure
+            try:
+                cleanup_cache_files()
+            except:
+                pass
             raise
 
         # Save model directly to HuggingFace Hub (bypass local checkpoints)
