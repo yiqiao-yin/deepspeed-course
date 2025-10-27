@@ -27,8 +27,8 @@ cd llava_video_trainer
 # 3. Initialize project
 uv init .
 
-# 4. Install all dependencies
-uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+# 4. Add all dependencies
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 # 5. Set credentials
 export HF_USER_ID=eagle0504
@@ -43,8 +43,9 @@ uv run python video_training_script.py
 **Why `uv`?**
 - ⚡ 10-100x faster than pip
 - 🔒 Better dependency resolution
-- 📦 Creates isolated virtual environments
-- 🎯 Reproducible builds with lock files
+- 📦 Creates isolated virtual environments with automatic activation
+- 🎯 Reproducible builds with lock files (pyproject.toml + uv.lock)
+- 📝 Uses `uv add` to manage dependencies in pyproject.toml
 
 ## 🏗️ Model Architecture
 
@@ -153,7 +154,7 @@ cd llava_video_trainer
 # Step 1: Install uv and setup project
 pip install uv
 uv init .
-uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 # Step 2: Set required environment variables
 export HF_USER_ID=eagle0504
@@ -212,7 +213,7 @@ Output:
 # (Optional) Setup with uv first
 pip install uv
 uv init .
-uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 # Set environment variables
 export HF_USER_ID=your_username
@@ -245,8 +246,8 @@ pip install uv
 cd llava_video_trainer
 uv init .
 
-# Install dependencies
-uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+# Add dependencies (updates pyproject.toml and creates uv.lock)
+uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 ```
 
 ### Option 2: Using `pip`
