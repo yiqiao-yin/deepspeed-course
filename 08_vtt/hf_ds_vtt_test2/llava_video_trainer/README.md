@@ -11,6 +11,41 @@ Vision-Language model training for video understanding using **LLaVA** (Large La
 - Multi-frame video analysis
 - Vision-language conversation about videos
 
+## ⚡ Quick Start
+
+**Recommended Setup: Using `uv`**
+
+[`uv`](https://github.com/astral-sh/uv) is an extremely fast Python package installer and project manager (10-100x faster than pip).
+
+```bash
+# 1. Install uv
+pip install uv
+
+# 2. Navigate to trainer directory
+cd llava_video_trainer
+
+# 3. Initialize project
+uv init .
+
+# 4. Install all dependencies
+uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+
+# 5. Set credentials
+export HF_USER_ID=eagle0504
+export HF_TOKEN=your_hf_token
+export WANDB_API_KEY=your_wandb_key  # Optional
+
+# 6. Run training
+export CUDA_VISIBLE_DEVICES=0,1
+uv run python video_training_script.py
+```
+
+**Why `uv`?**
+- ⚡ 10-100x faster than pip
+- 🔒 Better dependency resolution
+- 📦 Creates isolated virtual environments
+- 🎯 Reproducible builds with lock files
+
 ## 🏗️ Model Architecture
 
 - **Model Type**: `LlavaForConditionalGeneration`
@@ -110,7 +145,29 @@ cleanup_cache_files()  # Clears pip cache and /tmp files
 
 ## 🚀 Running Training
 
-### Method 1: Direct Execution (Recommended)
+### Method 1: Using `uv` (Recommended)
+
+```bash
+cd llava_video_trainer
+
+# Step 1: Install uv and setup project
+pip install uv
+uv init .
+uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+
+# Step 2: Set required environment variables
+export HF_USER_ID=eagle0504
+export HF_TOKEN=your_hf_token
+
+# Step 3 (Optional): Set W&B tracking
+export WANDB_API_KEY=your_wandb_key  # ← Only if you want tracking
+
+# Step 4: Run training (2 GPUs example)
+export CUDA_VISIBLE_DEVICES=0,1
+uv run python video_training_script.py
+```
+
+### Method 2: Direct Python Execution
 
 ```bash
 cd llava_video_trainer
@@ -149,9 +206,14 @@ Output:
 ```
 **Script still runs perfectly!**
 
-### Method 2: With run_training.sh
+### Method 3: With run_training.sh
 
 ```bash
+# (Optional) Setup with uv first
+pip install uv
+uv init .
+uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+
 # Set environment variables
 export HF_USER_ID=your_username
 export HF_TOKEN=your_token
@@ -171,6 +233,24 @@ chmod +x run_training.sh
 
 ## 📦 Requirements
 
+### Option 1: Using `uv` (Recommended)
+
+[`uv`](https://github.com/astral-sh/uv) is an extremely fast Python package installer and resolver.
+
+```bash
+# Install uv
+pip install uv
+
+# Initialize project (creates pyproject.toml)
+cd llava_video_trainer
+uv init .
+
+# Install dependencies
+uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+```
+
+### Option 2: Using `pip`
+
 ```bash
 pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 ```
@@ -180,6 +260,8 @@ pip install torch datasets transformers trl huggingface_hub accelerate deepspeed
 - `requests` - For downloading video frames
 - `transformers` - LLaVA model support
 - `wandb` - (Optional) For experiment tracking
+- `torch` - PyTorch deep learning framework
+- `deepspeed` - Distributed training optimization
 
 ## 🎓 Training Configuration
 
