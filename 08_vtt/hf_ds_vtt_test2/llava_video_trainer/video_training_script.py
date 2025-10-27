@@ -804,15 +804,27 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             raise
 
         # Save model directly to HuggingFace Hub (bypass local checkpoints)
-        model_repo_id = f"{self.hf_user_id}/llava-video-text-model"
-        print(f"\n💾 Saving trained model to {model_repo_id}...")
+        # Only save on rank 0 to avoid conflicts and disk space issues
+        import torch.distributed as dist
+        is_main_process = not dist.is_initialized() or dist.get_rank() == 0
 
-        self.save_model_directly_to_hub(
-            trainer.model,
-            model_repo_id,
-            base_model,
-            num_samples=len(video_urls)
-        )
+        model_repo_id = f"{self.hf_user_id}/llava-video-text-model"
+
+        if is_main_process:
+            print(f"\n💾 Saving trained model to {model_repo_id}...")
+
+            # Aggressive cleanup before saving to free disk space
+            print("🧹 Cleaning up disk space before model save...")
+            cleanup_cache_files()
+
+            self.save_model_directly_to_hub(
+                trainer.model,
+                model_repo_id,
+                base_model,
+                num_samples=len(video_urls)
+            )
+        else:
+            print(f"\n⏭️  Rank {dist.get_rank()}: Skipping model save (only rank 0 saves)")
 
         print("✅ LLaVA training and upload completed successfully!")
         print(f"🤗 Model available at: https://huggingface.co/{model_repo_id}")
@@ -857,14 +869,36 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         # Check disk space before saving
         check_disk_space()
 
+        # Use a temporary directory for model saving
+        import tempfile
+        temp_model_dir = None
+
         try:
-            # Push model directly to hub with retry logic
+            # Create temporary directory for model saving
+            temp_model_dir = tempfile.mkdtemp(prefix="llava_model_")
+            print(f"📁 Using temporary directory: {temp_model_dir}")
+
+            # Save model to temporary directory with small shards
+            print("💾 Saving model to temporary directory...")
+            model.save_pretrained(
+                temp_model_dir,
+                safe_serialization=True,
+                max_shard_size="500MB"  # Very small shards to reduce peak disk usage
+            )
+
+            # Save processor to temporary directory
+            print("💾 Saving processor to temporary directory...")
+            self.processor.save_pretrained(temp_model_dir)
+
+            # Upload from temporary directory with retry logic
+            print("📤 Uploading model to Hub...")
             def push_model():
-                return model.push_to_hub(
-                    model_repo_id,
+                from huggingface_hub import upload_folder
+                return upload_folder(
+                    folder_path=temp_model_dir,
+                    repo_id=model_repo_id,
                     token=self.hf_token,
-                    safe_serialization=True,  # Use safetensors for smaller files
-                    max_shard_size="2GB"      # Smaller shards to avoid memory issues
+                    repo_type="model"
                 )
 
             self.retry_handler.exponential_backoff_retry(
@@ -874,19 +908,11 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             )
             print("✅ Model uploaded successfully")
 
-            # Add delay before pushing processor
-            time.sleep(3)
-
-            # Push processor with retry logic
-            def push_processor():
-                return self.processor.push_to_hub(model_repo_id, token=self.hf_token)
-
-            self.retry_handler.exponential_backoff_retry(
-                push_processor,
-                repo_id=model_repo_id,
-                repo_type="model"
-            )
-            print("✅ Processor uploaded successfully")
+            # Clean up temporary directory immediately
+            if temp_model_dir and os.path.exists(temp_model_dir):
+                print(f"🧹 Cleaning up temporary directory...")
+                shutil.rmtree(temp_model_dir)
+                temp_model_dir = None
 
             # Add delay before uploading README
             time.sleep(3)
@@ -921,6 +947,13 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         except Exception as e:
             print(f"❌ Error saving model: {e}")
             check_disk_space()
+            # Clean up temporary directory on error
+            if temp_model_dir and os.path.exists(temp_model_dir):
+                print(f"🧹 Cleaning up temporary directory after error...")
+                try:
+                    shutil.rmtree(temp_model_dir)
+                except:
+                    pass
             raise
 
 
