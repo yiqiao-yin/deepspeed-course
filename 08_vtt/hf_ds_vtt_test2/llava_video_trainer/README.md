@@ -407,6 +407,109 @@ The script follows this streamlined workflow:
 - ✅ Only your trained model is saved publicly
 - ✅ Training data stays local
 
+### Detailed Training Execution Flow
+
+When you run training with DeepSpeed on 4 GPUs, here's what happens:
+
+#### 1. Training Phase (All 4 GPUs)
+```
+100%|████████| 3/3 [00:01<00:00, 3.06it/s]
+✅ Training completed successfully!
+```
+- All 4 ranks (GPUs 0-3) participate in distributed training
+- Training metrics logged to W&B (if enabled)
+- Model weights distributed across GPUs via ZeRO-2
+
+#### 2. Cleanup Phase (All 4 GPUs)
+```
+🧹 Cleaning up disk space after training...
+🧹 Cleared pip cache
+🧹 Cleared temporary files
+🧹 Cleared ./llava_video_finetune
+```
+- All ranks run cleanup to free disk space
+- Removes training artifacts, cache files, and checkpoints
+- Prepares for model upload
+
+#### 3. Model Save Phase (Only Rank 0)
+```
+Rank 0: "💾 Saving trained model..."
+Ranks 1, 2, 3: "⏭️ Skipping model save (only rank 0 saves)" → exit
+```
+- **Only rank 0 saves** to prevent 4x disk usage
+- Ranks 1-3 skip saving and exit cleanly
+- Prevents "disk quota exceeded" errors
+
+#### 4. Upload to Hub (Only Rank 0)
+```
+📁 Using temporary directory: /tmp/llava_model_xxxxx
+💾 Saving model to temporary directory...
+💾 Saving processor to temporary directory...
+📤 Uploading model to Hub...
+
+Processing Files (32 / 32): 100% | 16.3GB / 16.3GB
+New Data Upload: 100% | 16.3GB / 16.3GB, 412kB/s
+```
+
+### Understanding "New Data Upload"
+
+The `upload_folder` function performs **intelligent deduplication**:
+
+**Phase 1: Processing Files**
+```
+Processing Files (32 / 32): 16.3GB
+```
+- Scans all 32 files in the temp directory
+- Computes SHA256 hash for each file
+- Compares hashes with what's already on HuggingFace Hub
+
+**Phase 2: New Data Upload**
+```
+New Data Upload: 16.3GB / 16.3GB
+```
+- Only uploads files that **don't already exist** on the Hub
+- Skips files with matching hashes (already uploaded)
+
+**Benefits:**
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Deduplication** | If you update the model but tokenizer/config unchanged, only model weights upload |
+| **Resume on Failure** | If upload interrupted, re-running skips already-uploaded files |
+| **Bandwidth Savings** | Common files (processor, tokenizer) often unchanged between runs |
+| **Time Savings** | Skip re-uploading unchanged files |
+| **Cost Savings** | Less data transfer if using metered connections |
+
+**First Training Run:**
+```
+New Data Upload: 16.3GB / 16.3GB (100%)
+```
+All files uploaded (first time)
+
+**Second Training Run (same base model):**
+```
+Processing Files (32 / 32): 16.3GB
+New Data Upload: 7.2GB / 16.3GB  ← Only model weights changed!
+
+Skipped (unchanged):
+- tokenizer.json
+- special_tokens_map.json
+- preprocessor_config.json
+- config.json
+```
+
+### Disk Space Management
+
+**During Training:**
+- Peak usage: ~29.9GB on root (for temp model files)
+- Training creates NO local checkpoints (`save_strategy="no"`)
+- Only temporary model files during upload
+
+**After Training:**
+- Temp directory auto-deleted after upload
+- Returns to baseline disk usage
+- No lingering checkpoint files
+
 ## 🎬 Example Usage After Training
 
 ```python
