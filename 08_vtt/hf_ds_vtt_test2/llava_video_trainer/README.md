@@ -27,7 +27,7 @@ cd llava_video_trainer
 # 3. Initialize project
 uv init .
 
-# 4. Add all dependencies
+# 4. Add all dependencies (including deepspeed)
 uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 # 5. Set credentials
@@ -35,9 +35,9 @@ export HF_USER_ID=eagle0504
 export HF_TOKEN=your_hf_token
 export WANDB_API_KEY=your_wandb_key  # Optional
 
-# 6. Run training
+# 6. Run training with DeepSpeed (2 GPUs)
 export CUDA_VISIBLE_DEVICES=0,1
-uv run python video_training_script.py
+uv run deepspeed --num_gpus=2 video_training_script.py
 ```
 
 **Why `uv`?**
@@ -46,6 +46,7 @@ uv run python video_training_script.py
 - 📦 Creates isolated virtual environments with automatic activation
 - 🎯 Reproducible builds with lock files (pyproject.toml + uv.lock)
 - 📝 Uses `uv add` to manage dependencies in pyproject.toml
+- 🚀 Seamlessly integrates with `deepspeed` launcher via `uv run`
 
 ## 🏗️ Model Architecture
 
@@ -146,7 +147,7 @@ cleanup_cache_files()  # Clears pip cache and /tmp files
 
 ## 🚀 Running Training
 
-### Method 1: Using `uv` (Recommended)
+### Method 1: Using `uv` + DeepSpeed (Recommended)
 
 ```bash
 cd llava_video_trainer
@@ -163,15 +164,20 @@ export HF_TOKEN=your_hf_token
 # Step 3 (Optional): Set W&B tracking
 export WANDB_API_KEY=your_wandb_key  # ← Only if you want tracking
 
-# Step 4: Run training (2 GPUs example)
+# Step 4: Run training with DeepSpeed (2 GPUs example)
 export CUDA_VISIBLE_DEVICES=0,1
-uv run python video_training_script.py
+uv run deepspeed --num_gpus=2 video_training_script.py
 ```
 
-### Method 2: Direct Python Execution
+**Note:** Using `deepspeed` launcher enables proper distributed training with ZeRO optimizations.
+
+### Method 2: Direct DeepSpeed Execution
 
 ```bash
 cd llava_video_trainer
+
+# Install dependencies with pip
+pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 
 # Required environment variables
 export HF_USER_ID=eagle0504
@@ -180,9 +186,9 @@ export HF_TOKEN=your_hf_token
 # Optional - for Weights & Biases tracking
 export WANDB_API_KEY=your_wandb_key  # ← Only if you want tracking
 
-# Run training (2 GPUs example)
+# Run training with DeepSpeed (2 GPUs example)
 export CUDA_VISIBLE_DEVICES=0,1
-python video_training_script.py
+deepspeed --num_gpus=2 video_training_script.py
 ```
 
 **Weights & Biases Tracking (Optional):**
@@ -190,7 +196,8 @@ python video_training_script.py
 If you set `WANDB_API_KEY`:
 ```bash
 export WANDB_API_KEY=your_key
-python video_training_script.py
+export CUDA_VISIBLE_DEVICES=0,1
+deepspeed --num_gpus=2 video_training_script.py
 ```
 Output:
 ```
@@ -199,13 +206,14 @@ Output:
 
 If you don't set it:
 ```bash
-python video_training_script.py
+export CUDA_VISIBLE_DEVICES=0,1
+deepspeed --num_gpus=2 video_training_script.py
 ```
 Output:
 ```
 ℹ️  Weights & Biases disabled (WANDB_API_KEY not set)
 ```
-**Script still runs perfectly!**
+**Script still runs perfectly with or without W&B!**
 
 ### Method 3: With run_training.sh
 
