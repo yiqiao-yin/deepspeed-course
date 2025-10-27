@@ -110,26 +110,54 @@ cleanup_cache_files()  # Clears pip cache and /tmp files
 
 ## 🚀 Running Training
 
-### Method 1: Direct Execution
+### Method 1: Direct Execution (Recommended)
 
 ```bash
-# Set environment variables
-export HF_USER_ID=your_username
-export HF_TOKEN=your_token
+cd llava_video_trainer
 
-# Set visible GPUs
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+# Required environment variables
+export HF_USER_ID=eagle0504
+export HF_TOKEN=your_hf_token
 
-# Run with Python
+# Optional - for Weights & Biases tracking
+export WANDB_API_KEY=your_wandb_key  # ← Only if you want tracking
+
+# Run training (2 GPUs example)
+export CUDA_VISIBLE_DEVICES=0,1
 python video_training_script.py
 ```
 
-### Method 2: With run_training.sh (recommended)
+**Weights & Biases Tracking (Optional):**
+
+If you set `WANDB_API_KEY`:
+```bash
+export WANDB_API_KEY=your_key
+python video_training_script.py
+```
+Output:
+```
+✅ Weights & Biases enabled. Run: llava-video-20251027-123456
+```
+
+If you don't set it:
+```bash
+python video_training_script.py
+```
+Output:
+```
+ℹ️  Weights & Biases disabled (WANDB_API_KEY not set)
+```
+**Script still runs perfectly!**
+
+### Method 2: With run_training.sh
 
 ```bash
 # Set environment variables
 export HF_USER_ID=your_username
 export HF_TOKEN=your_token
+
+# Optional - for W&B tracking
+export WANDB_API_KEY=your_wandb_key
 
 # Make script executable
 chmod +x run_training.sh
@@ -144,19 +172,24 @@ chmod +x run_training.sh
 ## 📦 Requirements
 
 ```bash
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests
+pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
 ```
 
 **Key dependencies:**
 - `pillow` - For image processing (PIL)
 - `requests` - For downloading video frames
 - `transformers` - LLaVA model support
+- `wandb` - (Optional) For experiment tracking
 
 ## 🎓 Training Configuration
 
 ```python
+# Check if wandb is available and configured
+use_wandb = WANDB_AVAILABLE and os.environ.get("WANDB_API_KEY") is not None
+
 TrainingArguments(
     output_dir="./llava_video_finetune",
+    run_name=f"llava-video-{timestamp}" if use_wandb else None,
     per_device_train_batch_size=1,  # Large model, small batch
     num_train_epochs=3,
     learning_rate=5e-5,
@@ -166,7 +199,8 @@ TrainingArguments(
     do_eval=True,
     save_total_limit=2,
     warmup_steps=100,
-    weight_decay=0.01
+    weight_decay=0.01,
+    report_to=["wandb"] if use_wandb else []  # Optional W&B tracking
 )
 ```
 
@@ -174,18 +208,19 @@ TrainingArguments(
 - `remove_unused_columns=False` is **essential** for vision-language models
 - `eval_dataset=None` prevents local checkpoint creation (saves disk space)
 - Model is pushed directly to Hub after training
+- `report_to=["wandb"]` is automatically set if `WANDB_API_KEY` is available
 
 ## 💾 Model Saving Strategy
 
 This script uses a **direct-to-Hub** approach to save disk space:
 
 ```python
-# After training
+# After training - only model is uploaded
 self.save_model_directly_to_hub(
     trainer.model,
     model_repo_id,
-    dataset_repo_id,
-    base_model
+    base_model,
+    num_samples=len(video_urls)
 )
 
 # Uses safetensors with smaller shards
@@ -200,6 +235,7 @@ model.push_to_hub(
 - No local checkpoint creation during training
 - Smaller shards (2GB) reduce memory requirements
 - Uses safetensors format (safer, faster)
+- **No dataset uploads** - only the trained model is pushed
 
 ## 📊 Typical Resource Usage
 
@@ -253,10 +289,31 @@ The script automatically fixes common LLaVA processor issues:
 
 ## 📝 Output
 
-**Dataset:** `{HF_USER_ID}/llava-video-text-dataset`
 **Model:** `{HF_USER_ID}/llava-video-text-model`
 
-Both are automatically pushed to HuggingFace Hub with comprehensive READMEs.
+The trained model is automatically pushed to HuggingFace Hub with a comprehensive README.
+
+**What gets uploaded:**
+- ✅ Trained model weights (safetensors format)
+- ✅ Model processor/tokenizer
+- ✅ Model card (README.md)
+- ❌ Dataset (not uploaded - only used locally for training)
+
+## 🔄 Training Workflow
+
+The script follows this streamlined workflow:
+
+1. **Download** → Downloads video frames from provided URLs
+2. **Process** → Creates LLaVA conversation format with 5 frames per video
+3. **Train** → Fine-tunes LLaVA model with DeepSpeed
+4. **Upload** → Pushes only the trained model to HuggingFace Hub
+5. **(Optional)** → Tracks metrics in Weights & Biases if configured
+
+**No dataset uploads** means:
+- ✅ Faster workflow
+- ✅ No 409/412 repository conflict errors
+- ✅ Only your trained model is saved publicly
+- ✅ Training data stays local
 
 ## 🎬 Example Usage After Training
 
