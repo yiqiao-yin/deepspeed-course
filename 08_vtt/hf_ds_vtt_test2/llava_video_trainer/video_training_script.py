@@ -646,7 +646,6 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             num_train_epochs=3,
             learning_rate=5e-5,
             save_strategy="no",  # Disable all local checkpoints to save disk space
-            evaluation_strategy="no",  # Disable evaluation checkpoints
             logging_dir="./logs",
             logging_steps=10,  # Reduced logging frequency
             report_to=report_to,
