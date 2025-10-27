@@ -29,7 +29,7 @@ from transformers import (
     DataCollatorForSeq2Seq
 )
 from trl import SFTTrainer
-from huggingface_hub import HfApi, create_repo, upload_file
+from huggingface_hub import HfApi, create_repo, upload_file, delete_repo
 from huggingface_hub.errors import HfHubHTTPError
 
 
@@ -85,35 +85,48 @@ def cleanup_cache_files() -> None:
 
 
 class RetryHandler:
-    """Handle retries with exponential backoff for rate limiting."""
-    
-    @staticmethod
+    """Handle retries with exponential backoff for rate limiting and conflict resolution."""
+
+    def __init__(self, hf_token: str = None):
+        """
+        Initialize retry handler.
+
+        Args:
+            hf_token: HuggingFace token for repository operations
+        """
+        self.hf_token = hf_token
+
     def exponential_backoff_retry(
-        func, 
-        max_retries: int = 5, 
+        self,
+        func,
+        max_retries: int = 5,
         base_delay: float = 1.0,
         max_delay: float = 60.0,
-        backoff_factor: float = 2.0
+        backoff_factor: float = 2.0,
+        repo_id: str = None,
+        repo_type: str = None
     ):
         """
         Execute function with exponential backoff retry logic.
-        
+
         Args:
             func: Function to execute
             max_retries: Maximum number of retry attempts
             base_delay: Initial delay in seconds
             max_delay: Maximum delay in seconds
             backoff_factor: Multiplier for delay increase
-            
+            repo_id: Repository ID (for 412 conflict handling)
+            repo_type: Repository type: "model" or "dataset" (for 412 conflict handling)
+
         Returns:
             Function result if successful
-            
+
         Raises:
             Exception: If all retries fail
         """
         delay = base_delay
         last_exception = None
-        
+
         for attempt in range(max_retries + 1):
             try:
                 return func()
@@ -129,8 +142,26 @@ class RetryHandler:
                     else:
                         print("❌ Max retries reached for rate limiting")
                         raise
+                elif e.response.status_code == 412:  # Precondition Failed (conflict)
+                    if attempt < max_retries and repo_id and repo_type and self.hf_token:
+                        print(f"⚠️  Repository conflict (412). Deleting and recreating {repo_id}...")
+                        try:
+                            delete_repo(repo_id, repo_type=repo_type, token=self.hf_token)
+                            print(f"🗑️  Deleted {repo_type} repository: {repo_id}")
+                            time.sleep(2)  # Wait before recreating
+                        except Exception as del_error:
+                            print(f"⚠️  Could not delete repo (might not exist): {del_error}")
+
+                        print(f"🔄 Retrying after cleanup (attempt {attempt + 2}/{max_retries + 1})")
+                        time.sleep(delay)
+                        delay = min(delay * backoff_factor, max_delay)
+                        continue
+                    else:
+                        print(f"❌ HTTP Error 412: Repository conflict. Cannot auto-resolve.")
+                        print(f"   Try manually deleting: https://huggingface.co/{repo_id}")
+                        raise
                 else:
-                    # Non-rate-limiting error, don't retry
+                    # Other HTTP errors, don't retry
                     print(f"❌ HTTP Error {e.response.status_code}: {e}")
                     raise
             except Exception as e:
@@ -143,7 +174,7 @@ class RetryHandler:
                 else:
                     print("❌ Max retries reached")
                     raise
-        
+
         raise last_exception
 
 
@@ -153,7 +184,7 @@ class VideoTextTrainer:
     def __init__(self, hf_user_id: str, hf_token: str, num_frames: int = 5):
         """
         Initialize the trainer.
-        
+
         Args:
             hf_user_id: Hugging Face user ID
             hf_token: Hugging Face API token
@@ -163,7 +194,7 @@ class VideoTextTrainer:
         self.hf_token = hf_token
         self.num_frames = num_frames
         self.processor = None
-        self.retry_handler = RetryHandler()
+        self.retry_handler = RetryHandler(hf_token=hf_token)
         self.validate_credentials()
     
     def validate_credentials(self) -> None:
@@ -306,8 +337,8 @@ This dataset is designed for LLaVA models that support video input through multi
 """
 
     def push_dataset_to_hub(
-        self, 
-        dataset_dict: DatasetDict, 
+        self,
+        dataset_dict: DatasetDict,
         repo_id: str
     ) -> None:
         """
@@ -318,40 +349,48 @@ This dataset is designed for LLaVA models that support video input through multi
             repo_id: Repository ID for the dataset
         """
         print(f"📤 Pushing dataset to {repo_id} (with retry logic)...")
-        
+
         # First, create the repository if it doesn't exist
         def create_dataset_repo():
             return create_repo(
-                repo_id, 
+                repo_id,
                 repo_type="dataset",
-                private=False, 
-                exist_ok=True, 
+                private=False,
+                exist_ok=True,
                 token=self.hf_token
             )
-        
-        self.retry_handler.exponential_backoff_retry(create_dataset_repo)
+
+        self.retry_handler.exponential_backoff_retry(
+            create_dataset_repo,
+            repo_id=repo_id,
+            repo_type="dataset"
+        )
         print("✅ Dataset repository created/verified")
-        
+
         # Add delay to avoid immediate rate limiting
         time.sleep(2)
-        
+
         # Push dataset with retry logic
         def push_dataset():
             return dataset_dict.push_to_hub(repo_id, token=self.hf_token)
-        
-        self.retry_handler.exponential_backoff_retry(push_dataset)
+
+        self.retry_handler.exponential_backoff_retry(
+            push_dataset,
+            repo_id=repo_id,
+            repo_type="dataset"
+        )
         print("✅ Dataset uploaded successfully")
-        
+
         # Add delay before uploading README
         time.sleep(3)
-        
+
         # Create and upload README with retry logic
         readme_content = self.create_dataset_readme(repo_id)
-        
+
         readme_path = "/workspace/dataset_README.md"  # Save to workspace
         with open(readme_path, "w", encoding="utf-8") as file:
             file.write(readme_content)
-        
+
         def upload_readme():
             return upload_file(
                 path_or_fileobj=readme_path,
@@ -360,8 +399,12 @@ This dataset is designed for LLaVA models that support video input through multi
                 repo_type="dataset",
                 token=self.hf_token
             )
-        
-        self.retry_handler.exponential_backoff_retry(upload_readme)
+
+        self.retry_handler.exponential_backoff_retry(
+            upload_readme,
+            repo_id=repo_id,
+            repo_type="dataset"
+        )
         print("✅ Dataset README uploaded successfully")
 
     def download_and_process_video_frames(self, video_url: str, num_frames: int) -> List[Image.Image]:
@@ -702,15 +745,15 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             raise
         
     def save_model_directly_to_hub(
-        self, 
-        model, 
+        self,
+        model,
         model_repo_id: str,
         dataset_repo_id: str,
         base_model: str
     ) -> None:
         """
         Save model directly to HuggingFace Hub without local checkpoint.
-        
+
         Args:
             model: Trained model to save
             model_repo_id: Repository ID for the model
@@ -718,62 +761,74 @@ This model expects {self.num_frames} frames extracted from each video. For best 
             base_model: Base model name
         """
         print(f"💾 Saving LLaVA model directly to {model_repo_id}...")
-        
+
         # Create model repository with retry
         def create_model_repo():
             return create_repo(
-                model_repo_id, 
-                private=False, 
-                exist_ok=True, 
+                model_repo_id,
+                private=False,
+                exist_ok=True,
                 token=self.hf_token
             )
-        
-        self.retry_handler.exponential_backoff_retry(create_model_repo)
+
+        self.retry_handler.exponential_backoff_retry(
+            create_model_repo,
+            repo_id=model_repo_id,
+            repo_type="model"
+        )
         print("✅ Model repository created/verified")
-        
+
         # Add delay to avoid rate limiting
         time.sleep(5)
-        
+
         # Check disk space before saving
         check_disk_space()
-        
+
         try:
             # Push model directly to hub with retry logic
             def push_model():
                 return model.push_to_hub(
-                    model_repo_id, 
+                    model_repo_id,
                     token=self.hf_token,
                     safe_serialization=True,  # Use safetensors for smaller files
                     max_shard_size="2GB"      # Smaller shards to avoid memory issues
                 )
-            
-            self.retry_handler.exponential_backoff_retry(push_model)
+
+            self.retry_handler.exponential_backoff_retry(
+                push_model,
+                repo_id=model_repo_id,
+                repo_type="model"
+            )
             print("✅ Model uploaded successfully")
-            
+
             # Add delay before pushing processor
             time.sleep(3)
-            
+
             # Push processor with retry logic
             def push_processor():
                 return self.processor.push_to_hub(model_repo_id, token=self.hf_token)
-            
-            self.retry_handler.exponential_backoff_retry(push_processor)
+
+            self.retry_handler.exponential_backoff_retry(
+                push_processor,
+                repo_id=model_repo_id,
+                repo_type="model"
+            )
             print("✅ Processor uploaded successfully")
-            
+
             # Add delay before uploading README
             time.sleep(3)
 
             # Upload model README with retry logic
             model_readme = self.create_model_readme(
-                model_repo_id, 
-                dataset_repo_id, 
+                model_repo_id,
+                dataset_repo_id,
                 base_model
             )
-            
+
             readme_path = "/workspace/model_README.md"  # Save to workspace
             with open(readme_path, "w", encoding="utf-8") as file:
                 file.write(model_readme)
-            
+
             def upload_model_readme():
                 return upload_file(
                     path_or_fileobj=readme_path,
@@ -782,10 +837,14 @@ This model expects {self.num_frames} frames extracted from each video. For best 
                     repo_type="model",
                     token=self.hf_token
                 )
-            
-            self.retry_handler.exponential_backoff_retry(upload_model_readme)
+
+            self.retry_handler.exponential_backoff_retry(
+                upload_model_readme,
+                repo_id=model_repo_id,
+                repo_type="model"
+            )
             print("✅ Model README uploaded successfully")
-            
+
         except Exception as e:
             print(f"❌ Error saving model: {e}")
             check_disk_space()
