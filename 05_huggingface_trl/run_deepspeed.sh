@@ -46,7 +46,7 @@ mkdir -p logs
 
 # Activate Python virtual environment
 # Option 1: Using uv (recommended for faster dependency management)
-# pip install uv && uv init . && uv add torch transformers trl datasets deepspeed wandb
+# pip install uv && uv init . && uv add torch transformers trl datasets deepspeed wandb hf_transfer
 # source .venv/bin/activate
 
 # Option 2: Using traditional virtualenv

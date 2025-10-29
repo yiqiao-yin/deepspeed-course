@@ -12,7 +12,7 @@ The training enables the model to:
 Requirements:
     pip install uv
     uv init .
-    uv add torch transformers trl datasets deepspeed wandb
+    uv add torch transformers trl datasets deepspeed wandb hf_transfer
 """
 
 import json

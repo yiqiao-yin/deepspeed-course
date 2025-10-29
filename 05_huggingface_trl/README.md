@@ -14,7 +14,7 @@ cd 05_huggingface_trl
 # Setup (first time only)
 pip install uv
 uv init .
-uv add torch transformers trl datasets deepspeed wandb
+uv add torch transformers trl datasets deepspeed wandb hf_transfer
 
 # Option 1: Direct training (2 GPUs)
 uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
@@ -50,7 +50,7 @@ pip install uv
 
 # Initialize project and add dependencies
 uv init .
-uv add torch transformers trl datasets deepspeed wandb
+uv add torch transformers trl datasets deepspeed wandb hf_transfer
 
 # Optional: Enable W&B tracking
 export WANDB_API_KEY=your_api_key
