@@ -233,7 +233,6 @@ def main() -> None:
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer,
     )
 
     print(f"✅ SFTTrainer initialized successfully")
