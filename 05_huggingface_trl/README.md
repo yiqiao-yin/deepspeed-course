@@ -61,9 +61,12 @@ uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
 
 **Training Configuration:**
 - Epochs: 3
-- Batch size: 4 per GPU (effective: 8 with 2 GPUs)
+- Batch size: 4 per GPU (effective: 16 with 2 GPUs and gradient accumulation)
+  - `train_micro_batch_size_per_gpu`: 4
+  - `gradient_accumulation_steps`: 2
+  - `train_batch_size`: 16 (4 × 2 GPUs × 2 accumulation)
 - Learning rate: 2e-5 with 100 warmup steps
-- Optimizer: AdamW
+- Optimizer: AdamW (weight_decay: auto-synced with TrainingArguments)
 - Precision: FP32 (for stability)
 - Training time: ~10 minutes on 2 GPUs
 
@@ -74,6 +77,50 @@ uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
    - Samples per second: ~30
    - Model saved to: ./sft_qwen_model
 ```
+
+### DeepSpeed Configuration (`ds_config.json`)
+
+The training uses the following DeepSpeed configuration optimized for 2 GPUs:
+
+```json
+{
+  "train_batch_size": 16,
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 2,
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": 2e-5,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8,
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupLR",
+    "params": {
+      "warmup_min_lr": 0,
+      "warmup_max_lr": 2e-5,
+      "warmup_num_steps": 100
+    }
+  },
+  "gradient_clipping": 1.0,
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {"device": "none"},
+    "allgather_partitions": true,
+    "overlap_comm": true,
+    "reduce_scatter": true
+  }
+}
+```
+
+**Key Settings:**
+- **ZeRO Stage 2**: Optimizer state partitioning for memory efficiency
+- **Batch Size Calculation**: 4 (per GPU) × 2 (GPUs) × 2 (grad accum) = 16 total
+- **Weight Decay**: `"auto"` syncs with TrainingArguments for consistency
+- **Gradient Clipping**: 1.0 prevents gradient explosion
+- **FP32 Precision**: Disabled fp16/bf16 for numerical stability
 
 ### Inference Examples
 
