@@ -11,8 +11,13 @@ This directory now includes production-ready Python scripts for DeepSpeed distri
 ```bash
 cd 05_huggingface_trl
 
+# Setup (first time only)
+pip install uv
+uv init .
+uv add torch transformers trl datasets deepspeed wandb
+
 # Option 1: Direct training (2 GPUs)
-deepspeed --num_gpus=2 train_trl_deepspeed.py
+uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
 
 # Option 2: SLURM batch job
 sbatch run_deepspeed.sh
@@ -40,14 +45,18 @@ python inference_trl_model.py --model_path ./sft_qwen_model
 ### Training with DeepSpeed
 
 ```bash
-# Install dependencies
-pip install transformers trl datasets deepspeed torch wandb
+# Install uv (if not already installed)
+pip install uv
+
+# Initialize project and add dependencies
+uv init .
+uv add torch transformers trl datasets deepspeed wandb
 
 # Optional: Enable W&B tracking
 export WANDB_API_KEY=your_api_key
 
 # Train with 2 GPUs
-deepspeed --num_gpus=2 train_trl_deepspeed.py
+uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
 ```
 
 **Training Configuration:**

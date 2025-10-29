@@ -45,8 +45,12 @@ mkdir -p logs
 # export WANDB_API_KEY=<ENTER_KEY_HERE>
 
 # Activate Python virtual environment
+# Option 1: Using uv (recommended for faster dependency management)
+# pip install uv && uv init . && uv add torch transformers trl datasets deepspeed wandb
+# source .venv/bin/activate
+
+# Option 2: Using traditional virtualenv
 # Update this path to your actual virtual environment location
-# Using uv is recommended for faster dependency management
 source ~/myenv/bin/activate
 
 # Print job information

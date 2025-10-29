@@ -10,7 +10,9 @@ The training enables the model to:
 3. Process tool responses and continue conversations
 
 Requirements:
-    pip install transformers trl datasets deepspeed wandb torch
+    pip install uv
+    uv init .
+    uv add torch transformers trl datasets deepspeed wandb
 """
 
 import json
