@@ -1,6 +1,93 @@
-# Hugging Face TRL: Tool-Calling Model Fine-tuning
+# TRL Function Calling Training with DeepSpeed 🤖🔧
 
-Fine-tune small language models to use function calling/tool usage with Hugging Face TRL (Transformer Reinforcement Learning) library on custom tool-augmented datasets.
+Fine-tune Qwen/Qwen3-0.6B for function calling capabilities using TRL's SFTTrainer with DeepSpeed distributed training.
+
+## 🆕 New: Production-Ready DeepSpeed Scripts
+
+This directory now includes production-ready Python scripts for DeepSpeed distributed training:
+
+### Quick Start with DeepSpeed
+
+```bash
+cd 05_huggingface_trl
+
+# Option 1: Direct training (2 GPUs)
+deepspeed --num_gpus=2 train_trl_deepspeed.py
+
+# Option 2: SLURM batch job
+sbatch run_deepspeed.sh
+
+# Option 3: Inference
+python inference_trl_model.py --model_path ./sft_qwen_model
+```
+
+### New Files
+
+| File | Description |
+|------|-------------|
+| `train_trl_deepspeed.py` | Training script with DeepSpeed + ZeRO-2, optional W&B |
+| `ds_config.json` | DeepSpeed configuration (AdamW, ZeRO Stage 2) |
+| `run_deepspeed.sh` | SLURM batch script for HPC clusters |
+| `inference_trl_model.py` | Inference script with interactive mode |
+
+**Features:**
+- ✅ **DeepSpeed Integration**: ZeRO Stage 2 optimization for multi-GPU training
+- ✅ **Optional W&B Tracking**: Set `WANDB_API_KEY` to enable experiment logging
+- ✅ **Pylint Compliant**: Clean, production-ready code
+- ✅ **SLURM Support**: Ready for HPC cluster deployment
+- ✅ **Interactive Inference**: Test your model with sample prompts or custom queries
+
+### Training with DeepSpeed
+
+```bash
+# Install dependencies
+pip install transformers trl datasets deepspeed torch wandb
+
+# Optional: Enable W&B tracking
+export WANDB_API_KEY=your_api_key
+
+# Train with 2 GPUs
+deepspeed --num_gpus=2 train_trl_deepspeed.py
+```
+
+**Training Configuration:**
+- Epochs: 3
+- Batch size: 4 per GPU (effective: 8 with 2 GPUs)
+- Learning rate: 2e-5 with 100 warmup steps
+- Optimizer: AdamW
+- Precision: FP32 (for stability)
+- Training time: ~10 minutes on 2 GPUs
+
+**Expected Output:**
+```
+✅ Training Completed Successfully!
+   - Training loss: ~0.105
+   - Samples per second: ~30
+   - Model saved to: ./sft_qwen_model
+```
+
+### Inference Examples
+
+**Sample prompts mode:**
+```bash
+python inference_trl_model.py
+```
+
+**Single prompt:**
+```bash
+python inference_trl_model.py --prompt "Set a timer for 10 minutes"
+```
+
+**Interactive mode:**
+```bash
+python inference_trl_model.py --interactive
+```
+
+---
+
+## Original Notebook-Based Workflow
+
+The sections below document the original Jupyter notebook workflow for interactive development and experimentation.
 
 ## Features
 
