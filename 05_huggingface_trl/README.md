@@ -23,7 +23,7 @@ uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
 sbatch run_deepspeed.sh
 
 # Option 3: Inference
-python inference_trl_model.py --model_path ./sft_qwen_model
+uv run inference_trl_model.py --model_path ./sft_qwen_model
 ```
 
 ### New Files
@@ -126,17 +126,17 @@ The training uses the following DeepSpeed configuration optimized for 2 GPUs:
 
 **Sample prompts mode:**
 ```bash
-python inference_trl_model.py
+uv run inference_trl_model.py
 ```
 
 **Single prompt:**
 ```bash
-python inference_trl_model.py --prompt "Set a timer for 10 minutes"
+uv run inference_trl_model.py --prompt "Set a timer for 10 minutes"
 ```
 
 **Interactive mode:**
 ```bash
-python inference_trl_model.py --interactive
+uv run inference_trl_model.py --interactive
 ```
 
 ---
