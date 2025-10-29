@@ -85,7 +85,14 @@ deepspeed-course/
 │
 ├── 04_transferlearning/               # (TBD)
 ├── 05_huggingface/                    # HuggingFace examples
-├── 05_huggingface_trl/                # TRL (Transformer Reinforcement Learning)
+├── 05_huggingface_trl/                # TRL Function Calling with DeepSpeed
+│   ├── train_trl_deepspeed.py         # SFTTrainer with DeepSpeed + ZeRO-2
+│   ├── inference_trl_model.py         # Inference (sample/single/interactive modes)
+│   ├── ds_config.json                 # DeepSpeed config (batch_size=16, auto weight_decay)
+│   ├── run_deepspeed.sh               # SLURM batch script (2 GPUs)
+│   ├── tool_augmented_dataset.json    # Function calling training data
+│   └── README.md                      # Complete TRL + DeepSpeed guide
+│
 ├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
 ├── 07_huggingface_openai_gpt_oss_finetune_sft/  # SFT examples
 ├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
@@ -107,117 +114,6 @@ deepspeed-course/
 │
 └── README.md                          # This file
 ```
-
----
-
-## 08_vtt: Video-Text-to-Text Training 🎥📝
-
-The `08_vtt` directory contains two specialized video training frameworks optimized for different use cases. Both support DeepSpeed multi-GPU training with optional Weights & Biases tracking.
-
-### 🔍 Quick Comparison
-
-| Feature | LLaVA Trainer | Seq2Seq Trainer |
-|---------|---------------|-----------------|
-| **Use Case** | Video understanding with visual frames | Text generation about videos |
-| **Model** | LLaVA 7B (vision-language) | NLLB 600M (text-to-text) |
-| **Visual Processing** | ✅ Extracts & processes 5 frames/video | ❌ Text-only (no frames) |
-| **Config Strategy** | 🔧 Auto-generated with `"auto"` values | 📄 External file (manual sync) |
-| **GPU Memory** | 16-20GB per GPU (ZeRO-2) | 6-8GB per GPU (ZeRO-2) |
-| **Training Time** | 10-15 min (4 GPUs, 3 epochs) | 2-3 min (4 GPUs, 3 epochs) |
-| **Dependencies** | PIL, requests, transformers, trl, wandb, hf_transfer | transformers, trl only |
-
-### 📂 LLaVA Video Trainer
-
-**Perfect for:** Video understanding tasks requiring actual visual frame comprehension.
-
-**Features:**
-- Downloads and extracts 5 frames per video as PIL Images
-- Creates LLaVA conversation format with multi-frame context
-- Auto-generates DeepSpeed config synced with TrainingArguments
-- Optional Weights & Biases integration (graceful fallback)
-- Aggressive disk management (rank 0 saves only, temp directory cleanup)
-- Direct-to-Hub upload with intelligent deduplication
-- Comprehensive training workflow logging
-
-**Quick Start:**
-```bash
-cd 08_vtt/hf_ds_vtt_test2/llava_video_trainer
-
-# Install dependencies with uv
-pip install uv
-uv init .
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
-
-# Set environment
-export HF_USER_ID=your_username
-export HF_TOKEN=your_token
-export WANDB_API_KEY=your_key  # Optional
-
-# Run training (4 GPUs)
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-uv run deepspeed --num_gpus=4 video_training_script.py
-```
-
-**What Gets Uploaded:**
-- ✅ Trained model weights (safetensors, 500MB shards)
-- ✅ Processor/tokenizer
-- ✅ Model README card
-- ❌ Dataset (stays local)
-
-**Training Execution Flow:**
-1. **Training Phase** (All 4 GPUs): Distributed training with ZeRO-2
-2. **Cleanup Phase** (All 4 GPUs): Free disk space
-3. **Model Save** (Rank 0 only): Prevents 4x disk usage
-4. **Upload to Hub** (Rank 0 only): Intelligent deduplication
-
----
-
-### 📂 Seq2Seq Video Trainer
-
-**Perfect for:** Text-based video tasks with metadata (titles, captions, descriptions).
-
-**Features:**
-- Text-to-text generation (no frame extraction)
-- Smaller 600M model for faster iteration
-- External DeepSpeed config (must sync manually)
-- Lower GPU memory requirements
-- Standard checkpointing workflow
-
-**Quick Start:**
-```bash
-cd 08_vtt/hf_ds_vtt_test2/seq2seq_video_trainer
-
-# Install dependencies
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed
-
-# Set environment
-export HF_USER_ID=your_username
-export HF_TOKEN=your_token
-
-# Run training (4 GPUs)
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-deepspeed --num_gpus=4 video_text_trainer.py
-```
-
-**Important:** The `ds_config.json` must exist and be manually synced with TrainingArguments (batch size, learning rate, etc.).
-
----
-
-### 🎯 When to Use Which?
-
-**Use LLaVA Trainer when:**
-- ✅ Need actual video understanding through visual frames
-- ✅ Working on video QA, visual captioning, or scene analysis
-- ✅ Have 16GB+ GPU memory available
-- ✅ Want auto-generated DeepSpeed config
-
-**Use Seq2Seq Trainer when:**
-- ✅ Processing video metadata (text-only)
-- ✅ Need smaller model for faster experiments
-- ✅ Have limited GPU resources (6-8GB)
-- ✅ Working on text generation tasks
-
-**Detailed comparison and full documentation:** See `08_vtt/hf_ds_vtt_test2/README.md`
 
 ---
 
@@ -812,41 +708,6 @@ sbatch run_deepspeed.sh  # SLURM
 cd 04_intermediate_rnn_stock_data
 sbatch run_deepspeed.sh  # SLURM
 # Or: deepspeed --num_gpus=2 train_rnn_stock_data_ds.py  # Direct
-```
-
-**LLaVA Video Trainer (Vision-Language, 7B Model):**
-```bash
-cd 08_vtt/hf_ds_vtt_test2/llava_video_trainer
-
-# Setup with uv
-pip install uv
-uv init .
-uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
-
-# Set environment
-export HF_USER_ID=your_username
-export HF_TOKEN=your_token
-export WANDB_API_KEY=your_key  # Optional
-
-# Run training (4 GPUs, auto-generated DeepSpeed config)
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-uv run deepspeed --num_gpus=4 video_training_script.py
-```
-
-**Seq2Seq Video Trainer (Text-Only, 600M Model):**
-```bash
-cd 08_vtt/hf_ds_vtt_test2/seq2seq_video_trainer
-
-# Install dependencies
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed
-
-# Set environment
-export HF_USER_ID=your_username
-export HF_TOKEN=your_token
-
-# Run training (4 GPUs, uses external ds_config.json)
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-deepspeed --num_gpus=4 video_text_trainer.py
 ```
 
 ---
