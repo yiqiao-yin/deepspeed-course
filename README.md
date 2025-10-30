@@ -76,6 +76,11 @@ deepspeed-course/
 │   ├── run_deepspeed.sh              # SLURM batch script
 │   └── README.md                      # Documentation with W&B guide
 │
+├── 04_bayesian_neuralnet/
+│   ├── parallel_tempering_mcmc.py    # Parallel tempering MCMC for Bayesian NNs
+│   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
+│   └── README.md                      # Bayesian inference with replica exchange
+│
 ├── 04_intermediate_rnn_stock_data/
 │   ├── train_rnn_stock_data.py       # Single-machine stock RNN training
 │   ├── train_rnn_stock_data_ds.py    # DeepSpeed stock RNN with W&B
