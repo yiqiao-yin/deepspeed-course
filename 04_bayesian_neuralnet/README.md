@@ -122,18 +122,20 @@ This implementation is designed for **uncertainty quantification in production M
 
 ## What is Parallel Tempering?
 
-In standard MCMC, we sample from the posterior: **p(θ|D) ∝ p(D|θ) p(θ)**
+In standard MCMC, we sample from the posterior:
 
-Parallel tempering introduces a temperature parameter **T** that modifies the posterior:
+$$p(\boldsymbol{\theta} \mid \mathcal{D}) \propto p(\mathcal{D} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})$$
 
-**p_T(θ|D) ∝ [p(D|θ) p(θ)]^(1/T)**
+Parallel tempering introduces a temperature parameter $T$ that modifies the posterior:
 
-- **T = 1.0** (cold chain): Samples from the true posterior
-- **T > 1.0** (hot chains): Flattened posterior allows easier exploration
+$$p_T(\boldsymbol{\theta} \mid \mathcal{D}) \propto [p(\mathcal{D} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})]^{1/T}$$
+
+- $T = 1.0$ (cold chain): Samples from the true posterior
+- $T > 1.0$ (hot chains): Flattened posterior allows easier exploration
 
 **Replica Exchange:** Periodically swap configurations between adjacent temperature chains with acceptance probability:
 
-**α = min(1, exp[(1/T_i - 1/T_j)(log p(θ_j|D) - log p(θ_i|D))])**
+$$\alpha = \min\left(1, \exp\left[\left(\frac{1}{T_i} - \frac{1}{T_j}\right)\left(\log p(\boldsymbol{\theta}_j \mid \mathcal{D}) - \log p(\boldsymbol{\theta}_i \mid \mathcal{D})\right)\right]\right)$$
 
 This allows hot chains to escape local modes and cold chains to benefit from this exploration.
 
@@ -158,8 +160,8 @@ The replica exchange implementation has been significantly improved with a **sym
    - Ensures both replicas make **identical accept/reject decisions** (required for detailed balance)
 
 3. **Correct Energy Formulation** 🔬
-   - Now uses proper statistical physics formulation: **E = -log p(θ|D)**
-   - Swap acceptance: **α = min(1, exp[(β_i - β_j)(E_j - E_i)])** where **β = 1/T**
+   - Now uses proper statistical physics formulation: $E = -\log p(\boldsymbol{\theta} \mid \mathcal{D})$
+   - Swap acceptance: $\alpha = \min(1, \exp[(\beta_i - \beta_j)(E_j - E_i)])$ where $\beta = 1/T$
    - Previous version had inverted formula which could affect acceptance rates
 
 4. **Enhanced Logging** 📊
@@ -184,7 +186,7 @@ The replica exchange implementation has been significantly improved with a **sym
 The improved algorithm has been tested and confirmed to produce:
 - ✅ Correct swap acceptance rates (10-40% for well-spaced temperatures)
 - ✅ Proper mixing between hot and cold chains
-- ✅ Convergent posterior samples from the coldest chain (T=1.0)
+- ✅ Convergent posterior samples from the coldest chain ($T=1.0$)
 - ✅ Detailed balance satisfaction in replica exchange transitions
 
 ---
@@ -585,11 +587,12 @@ uv run deepspeed --num_gpus=4 parallel_tempering_mcmc.py \
 
 The script automatically creates a **geometric temperature schedule** based on the number of GPUs:
 
-**T_i = T_min × (T_max / T_min)^(i / (num_gpus - 1))**
+$$T_i = T_{\min} \times \left(\frac{T_{\max}}{T_{\min}}\right)^{i / (K - 1)}$$
 
 Where:
-- **T_min = 1.0** (coldest chain, samples true posterior)
-- **T_max = 10.0** (hottest chain, explores freely)
+- $T_{\min} = 1.0$ (coldest chain, samples true posterior)
+- $T_{\max} = 10.0$ (hottest chain, explores freely)
+- $K$ = number of GPUs (replicas)
 
 **Example schedules:**
 
@@ -712,42 +715,6 @@ uv run deepspeed --num_gpus=4 parallel_tempering_mcmc.py
 # Solution: Longer run with more thinning
 --num_iterations 10000 --burn_in 2000 --thinning 10
 ```
-
----
-
-## Mathematical Details
-
-### Bayesian Neural Network Model
-
-**Prior:** p(θ) = N(0, σ_prior² I)
-
-**Likelihood:** p(y|X, θ) = N(f(X; θ), σ_noise² I)
-
-**Posterior:** p(θ|D) ∝ p(D|θ) p(θ)
-
-Where:
-- **θ**: Neural network parameters
-- **f(X; θ)**: Neural network forward pass
-- **σ_prior**: Prior standard deviation (default: 1.0)
-- **σ_noise**: Observation noise std dev (default: 0.1)
-
-### Metropolis-Hastings with Temperature
-
-**Proposal:** θ' = θ + ε, where ε ~ N(0, σ_proposal² I)
-
-**Acceptance Ratio:**
-```
-α = min(1, exp([log p(θ'|D) - log p(θ|D)] / T))
-```
-
-### Replica Exchange
-
-**Swap Acceptance:**
-```
-α = min(1, exp[(1/T_i - 1/T_j)(log p(θ_j|D) - log p(θ_i|D))])
-```
-
-This ensures detailed balance and converges to the correct distribution.
 
 ---
 
