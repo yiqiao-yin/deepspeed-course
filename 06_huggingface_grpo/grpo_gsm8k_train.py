@@ -7,7 +7,8 @@ import logging
 from typing import List
 
 from datasets import load_dataset
-from trl import GRPOTrainer
+from transformers import TrainingArguments
+from trl import GRPOConfig, GRPOTrainer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -127,12 +128,40 @@ def main() -> None:
         [col for col in dataset.column_names if col not in ["prompt", "output"]]
     )
 
+    logger.info("Configuring training with DeepSpeed...")
+    # Create training arguments with DeepSpeed config
+    training_args = TrainingArguments(
+        output_dir="./grpo-trained-qwen-gsm8k",
+        num_train_epochs=3,
+        per_device_train_batch_size=32,  # Will be overridden by DeepSpeed config
+        gradient_accumulation_steps=1,
+        learning_rate=5e-5,
+        logging_steps=50,
+        save_strategy="epoch",
+        deepspeed="ds_config.json",  # DeepSpeed config file
+        fp16=True,
+        report_to="none",  # Disable W&B/tensorboard if not needed
+    )
+
+    # Create GRPO config
+    grpo_config = GRPOConfig(
+        output_dir="./grpo-trained-qwen-gsm8k",
+        learning_rate=5e-5,
+        per_device_train_batch_size=32,
+        gradient_accumulation_steps=1,
+        num_train_epochs=3,
+        logging_steps=50,
+        save_strategy="epoch",
+        deepspeed="ds_config.json",
+        fp16=True,
+    )
+
     logger.info("Initializing trainer with DeepSpeed...")
     trainer = GRPOTrainer(
         model="eagle0504/qwen-distilled-scout-1.5b-instruct-gen2",
         reward_funcs=reward_combined,
         train_dataset=dataset,
-        deepspeed="ds_config.json"
+        args=grpo_config,  # Pass config via args parameter
     )
 
     logger.info("Starting training...")

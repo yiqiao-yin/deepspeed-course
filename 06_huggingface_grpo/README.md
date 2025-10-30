@@ -75,15 +75,22 @@ uv init .
 uv add torch transformers accelerate datasets deepspeed bitsandbytes trl
 ```
 
-**Step 4: Create symbolic link for config (Important!)**
+**Step 4: Ensure DeepSpeed config is named correctly**
 
-The script references `ds_config.json` but the file is named `ds_config_zero1.json`. Create a symlink:
+The script references `ds_config.json`. Either:
 
+**Option A: Create symbolic link (recommended)**
 ```bash
 ln -s ds_config_zero1.json ds_config.json
 ```
 
-Or alternatively, update line 135 in `grpo_gsm8k_train.py`:
+**Option B: Rename the file**
+```bash
+cp ds_config_zero1.json ds_config.json
+```
+
+**Option C: Update the script**
+Update line 155 in `grpo_gsm8k_train.py`:
 ```python
 deepspeed="ds_config_zero1.json"  # Instead of "ds_config.json"
 ```
@@ -148,6 +155,39 @@ Question: A store sells apples for $1.50 each. If you buy 12 apples, how much wi
 Answer: $18.00
 ```
 
+### Training Configuration
+
+**GRPOConfig Integration:**
+
+The script uses `GRPOConfig` to pass training arguments including DeepSpeed configuration:
+
+```python
+from transformers import TrainingArguments
+from trl import GRPOConfig, GRPOTrainer
+
+# Create GRPO config with DeepSpeed
+grpo_config = GRPOConfig(
+    output_dir="./grpo-trained-qwen-gsm8k",
+    learning_rate=5e-5,
+    per_device_train_batch_size=32,
+    gradient_accumulation_steps=1,
+    num_train_epochs=3,
+    logging_steps=50,
+    save_strategy="epoch",
+    deepspeed="ds_config.json",  # DeepSpeed config file
+    fp16=True,
+)
+
+trainer = GRPOTrainer(
+    model="eagle0504/qwen-distilled-scout-1.5b-instruct-gen2",
+    reward_funcs=reward_combined,
+    train_dataset=dataset,
+    args=grpo_config,  # Pass via args parameter
+)
+```
+
+**Important:** `GRPOTrainer` does **not** accept `deepspeed` as a direct parameter. You must pass it via `GRPOConfig` or `TrainingArguments` through the `args` parameter.
+
 ### DeepSpeed Config: `ds_config_zero1.json`
 
 **Key Settings:**
@@ -156,18 +196,18 @@ Answer: $18.00
 |-----------|-------|-------------|
 | **ZeRO Stage** | 1 | Optimizer state partitioning |
 | **FP16** | Enabled | Half-precision training |
-| **Batch Size** | Auto | Dynamically determined by TRL |
+| **Batch Size** | 64 | Total batch size across all GPUs |
+| **Micro Batch Size** | 32 | Batch size per GPU |
+| **Gradient Accumulation** | 1 | Number of accumulation steps |
 | **Optimizer** | AdamW | Learning rate: 5e-5 |
 | **Scheduler** | WarmupDecayLR | Cosine decay with warmup |
 | **Gradient Clipping** | 1.0 | Prevents gradient explosion |
 | **Checkpointing** | CPU | Activation checkpointing on CPU |
 
 **Auto Parameters:**
-- `train_batch_size`: Auto-detected by TRL trainer
-- `train_micro_batch_size_per_gpu`: Auto-tuned for GPU memory
-- `gradient_accumulation_steps`: Auto-calculated
 - `warmup_num_steps`: Auto-scaled to dataset size
 - `total_num_steps`: Auto-determined from epochs
+- `weight_decay`: Auto-tuned by optimizer
 
 **Memory Optimization:**
 ```json
@@ -234,6 +274,42 @@ Answer: 180 miles
 
 ## Troubleshooting
 
+### Issue: `TypeError: GRPOTrainer.__init__() got an unexpected keyword argument 'deepspeed'`
+
+**Root Cause:** `GRPOTrainer` does not accept `deepspeed` as a direct parameter.
+
+**Solution:** Use `GRPOConfig` to pass DeepSpeed configuration:
+
+```python
+from trl import GRPOConfig, GRPOTrainer
+
+grpo_config = GRPOConfig(
+    output_dir="./grpo-trained-qwen-gsm8k",
+    learning_rate=5e-5,
+    per_device_train_batch_size=32,
+    num_train_epochs=3,
+    deepspeed="ds_config.json",  # ✅ Pass via config
+    fp16=True,
+)
+
+trainer = GRPOTrainer(
+    model="eagle0504/qwen-distilled-scout-1.5b-instruct-gen2",
+    reward_funcs=reward_combined,
+    train_dataset=dataset,
+    args=grpo_config,  # ✅ Pass config via args
+)
+```
+
+**Wrong approach (will fail):**
+```python
+trainer = GRPOTrainer(
+    model="...",
+    reward_funcs=reward_combined,
+    train_dataset=dataset,
+    deepspeed="ds_config.json"  # ❌ This doesn't work!
+)
+```
+
 ### Issue: `FileNotFoundError: ds_config.json`
 
 **Solution:**
@@ -241,7 +317,7 @@ Answer: 180 miles
 ln -s ds_config_zero1.json ds_config.json
 ```
 
-Or update line 135 in `grpo_gsm8k_train.py`:
+Or update line 155 in `grpo_gsm8k_train.py`:
 ```python
 deepspeed="ds_config_zero1.json"
 ```
@@ -368,10 +444,14 @@ These files are preserved for reference but are **not maintained**.
 
 This configuration has been **tested and verified working** with:
 - **Command:** `uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py`
-- **Environment:** RunPod with PyTorch 2.1.0, CUDA 11.8
-- **Model:** Qwen 1.5B distilled
+- **Environment:** RunPod with PyTorch 2.1.0+, CUDA 11.8+
+- **Model:** Qwen 1.5B distilled (`eagle0504/qwen-distilled-scout-1.5b-instruct-gen2`)
 - **Dataset:** GSM8K enhanced (8K samples)
+- **Configuration Method:** `GRPOConfig` with `deepspeed="ds_config.json"`
+- **Batch Settings:** 64 total batch size, 32 per GPU, 1 accumulation step
 - **Result:** Successfully trained and saved to `./grpo-trained-qwen-gsm8k/`
+
+**Key Fix Applied:** Updated script to use `GRPOConfig(args=...)` instead of passing `deepspeed` directly to `GRPOTrainer`.
 
 ---
 
