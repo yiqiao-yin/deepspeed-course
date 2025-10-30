@@ -189,6 +189,244 @@ The improved algorithm has been tested and confirmed to produce:
 
 ---
 
+## Dataset Structure 📊
+
+### Synthetic Tabular Data
+
+Based on the `SyntheticDataset` class, this script trains on **tabular data** with the following dimensions:
+
+**Input Features ($\mathbf{X}$):**
+- Shape: $(1000, 10)$ - **1,000 samples × 10 features**
+- Type: **10-dimensional feature vectors**
+- Distribution: $\mathbf{X} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{10})$ (standard normal)
+- Generated via: `torch.randn(num_samples, input_dim)`
+
+**Target Variable ($\mathbf{y}$):**
+- Shape: $(1000, 1)$ - **1,000 samples × 1 continuous target**
+- Type: **Regression target**
+- Generative model: $\mathbf{y} = \mathbf{X}\boldsymbol{\theta}^* + \boldsymbol{\epsilon}$
+  - Where $\boldsymbol{\theta}^* \in \mathbb{R}^{10}$ are true weights
+  - Noise: $\boldsymbol{\epsilon} \sim \mathcal{N}(0, \sigma_{\text{noise}}^2\mathbf{I})$ with $\sigma_{\text{noise}} = 0.1$
+
+### Mathematical Formulation
+
+**Data Generating Process:**
+
+$$
+\begin{aligned}
+\mathbf{x}_i &\sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{10}), \quad i = 1, \ldots, 1000 \\
+y_i &= \mathbf{x}_i^\top \boldsymbol{\theta}^* + \epsilon_i, \quad \epsilon_i \sim \mathcal{N}(0, 0.1^2)
+\end{aligned}
+$$
+
+**True Linear Relationship:**
+
+$$
+y = \theta_1^* x_1 + \theta_2^* x_2 + \cdots + \theta_{10}^* x_{10} + \epsilon
+$$
+
+**What This Represents:**
+
+This is a **simple linear regression problem** in 10-dimensional space:
+- Each data point is a **10-dimensional vector** (like 10 features in a spreadsheet row)
+- The true underlying relationship is **linear** with Gaussian noise
+- The model learns to recover $\boldsymbol{\theta}^*$ from noisy observations
+- Noise level ($\sigma = 0.1$) simulates real-world measurement errors
+
+### Real-World Analogy
+
+Think of it like predicting a person's **credit score** ($y$) from 10 financial features:
+
+$$
+\begin{aligned}
+x_1 &= \text{income (normalized)} \\
+x_2 &= \text{debt-to-income ratio} \\
+x_3 &= \text{number of credit cards} \\
+x_4 &= \text{payment history score} \\
+x_5 &= \text{account age (years)} \\
+x_6 &= \text{utilization rate} \\
+&\vdots \\
+x_{10} &= \text{recent inquiries}
+\end{aligned}
+$$
+
+**Credit Score Prediction:**
+
+$$
+\text{Credit Score} = \sum_{j=1}^{10} \theta_j x_j + \epsilon
+$$
+
+**Key Point:** This is **tabular/structured data** (like CSV or pandas DataFrame), **NOT** images, text, or time series. Each sample is a single row with 10 numeric columns.
+
+**Why Tabular Data for Bayesian NNs?**
+- Easy to visualize uncertainty in feature importance
+- Common in finance, healthcare, and science
+- Small enough to demonstrate MCMC convergence
+- Generalizes to high-dimensional problems (credit models often have 100+ features)
+
+---
+
+## Mathematical Details 📐
+
+### Bayesian Neural Network Model
+
+**Prior Distribution:**
+
+$$
+p(\boldsymbol{\theta}) = \prod_{l} \mathcal{N}(\theta_l \mid 0, \sigma_{\text{prior}}^2)
+$$
+
+where $\boldsymbol{\theta}$ includes all network weights and biases, and $\sigma_{\text{prior}} = 1.0$.
+
+**Likelihood Function:**
+
+$$
+p(\mathcal{D} \mid \boldsymbol{\theta}) = \prod_{i=1}^{N} \mathcal{N}(y_i \mid f_{\boldsymbol{\theta}}(\mathbf{x}_i), \sigma_{\text{noise}}^2)
+$$
+
+where $f_{\boldsymbol{\theta}}(\mathbf{x})$ is the neural network forward pass with parameters $\boldsymbol{\theta}$.
+
+**Posterior Distribution (Target):**
+
+$$
+p(\boldsymbol{\theta} \mid \mathcal{D}) = \frac{p(\mathcal{D} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})}{p(\mathcal{D})} \propto p(\mathcal{D} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})
+$$
+
+**Log Posterior (What We Sample):**
+
+$$
+\begin{aligned}
+\log p(\boldsymbol{\theta} \mid \mathcal{D}) &= \log p(\mathcal{D} \mid \boldsymbol{\theta}) + \log p(\boldsymbol{\theta}) + \text{const} \\
+&= -\frac{1}{2\sigma_{\text{noise}}^2} \sum_{i=1}^{N} (y_i - f_{\boldsymbol{\theta}}(\mathbf{x}_i))^2 - \frac{1}{2\sigma_{\text{prior}}^2} \sum_{l} \theta_l^2 + \text{const}
+\end{aligned}
+$$
+
+### Parallel Tempering with Statistical Physics
+
+**Tempered Posterior:**
+
+$$
+p_T(\boldsymbol{\theta} \mid \mathcal{D}) \propto [p(\mathcal{D} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})]^{1/T}
+$$
+
+**Energy Formulation:**
+
+Define energy as the negative log posterior:
+
+$$
+E(\boldsymbol{\theta}) = -\log p(\boldsymbol{\theta} \mid \mathcal{D})
+$$
+
+**Canonical Distribution:**
+
+$$
+p_T(\boldsymbol{\theta} \mid \mathcal{D}) \propto e^{-\beta E(\boldsymbol{\theta})}
+$$
+
+where $\beta = 1/T$ is the inverse temperature.
+
+### Metropolis-Hastings Algorithm
+
+**Proposal Distribution:**
+
+$$
+q(\boldsymbol{\theta}' \mid \boldsymbol{\theta}) = \mathcal{N}(\boldsymbol{\theta}' \mid \boldsymbol{\theta}, \sigma_{\text{prop}}^2 \mathbf{I})
+$$
+
+where $\sigma_{\text{prop}} = 0.01$ (tunable).
+
+**Acceptance Probability:**
+
+$$
+\alpha_{\text{MH}} = \min\left(1, \exp\left(\frac{1}{T}[\log p(\boldsymbol{\theta}' \mid \mathcal{D}) - \log p(\boldsymbol{\theta} \mid \mathcal{D})]\right)\right)
+$$
+
+**Decision Rule:**
+
+$$
+\boldsymbol{\theta}^{(t+1)} = \begin{cases}
+\boldsymbol{\theta}' & \text{with probability } \alpha_{\text{MH}} \\
+\boldsymbol{\theta}^{(t)} & \text{otherwise}
+\end{cases}
+$$
+
+### Replica Exchange (Swap) Criterion
+
+**Swap Acceptance Probability:**
+
+$$
+\alpha_{\text{swap}} = \min\left(1, \exp\left[(\beta_i - \beta_j)(E_j - E_i)\right]\right)
+$$
+
+where:
+- $\beta_i = 1/T_i$ and $\beta_j = 1/T_j$ are inverse temperatures
+- $E_i = -\log p(\boldsymbol{\theta}_i \mid \mathcal{D})$ is the energy of replica $i$
+
+**Detailed Balance Condition:**
+
+For the Markov chain to converge to the correct distribution:
+
+$$
+p_i(\boldsymbol{\theta}_i) p_j(\boldsymbol{\theta}_j) P(\text{swap}) = p_i(\boldsymbol{\theta}_j) p_j(\boldsymbol{\theta}_i) P(\text{swap})
+$$
+
+This is satisfied by the acceptance probability above.
+
+**Why This Works:**
+
+When $T_i < T_j$ (replica $i$ is colder):
+- If $E_j < E_i$: $\alpha_{\text{swap}} \approx 1$ (high probability swap - hot chain found better state)
+- If $E_j > E_i$: $\alpha_{\text{swap}} < 1$ (lower probability - hot chain is in worse state)
+
+### Temperature Schedule
+
+**Geometric Spacing:**
+
+$$
+T_k = T_{\min} \left(\frac{T_{\max}}{T_{\min}}\right)^{k/(K-1)}, \quad k = 0, 1, \ldots, K-1
+$$
+
+where:
+- $K$ = number of replicas (GPUs)
+- $T_{\min} = 1.0$ (samples true posterior)
+- $T_{\max} = 10.0$ (explores broadly)
+
+**Example for 4 GPUs:**
+
+$$
+\begin{aligned}
+T_0 &= 1.0 \times (10.0/1.0)^{0/3} = 1.00 \\
+T_1 &= 1.0 \times (10.0/1.0)^{1/3} = 2.15 \\
+T_2 &= 1.0 \times (10.0/1.0)^{2/3} = 4.64 \\
+T_3 &= 1.0 \times (10.0/1.0)^{3/3} = 10.00
+\end{aligned}
+$$
+
+### Convergence Diagnostics
+
+**Effective Sample Size (ESS):**
+
+$$
+\text{ESS} = \frac{N}{1 + 2\sum_{k=1}^{\infty} \rho_k}
+$$
+
+where $\rho_k$ is the autocorrelation at lag $k$.
+
+**Gelman-Rubin Statistic ($\hat{R}$):**
+
+$$
+\hat{R} = \sqrt{\frac{\hat{V}}{W}}
+$$
+
+where $\hat{V}$ is between-chain variance and $W$ is within-chain variance. Convergence when $\hat{R} < 1.1$.
+
+**Acceptance Rate Guidelines:**
+
+- **Metropolis-Hastings**: Target 20-40% for optimal mixing
+- **Replica Exchange**: Target 10-30% for good temperature spacing
+
+---
+
 ## Requirements
 
 ### Weights & Biases (W&B) Setup
