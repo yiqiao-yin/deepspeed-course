@@ -99,6 +99,11 @@ deepspeed-course/
 │   └── README.md                      # Complete TRL + DeepSpeed guide
 │
 ├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
+│   ├── grpo_gsm8k_train.py            # Memory-efficient GRPO training with LoRA
+│   ├── ds_config.json                 # DeepSpeed ZeRO-2 config (tested on RTX 3070 8GB)
+│   ├── archive/                       # Experimental scripts and configs
+│   └── README.md                      # Complete guide: LoRA + DeepSpeed + W&B + ZeRO stages
+│
 ├── 07_huggingface_openai_gpt_oss_finetune_sft/  # SFT examples
 ├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
 │
