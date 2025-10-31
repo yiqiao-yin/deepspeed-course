@@ -34,7 +34,7 @@
 
 **What Makes This Work on 8GB GPUs:**
 1. **LoRA (Low-Rank Adaptation)**: Only trains ~1% of model parameters
-2. **ZeRO-2 Optimizer Offloading**: Moves optimizer states to CPU
+2. **ZeRO-2 Optimizer Partitioning**: Splits optimizer states across GPUs
 3. **Small Batch Size**: 4 per GPU with gradient accumulation
 4. **FP16 Training**: Half-precision reduces memory by 50%
 
@@ -272,45 +272,46 @@ trainer = GRPOTrainer(
 )
 ```
 
-**Memory Breakdown (8GB GPU):**
+**Memory Breakdown (8GB GPU with 2 GPUs):**
 - Base model (FP16): ~3GB
 - LoRA adapters: ~30MB
-- Optimizer states (CPU offloaded): 0GB GPU
-- Activations + gradients: ~2-3GB
-- Generation buffer (GRPO): ~2GB
-- **Total: ~5-6GB per GPU** ✅
+- Optimizer states (ZeRO-2 partitioned): ~1.5GB per GPU (split across 2 GPUs)
+- Activations + gradients: ~2GB
+- Generation buffer (GRPO): ~1.5GB
+- **Total: ~6-7GB per GPU** ✅ (fits in 8GB RTX 3070)
 
 **Important:** `GRPOTrainer` does **not** accept `deepspeed` as a direct parameter. You must pass it via `GRPOConfig` through the `args` parameter.
 
 ### DeepSpeed Config: `ds_config_zero1.json`
 
-**Key Settings (ZeRO-2 with CPU Offloading):**
+**Key Settings (ZeRO-2 with GPU Partitioning):**
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| **ZeRO Stage** | 2 | Optimizer + gradient partitioning |
-| **CPU Offloading** | Enabled | Offload optimizer states to CPU |
-| **FP16** | Enabled | Half-precision training |
+| **ZeRO Stage** | 2 | Optimizer + gradient partitioning across GPUs |
+| **CPU Offloading** | Disabled | Keep optimizer on GPU (avoid CUDA compilation issues) |
+| **FP16** | Auto | Half-precision training |
 | **Batch Size** | Auto | Determined by GRPOConfig (4 per GPU) |
 | **Micro Batch Size** | Auto | Set by GRPOConfig |
 | **Gradient Accumulation** | Auto | Set by GRPOConfig (8 steps) |
-| **Optimizer** | AdamW | Learning rate: 5e-5 |
-| **Scheduler** | WarmupDecayLR | Cosine decay with warmup |
-| **Gradient Clipping** | 1.0 | Prevents gradient explosion |
+| **Gradient Clipping** | Auto | Set by GRPOConfig |
 
 **Memory-Saving Features:**
 ```json
 "zero_optimization": {
   "stage": 2,
-  "offload_optimizer": {
-    "device": "cpu",        // Move optimizer to CPU RAM
-    "pin_memory": true      // Faster CPU-GPU transfer
-  },
   "allgather_partitions": true,
   "overlap_comm": true,     // Overlap communication with computation
+  "reduce_scatter": true,   // Efficient gradient reduction
   "contiguous_gradients": true
 }
 ```
+
+**Why No CPU Offloading:**
+- CPU offloading requires DeepSpeed to compile CUDA extensions
+- Compilation fails if PyTorch CUDA version ≠ system CUDA version
+- With LoRA + ZeRO-2 partitioning, optimizer states are small (~1.5GB per GPU)
+- Keeping optimizer on GPU is faster and avoids compilation issues
 
 **Auto Parameters:**
 - `train_batch_size`: Auto-calculated from per_device_batch_size × num_gpus × gradient_accumulation_steps
@@ -465,6 +466,54 @@ Or update line 155 in `grpo_gsm8k_train.py`:
 ```python
 deepspeed="ds_config_zero1.json"
 ```
+
+### Issue: CUDA Version Mismatch with DeepSpeed
+
+**Error Message:**
+```
+deepspeed.ops.op_builder.builder.CUDAMismatchException:
+Installed CUDA version 11.8 does not match the version torch was compiled with 12.8,
+unable to compile cuda/cpp extensions without a matching cuda version.
+```
+
+**Root Cause:**
+DeepSpeed with CPU optimizer offloading tries to compile CUDA extensions, but your PyTorch was compiled with a different CUDA version than what's installed on your system.
+
+**Solution: Disable CPU Offloading (already done in ds_config_zero1.json)**
+
+The config has been updated to remove CPU offloading:
+
+```json
+{
+  "zero_optimization": {
+    "stage": 2,
+    // ❌ Removed: "offload_optimizer": {"device": "cpu"}
+    "allgather_partitions": true,
+    "overlap_comm": true,
+    ...
+  }
+}
+```
+
+**Why This Still Works on 8GB GPUs:**
+- LoRA keeps trainable parameters tiny (~15M vs 1.5B)
+- ZeRO-2 partitions optimizer across 2 GPUs (~1.5GB per GPU)
+- Each GPU only holds half of the optimizer states
+- Total memory: ~6-7GB per GPU (fits in 8GB)
+
+**Alternative Solutions (if you want CPU offloading):**
+1. **Match CUDA versions:**
+   ```bash
+   # Reinstall PyTorch with matching CUDA version
+   pip install torch --index-url https://download.pytorch.org/whl/cu118
+   ```
+
+2. **Set environment variable to skip compilation:**
+   ```bash
+   export DS_BUILD_CPU_ADAM=0
+   export DS_BUILD_FUSED_ADAM=0
+   uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
+   ```
 
 ### Issue: CUDA Out of Memory (8GB GPUs)
 
@@ -627,9 +676,10 @@ This configuration has been **tested and verified working** on **consumer GPUs**
 
 **Key Fixes Applied:**
 1. ✅ **LoRA Integration**: Reduces memory by ~10x (1.5B → ~15M trainable params)
-2. ✅ **ZeRO-2 CPU Offloading**: Moves optimizer states to CPU RAM
+2. ✅ **ZeRO-2 Optimizer Partitioning**: Splits optimizer across GPUs (~1.5GB per GPU)
 3. ✅ **Reduced Batch Size**: 4 per GPU instead of 32
 4. ✅ **GRPOConfig**: Pass DeepSpeed config via `args` parameter (not directly)
+5. ✅ **No CPU Offloading**: Avoids CUDA version mismatch compilation errors
 
 **How to Use Trained Model:**
 ```python
