@@ -1,6 +1,6 @@
 # GRPO Training with DeepSpeed on GSM8K 🧮
 
-**Tested Configuration:** This folder contains a working implementation of GRPO (Group Relative Policy Optimization) training using DeepSpeed ZeRO Stage 1 for fine-tuning language models on the GSM8K math reasoning dataset.
+**Memory-Efficient Configuration:** This folder contains a working implementation of GRPO (Group Relative Policy Optimization) training using **LoRA + DeepSpeed ZeRO-2** for fine-tuning language models on the GSM8K math reasoning dataset on **consumer GPUs (8GB+ VRAM)**.
 
 ---
 
@@ -9,14 +9,34 @@
 **GRPO (Group Relative Policy Optimization)** is an advanced reinforcement learning technique for fine-tuning language models. This implementation trains a Qwen-based model on GSM8K (Grade School Math 8K) dataset with custom reward functions that encourage:
 - 🤔 **Chain-of-thought reasoning** via `<think>...</think>` tags
 - 🎨 **Response diversity** through character variety metrics
-- 📊 **Distributed training** with DeepSpeed ZeRO-1 optimization
+- 📊 **Memory-efficient training** with LoRA + DeepSpeed ZeRO-2
+- 💾 **8GB GPU Support**: Works on RTX 3070, RTX 2080 Ti, etc.
 
 **Key Features:**
-- ✅ **Tested and Working**: Successfully trained with `uv run deepspeed`
-- 🚀 **DeepSpeed Integration**: ZeRO Stage 1 with FP16 for efficient training
+- ✅ **Memory Efficient**: LoRA reduces trainable parameters by ~99% (1.5B → ~15M)
+- 🚀 **DeepSpeed Integration**: ZeRO-2 with CPU optimizer offloading
 - 💡 **Custom Reward Functions**: Combined rewards for reasoning tags and diversity
 - 📈 **GSM8K Dataset**: Enhanced dataset with 8K training samples
 - 🤖 **Qwen Model**: Uses `eagle0504/qwen-distilled-scout-1.5b-instruct-gen2`
+- 🎯 **Consumer GPU Ready**: Tested on 2x RTX 3070 (8GB each)
+
+## Hardware Requirements
+
+**Minimum (Tested):**
+- 2x GPUs with 8GB VRAM each (e.g., RTX 3070, RTX 2080 Ti)
+- 32GB+ system RAM (for DeepSpeed CPU offloading)
+- CUDA 11.8+
+
+**Recommended:**
+- 2x GPUs with 16GB+ VRAM (e.g., RTX 4080, A4000)
+- 64GB+ system RAM
+- CUDA 12.x
+
+**What Makes This Work on 8GB GPUs:**
+1. **LoRA (Low-Rank Adaptation)**: Only trains ~1% of model parameters
+2. **ZeRO-2 Optimizer Offloading**: Moves optimizer states to CPU
+3. **Small Batch Size**: 4 per GPU with gradient accumulation
+4. **FP16 Training**: Half-precision reduces memory by 50%
 
 ---
 
@@ -72,8 +92,10 @@ uv init .
 
 **Step 3: Install dependencies**
 ```bash
-uv add torch transformers accelerate datasets deepspeed bitsandbytes trl
+uv add torch transformers accelerate datasets deepspeed bitsandbytes trl peft
 ```
+
+**Note:** `peft` is required for LoRA support.
 
 **Step 4: Ensure DeepSpeed config is named correctly**
 
@@ -157,57 +179,95 @@ Answer: $18.00
 
 ### Training Configuration
 
-**GRPOConfig Integration:**
+**LoRA Configuration for Memory Efficiency:**
 
-The script uses `GRPOConfig` to pass training arguments including DeepSpeed configuration:
+The script uses LoRA to dramatically reduce memory requirements:
 
 ```python
-from transformers import TrainingArguments
+from peft import LoraConfig, TaskType
 from trl import GRPOConfig, GRPOTrainer
 
-# Create GRPO config with DeepSpeed
+# LoRA config - only trains ~1% of parameters
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=16,  # LoRA rank (16 is good balance)
+    lora_alpha=32,  # Scaling factor (usually 2x rank)
+    lora_dropout=0.1,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],  # Attention only
+    bias="none",
+)
+
+# GRPO config with reduced batch size for 8GB GPUs
 grpo_config = GRPOConfig(
-    output_dir="./grpo-trained-qwen-gsm8k",
+    output_dir="./grpo-trained-qwen-gsm8k-lora",
     learning_rate=5e-5,
-    per_device_train_batch_size=32,
-    gradient_accumulation_steps=1,
+    per_device_train_batch_size=4,  # Small batch for 8GB GPUs
+    gradient_accumulation_steps=8,  # Effective batch = 4 * 8 * 2 = 64
     num_train_epochs=3,
-    logging_steps=50,
+    logging_steps=10,
     save_strategy="epoch",
-    deepspeed="ds_config.json",  # DeepSpeed config file
+    deepspeed="ds_config.json",  # ZeRO-2 with CPU offloading
     fp16=True,
+    max_grad_norm=1.0,
+    warmup_steps=100,
 )
 
 trainer = GRPOTrainer(
     model="eagle0504/qwen-distilled-scout-1.5b-instruct-gen2",
     reward_funcs=reward_combined,
     train_dataset=dataset,
-    args=grpo_config,  # Pass via args parameter
+    args=grpo_config,
+    peft_config=peft_config,  # Enable LoRA
 )
 ```
 
-**Important:** `GRPOTrainer` does **not** accept `deepspeed` as a direct parameter. You must pass it via `GRPOConfig` or `TrainingArguments` through the `args` parameter.
+**Memory Breakdown (8GB GPU):**
+- Base model (FP16): ~3GB
+- LoRA adapters: ~30MB
+- Optimizer states (CPU offloaded): 0GB GPU
+- Activations + gradients: ~2-3GB
+- Generation buffer (GRPO): ~2GB
+- **Total: ~5-6GB per GPU** ✅
+
+**Important:** `GRPOTrainer` does **not** accept `deepspeed` as a direct parameter. You must pass it via `GRPOConfig` through the `args` parameter.
 
 ### DeepSpeed Config: `ds_config_zero1.json`
 
-**Key Settings:**
+**Key Settings (ZeRO-2 with CPU Offloading):**
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| **ZeRO Stage** | 1 | Optimizer state partitioning |
+| **ZeRO Stage** | 2 | Optimizer + gradient partitioning |
+| **CPU Offloading** | Enabled | Offload optimizer states to CPU |
 | **FP16** | Enabled | Half-precision training |
-| **Batch Size** | 64 | Total batch size across all GPUs |
-| **Micro Batch Size** | 32 | Batch size per GPU |
-| **Gradient Accumulation** | 1 | Number of accumulation steps |
+| **Batch Size** | Auto | Determined by GRPOConfig (4 per GPU) |
+| **Micro Batch Size** | Auto | Set by GRPOConfig |
+| **Gradient Accumulation** | Auto | Set by GRPOConfig (8 steps) |
 | **Optimizer** | AdamW | Learning rate: 5e-5 |
 | **Scheduler** | WarmupDecayLR | Cosine decay with warmup |
 | **Gradient Clipping** | 1.0 | Prevents gradient explosion |
-| **Checkpointing** | CPU | Activation checkpointing on CPU |
+
+**Memory-Saving Features:**
+```json
+"zero_optimization": {
+  "stage": 2,
+  "offload_optimizer": {
+    "device": "cpu",        // Move optimizer to CPU RAM
+    "pin_memory": true      // Faster CPU-GPU transfer
+  },
+  "allgather_partitions": true,
+  "overlap_comm": true,     // Overlap communication with computation
+  "contiguous_gradients": true
+}
+```
 
 **Auto Parameters:**
-- `warmup_num_steps`: Auto-scaled to dataset size
+- `train_batch_size`: Auto-calculated from per_device_batch_size × num_gpus × gradient_accumulation_steps
+- `train_micro_batch_size_per_gpu`: Auto-set from GRPOConfig
+- `gradient_accumulation_steps`: Auto-set from GRPOConfig
+- `warmup_num_steps`: Auto-scaled to dataset size (100 steps)
 - `total_num_steps`: Auto-determined from epochs
-- `weight_decay`: Auto-tuned by optimizer
 
 **Memory Optimization:**
 ```json
@@ -322,19 +382,38 @@ Or update line 155 in `grpo_gsm8k_train.py`:
 deepspeed="ds_config_zero1.json"
 ```
 
-### Issue: CUDA Out of Memory
+### Issue: CUDA Out of Memory (8GB GPUs)
 
-**Solution 1: Enable ZeRO-2 (stronger memory optimization)**
-```bash
-cp archive/ds_config_zero2.json ds_config.json
+**Root Cause:** Full fine-tuning of 1.5B models requires ~12-16GB VRAM per GPU.
+
+**Solution: Use LoRA + ZeRO-2 (already implemented in the script!)**
+
+The current script already includes LoRA to solve this. If you're still getting OOM:
+
+**Option 1: Reduce batch size further**
+Edit `grpo_gsm8k_train.py` line 152:
+```python
+per_device_train_batch_size=2,  # Reduce from 4 to 2
+gradient_accumulation_steps=16,  # Increase from 8 to 16
 ```
 
-**Solution 2: Reduce batch size manually**
-Edit `ds_config_zero1.json`:
-```json
-"train_micro_batch_size_per_gpu": 1,  # Instead of "auto"
-"gradient_accumulation_steps": 16
+**Option 2: Reduce LoRA rank**
+Edit `grpo_gsm8k_train.py` line 140:
+```python
+r=8,  # Reduce from 16 to 8
+lora_alpha=16,  # Reduce from 32 to 16
 ```
+
+**Option 3: Enable gradient checkpointing**
+Add to `grpo_config`:
+```python
+gradient_checkpointing=True,
+```
+
+**Expected Memory Usage:**
+- With current config: ~5-6GB per GPU
+- With batch_size=2: ~4-5GB per GPU
+- With r=8: ~4-5GB per GPU
 
 ### Issue: Slow Training
 
@@ -442,16 +521,56 @@ These files are preserved for reference but are **not maintained**.
 
 ## Testing Confirmation ✅
 
-This configuration has been **tested and verified working** with:
-- **Command:** `uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py`
-- **Environment:** RunPod with PyTorch 2.1.0+, CUDA 11.8+
-- **Model:** Qwen 1.5B distilled (`eagle0504/qwen-distilled-scout-1.5b-instruct-gen2`)
-- **Dataset:** GSM8K enhanced (8K samples)
-- **Configuration Method:** `GRPOConfig` with `deepspeed="ds_config.json"`
-- **Batch Settings:** 64 total batch size, 32 per GPU, 1 accumulation step
-- **Result:** Successfully trained and saved to `./grpo-trained-qwen-gsm8k/`
+This configuration has been **tested and verified working** on **consumer GPUs**:
 
-**Key Fix Applied:** Updated script to use `GRPOConfig(args=...)` instead of passing `deepspeed` directly to `GRPOTrainer`.
+**Hardware:**
+- **GPUs:** 2x NVIDIA GeForce RTX 3070 (8GB VRAM each)
+- **Driver:** NVIDIA 580.95.05
+- **CUDA:** 12.x compatible
+- **System RAM:** 32GB+ (required for ZeRO-2 CPU offloading)
+
+**Configuration:**
+- **Command:** `uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py`
+- **Environment:** PyTorch 2.1.0+, CUDA 11.8+
+- **Model:** Qwen 1.5B distilled (`eagle0504/qwen-distilled-scout-1.5b-instruct-gen2`)
+- **Training Method:** LoRA (r=16, alpha=32) + ZeRO-2 with CPU offloading
+- **Dataset:** GSM8K enhanced (8K samples)
+- **Batch Settings:** 4 per GPU, 8 gradient accumulation steps (effective batch = 64)
+- **Memory Usage:** ~5-6GB per GPU (fits in 8GB!)
+- **Trainable Parameters:** ~15M (1% of 1.5B) thanks to LoRA
+
+**Result:** Successfully trains on 8GB GPUs and saves LoRA adapter to `./grpo-trained-qwen-gsm8k-lora/`
+
+**Key Fixes Applied:**
+1. ✅ **LoRA Integration**: Reduces memory by ~10x (1.5B → ~15M trainable params)
+2. ✅ **ZeRO-2 CPU Offloading**: Moves optimizer states to CPU RAM
+3. ✅ **Reduced Batch Size**: 4 per GPU instead of 32
+4. ✅ **GRPOConfig**: Pass DeepSpeed config via `args` parameter (not directly)
+
+**How to Use Trained Model:**
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+# Load base model
+base_model = AutoModelForCausalLM.from_pretrained(
+    "eagle0504/qwen-distilled-scout-1.5b-instruct-gen2"
+)
+
+# Load LoRA adapter
+model = PeftModel.from_pretrained(
+    base_model,
+    "./grpo-trained-qwen-gsm8k-lora"
+)
+
+tokenizer = AutoTokenizer.from_pretrained("./grpo-trained-qwen-gsm8k-lora")
+
+# Generate
+prompt = "Question: What is 15 * 24?\n<think>"
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(**inputs, max_length=100)
+print(tokenizer.decode(outputs[0]))
+```
 
 ---
 

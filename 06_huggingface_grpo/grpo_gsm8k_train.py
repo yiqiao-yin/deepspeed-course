@@ -1,6 +1,8 @@
 """
 Train a Qwen-based model on GSM8K using GRPOTrainer with a custom reward
 function that promotes <think>...</think> tags and character diversity.
+
+Memory-efficient version using LoRA for 8GB GPUs (RTX 3070, etc.)
 """
 
 import logging
@@ -9,6 +11,7 @@ from typing import List
 from datasets import load_dataset
 from transformers import TrainingArguments
 from trl import GRPOConfig, GRPOTrainer
+from peft import LoraConfig, get_peft_model, TaskType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -115,6 +118,7 @@ def format_gsm8k_example(example: dict) -> dict:
 def main() -> None:
     """
     Main function to train the model with GRPOTrainer and save the result.
+    Memory-efficient version using LoRA for 8GB GPUs.
     """
     logger.info("Loading dataset...")
     dataset = load_dataset(
@@ -128,52 +132,59 @@ def main() -> None:
         [col for col in dataset.column_names if col not in ["prompt", "output"]]
     )
 
-    logger.info("Configuring training with DeepSpeed...")
-    # Create training arguments with DeepSpeed config
-    training_args = TrainingArguments(
-        output_dir="./grpo-trained-qwen-gsm8k",
-        num_train_epochs=3,
-        per_device_train_batch_size=32,  # Will be overridden by DeepSpeed config
-        gradient_accumulation_steps=1,
-        learning_rate=5e-5,
-        logging_steps=50,
-        save_strategy="epoch",
-        deepspeed="ds_config.json",  # DeepSpeed config file
-        fp16=True,
-        report_to="none",  # Disable W&B/tensorboard if not needed
+    logger.info("Configuring LoRA for memory efficiency...")
+    # LoRA configuration for 8GB GPUs
+    peft_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=16,  # LoRA rank (higher = more parameters, more memory)
+        lora_alpha=32,  # LoRA scaling factor
+        lora_dropout=0.1,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],  # Attention layers
+        bias="none",
     )
 
-    # Create GRPO config
+    logger.info("Configuring training with DeepSpeed and LoRA...")
+    # Create GRPO config with reduced batch size for 8GB GPUs
     grpo_config = GRPOConfig(
-        output_dir="./grpo-trained-qwen-gsm8k",
+        output_dir="./grpo-trained-qwen-gsm8k-lora",
         learning_rate=5e-5,
-        per_device_train_batch_size=32,
-        gradient_accumulation_steps=1,
+        per_device_train_batch_size=4,  # Reduced from 32 for 8GB GPUs
+        gradient_accumulation_steps=8,  # Increased to maintain effective batch size
         num_train_epochs=3,
-        logging_steps=50,
+        logging_steps=10,
         save_strategy="epoch",
         deepspeed="ds_config.json",
         fp16=True,
+        max_grad_norm=1.0,
+        warmup_steps=100,
+        save_total_limit=2,
+        load_best_model_at_end=False,
     )
 
-    logger.info("Initializing trainer with DeepSpeed...")
+    logger.info("Initializing trainer with DeepSpeed and LoRA...")
     trainer = GRPOTrainer(
         model="eagle0504/qwen-distilled-scout-1.5b-instruct-gen2",
         reward_funcs=reward_combined,
         train_dataset=dataset,
-        args=grpo_config,  # Pass config via args parameter
+        args=grpo_config,
+        peft_config=peft_config,  # Enable LoRA
     )
 
-    logger.info("Starting training...")
+    logger.info("Starting training with LoRA...")
+    logger.info(f"Trainable parameters: {trainer.model.num_parameters(only_trainable=True):,}")
+    logger.info(f"Total parameters: {trainer.model.num_parameters():,}")
+
     trainer.train()
     logger.info("Training complete.")
 
-    # Save the trained model and tokenizer
-    save_path = "./grpo-trained-qwen-gsm8k"
-    logger.info("Saving model and tokenizer to %s", save_path)
+    # Save the trained LoRA adapter and tokenizer
+    save_path = "./grpo-trained-qwen-gsm8k-lora"
+    logger.info("Saving LoRA adapter and tokenizer to %s", save_path)
     trainer.model.save_pretrained(save_path)
     trainer.tokenizer.save_pretrained(save_path)
-    logger.info("Model and tokenizer saved.")
+    logger.info("LoRA adapter and tokenizer saved.")
+    logger.info("To use the model, load both the base model and this LoRA adapter.")
 
 
 if __name__ == "__main__":
