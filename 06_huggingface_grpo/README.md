@@ -121,32 +121,82 @@ deepspeed="ds_config_zero1.json"  # Instead of "ds_config.json"
 
 ## Usage
 
+### Weights & Biases (W&B) Setup (Optional)
+
+The script automatically detects and uses W&B if `WANDB_API_KEY` is set in your environment.
+
+**Enable W&B tracking:**
+```bash
+# Get your API key from https://wandb.ai/authorize
+export WANDB_API_KEY=your_api_key_here
+```
+
+**Disable W&B tracking:**
+```bash
+# Simply don't set WANDB_API_KEY, or:
+unset WANDB_API_KEY
+```
+
+**What gets logged to W&B:**
+- Training loss, learning rate, gradient norms
+- Reward metrics (think tags, character diversity)
+- GRPO-specific metrics (policy loss, value estimates)
+- Model parameters count
+- Hardware utilization
+- Training progress and ETA
+
 ### Basic Training (Single GPU)
 
 ```bash
+# Without W&B
+uv run deepspeed --num_gpus=1 grpo_gsm8k_train.py
+
+# With W&B
+export WANDB_API_KEY=your_key
 uv run deepspeed --num_gpus=1 grpo_gsm8k_train.py
 ```
 
 ### Multi-GPU Training (Recommended)
 
 ```bash
+# Without W&B
+uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
+
+# With W&B
+export WANDB_API_KEY=your_key
 uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
 ```
 
 ### Expected Output
 
+**With W&B enabled:**
 ```
+INFO:__main__:✅ W&B tracking enabled (API key found)
 INFO:__main__:Loading dataset...
 INFO:__main__:Formatting dataset...
-INFO:__main__:Initializing trainer with DeepSpeed...
-INFO:__main__:Starting training...
+INFO:__main__:Configuring LoRA for memory efficiency...
+INFO:__main__:Configuring training with DeepSpeed and LoRA...
+INFO:__main__:📊 W&B run name: grpo-qwen-gsm8k-lora-your_username
+INFO:__main__:   View at: https://wandb.ai/your-username/grpo-qwen-gsm8k-lora
+INFO:__main__:Initializing trainer with DeepSpeed and LoRA...
+INFO:__main__:Starting training with LoRA...
+INFO:__main__:Trainable parameters: 15,728,640
+INFO:__main__:Total parameters: 1,544,363,008
 [Training progress logs...]
 INFO:__main__:Training complete.
-INFO:__main__:Saving model and tokenizer to ./grpo-trained-qwen-gsm8k
-INFO:__main__:Model and tokenizer saved.
+INFO:__main__:Saving LoRA adapter and tokenizer to ./grpo-trained-qwen-gsm8k-lora
+INFO:__main__:LoRA adapter and tokenizer saved.
 ```
 
-**Output Model:** `./grpo-trained-qwen-gsm8k/`
+**Without W&B:**
+```
+INFO:__main__:⚠️  W&B tracking disabled (WANDB_API_KEY not set)
+INFO:__main__:   To enable: export WANDB_API_KEY=your_key_here
+INFO:__main__:Loading dataset...
+[... rest of training ...]
+```
+
+**Output Model:** `./grpo-trained-qwen-gsm8k-lora/`
 
 ---
 
@@ -333,6 +383,40 @@ Answer: 180 miles
 ---
 
 ## Troubleshooting
+
+### Issue: `ValueError: DeepSpeed config values mismatch TrainingArguments`
+
+**Error Message:**
+```
+ValueError: Please correct the following DeepSpeed config values that mismatch TrainingArguments values:
+- ds train_micro_batch_size_per_gpu=32 vs hf per_device_train_batch_size=4
+- ds gradient_accumulation_steps=1 vs hf gradient_accumulation_steps=8
+The easiest method is to set these DeepSpeed config values to 'auto'.
+```
+
+**Root Cause:** DeepSpeed config file has hardcoded values that don't match the Python script settings.
+
+**Solution:** Set all DeepSpeed config values to `"auto"`:
+
+```json
+{
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "fp16": {
+    "enabled": "auto"
+  },
+  "gradient_clipping": "auto",
+  ...
+}
+```
+
+**Don't include optimizer/scheduler in DeepSpeed config** - let `GRPOConfig` control these:
+- ❌ Remove `"optimizer"` section from ds_config.json
+- ❌ Remove `"scheduler"` section from ds_config.json
+- ✅ All training params controlled by `GRPOConfig` in Python script
+
+The current `ds_config_zero1.json` is already configured correctly with all "auto" settings.
 
 ### Issue: `TypeError: GRPOTrainer.__init__() got an unexpected keyword argument 'deepspeed'`
 

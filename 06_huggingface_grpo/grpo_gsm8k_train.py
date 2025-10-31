@@ -6,6 +6,7 @@ Memory-efficient version using LoRA for 8GB GPUs (RTX 3070, etc.)
 """
 
 import logging
+import os
 from typing import List
 
 from datasets import load_dataset
@@ -16,6 +17,17 @@ from peft import LoraConfig, get_peft_model, TaskType
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Check for W&B API key
+WANDB_API_KEY = os.environ.get("WANDB_API_KEY")
+USE_WANDB = WANDB_API_KEY is not None
+
+if USE_WANDB:
+    logger.info(f"✅ W&B tracking enabled (API key found)")
+    import wandb
+else:
+    logger.info("⚠️  W&B tracking disabled (WANDB_API_KEY not set)")
+    logger.info("   To enable: export WANDB_API_KEY=your_key_here")
 
 
 def reward_num_unique_chars(completions: List[str], **kwargs) -> List[float]:
@@ -160,7 +172,14 @@ def main() -> None:
         warmup_steps=100,
         save_total_limit=2,
         load_best_model_at_end=False,
+        # W&B integration
+        report_to="wandb" if USE_WANDB else "none",
+        run_name=f"grpo-qwen-gsm8k-lora-{os.environ.get('USER', 'user')}" if USE_WANDB else None,
     )
+
+    if USE_WANDB:
+        logger.info(f"📊 W&B run name: {grpo_config.run_name}")
+        logger.info(f"   View at: https://wandb.ai/{wandb.run.entity if hasattr(wandb, 'run') and wandb.run else 'your-username'}/grpo-qwen-gsm8k-lora")
 
     logger.info("Initializing trainer with DeepSpeed and LoRA...")
     trainer = GRPOTrainer(
