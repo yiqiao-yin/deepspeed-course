@@ -101,6 +101,7 @@ deepspeed-course/
 ├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
 │   ├── grpo_gsm8k_train.py            # Memory-efficient GRPO training with LoRA
 │   ├── ds_config.json                 # DeepSpeed ZeRO-2 config (tested on RTX 3070 8GB)
+│   ├── run_deepspeed.sh               # SLURM batch script (CoreWeave/HPC clusters)
 │   ├── archive/                       # Experimental scripts and configs
 │   └── README.md                      # Complete guide: LoRA + DeepSpeed + W&B + ZeRO stages
 │

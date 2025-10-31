@@ -46,6 +46,7 @@
 06_huggingface_grpo/
 ├── grpo_gsm8k_train.py         # Main training script (GRPO + DeepSpeed + LoRA)
 ├── ds_config.json               # DeepSpeed ZeRO-2 configuration
+├── run_deepspeed.sh             # SLURM batch script for CoreWeave/HPC clusters
 ├── archive/                     # Old experimental scripts
 │   ├── README.md               # Original setup instructions
 │   ├── ds_config_zero2.json    # Alternative ZeRO-2 config
@@ -150,6 +151,290 @@ uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
 export WANDB_API_KEY=your_key
 uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
 ```
+
+---
+
+## SLURM Batch Job Submission (CoreWeave) 🖥️
+
+For HPC cluster environments like CoreWeave, use the provided SLURM batch script to submit training jobs to the scheduler.
+
+### Prerequisites
+
+**Before submitting jobs:**
+
+1. **Activate your virtual environment** and ensure all dependencies are installed:
+   ```bash
+   source ~/myenv/bin/activate
+   uv add torch transformers accelerate datasets deepspeed trl peft
+   ```
+
+2. **Edit `run_deepspeed.sh`** to configure your environment:
+   ```bash
+   nano run_deepspeed.sh
+   ```
+
+   Update the following:
+   - `WANDB_API_KEY=<ENTER_KEY_HERE>` → Replace with your W&B API key from https://wandb.ai/authorize
+   - `source ~/myenv/bin/activate` → Update path to your virtual environment
+   - `#SBATCH --partition=h200-low` → Update partition name based on your cluster
+
+### Submitting a Job
+
+**Step 1: Navigate to the folder**
+```bash
+cd 06_huggingface_grpo
+```
+
+**Step 2: Submit the job to SLURM**
+```bash
+sbatch run_deepspeed.sh
+```
+
+**Expected output:**
+```
+Submitted batch job 12345
+```
+
+**Step 3: Check job status**
+```bash
+squeue -u $USER
+```
+
+**Example output:**
+```
+  JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+  12345 h200-low  grpo_gsm yyin    R       0:15      1 node-001
+```
+
+**Job Status Codes:**
+- `PD` = Pending (waiting for resources)
+- `R` = Running (job is executing)
+- `CG` = Completing (job finishing up)
+- `CD` = Completed (job finished successfully)
+- `F` = Failed (job encountered an error)
+
+### Monitoring Your Job
+
+**Watch job queue in real-time:**
+```bash
+watch -n 1 squeue -u $USER
+# Updates every 1 second, Ctrl+C to exit
+```
+
+**View detailed job information:**
+```bash
+scontrol show job 12345
+```
+
+**Check estimated start time (for pending jobs):**
+```bash
+squeue -j 12345 --start
+```
+
+**View job history:**
+```bash
+sacct -u $USER
+# Or for specific job:
+sacct -j 12345 --format=JobID,JobName,State,Elapsed,MaxRSS,NodeList
+```
+
+### Viewing Logs
+
+**Real-time log monitoring (while job is running):**
+```bash
+# Standard output
+tail -f logs/grpo_gsm8k_12345.out
+
+# Standard error (if errors occur)
+tail -f logs/grpo_gsm8k_12345.err
+```
+
+**View complete logs (after job finishes):**
+```bash
+# List all log files (sorted by time)
+ls -lt logs/
+
+# View specific job output
+cat logs/grpo_gsm8k_12345.out
+
+# Search for errors
+grep -i error logs/grpo_gsm8k_12345.err
+
+# Search for specific metrics
+grep "Loss:" logs/grpo_gsm8k_12345.out
+grep "Trainable parameters" logs/grpo_gsm8k_12345.out
+```
+
+### Managing Jobs
+
+**Cancel a running job:**
+```bash
+scancel 12345
+```
+
+**Cancel all your jobs:**
+```bash
+scancel -u $USER
+```
+
+**Cancel jobs by name:**
+```bash
+scancel --name=grpo_gsm8k_lora
+```
+
+**View resource usage of running job:**
+```bash
+sstat -j 12345 --format=JobID,MaxRSS,AveCPU,AveRSS
+```
+
+### GPU Monitoring
+
+**Create a GPU monitoring script:**
+
+```bash
+cat > gpu_monitor.sh << 'EOF'
+#!/bin/bash
+#SBATCH --gres=gpu:1
+#SBATCH --partition=h200-low
+#SBATCH --time=00:30:00
+#SBATCH --job-name=gpu_monitor
+
+while true; do
+    nvidia-smi
+    echo "---"
+    sleep 1
+done
+EOF
+```
+
+**Submit the monitor:**
+```bash
+sbatch gpu_monitor.sh
+# Note the job ID, then:
+tail -f slurm-<job_id>.out
+```
+
+**SSH to compute node (if allowed):**
+```bash
+# Find node where your job is running
+squeue -j 12345 -o "%N"
+# Output: node-001
+
+# SSH to that node (if permitted)
+ssh node-001
+
+# Monitor GPU on that node
+nvidia-smi -l 1  # Updates every 1 second
+```
+
+### Common SLURM Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `sbatch run_deepspeed.sh` | Submit a batch job |
+| `squeue -u $USER` | View your jobs in the queue |
+| `squeue` | View all jobs in the queue |
+| `scontrol show job 12345` | Detailed job information |
+| `scancel 12345` | Cancel a specific job |
+| `scancel -u $USER` | Cancel all your jobs |
+| `sacct -u $USER` | View job history |
+| `sinfo` | View cluster partition info |
+| `sinfo -N` | View all nodes and their status |
+| `squeue --start -j 12345` | Estimate start time for pending job |
+| `sstat -j 12345` | Resource usage of running job |
+| `tail -f logs/grpo_gsm8k_12345.out` | Monitor job output in real-time |
+
+### Expected Training Time
+
+**On 2x RTX 3070 (8GB each):**
+- Dataset loading: ~2-5 minutes (first run, cached afterward)
+- Model initialization: ~1-2 minutes
+- Training (3 epochs, 8K samples): ~30-45 minutes
+- **Total runtime: ~45-60 minutes**
+
+**On 2x H100 (80GB each):**
+- Training: ~10-15 minutes
+- **Total runtime: ~15-20 minutes**
+
+### Troubleshooting SLURM Jobs
+
+**Job stays in PD (Pending) state:**
+```bash
+# Check why job is waiting
+squeue -j 12345 --start
+# Common reasons:
+#   - Resources: Waiting for available GPUs
+#   - Priority: Other users have higher priority
+#   - ReqNodeNotAvail: Node is reserved/down
+```
+
+**Job fails immediately:**
+```bash
+# Check error logs
+cat logs/grpo_gsm8k_12345.err
+
+# Common issues:
+#   - Invalid partition name
+#   - Python environment not activated
+#   - Missing dependencies (trl, peft)
+#   - WANDB_API_KEY not set correctly
+```
+
+**Out of memory error in logs:**
+```bash
+# Check logs for OOM
+grep "CUDA out of memory" logs/grpo_gsm8k_12345.err
+
+# Solutions:
+#   1. Reduce batch size in grpo_gsm8k_train.py
+#   2. Switch to ZeRO Stage 1
+#   3. Reduce LoRA rank
+# See "Troubleshooting" section below for details
+```
+
+**Job runs but produces no output:**
+```bash
+# Check if logs directory exists
+ls -la logs/
+
+# Check SLURM job status
+scontrol show job 12345 | grep -E "(JobState|Reason|WorkDir)"
+
+# Verify script has execute permissions
+ls -l run_deepspeed.sh
+# Should show: -rwxr-xr-x
+
+# Make executable if needed
+chmod +x run_deepspeed.sh
+```
+
+### SLURM Script Configuration
+
+The `run_deepspeed.sh` script is configured with the following resources:
+
+| Resource | Value | Reason |
+|----------|-------|--------|
+| **GPUs** | 2 | Tested on 2x RTX 3070 (8GB each) |
+| **CPUs** | 16 | Sufficient for data loading/preprocessing |
+| **Memory** | 64GB | Model init + dataset + ZeRO-2 optimizer |
+| **Time** | 2 hours | Typical: 30-45 min, buffer for initialization |
+| **Partition** | h200-low | Update based on your cluster |
+
+**To modify resources**, edit `run_deepspeed.sh`:
+
+```bash
+#SBATCH --gres=gpu:4          # Request 4 GPUs instead of 2
+#SBATCH --cpus-per-task=32    # Request 32 CPUs instead of 16
+#SBATCH --mem=128G            # Request 128GB RAM instead of 64GB
+#SBATCH --time=04:00:00       # Request 4 hours instead of 2
+```
+
+Then update the DeepSpeed command:
+```bash
+deepspeed --num_gpus=4 grpo_gsm8k_train.py  # Match GPU count
+```
+
+---
 
 ### Expected Output
 
