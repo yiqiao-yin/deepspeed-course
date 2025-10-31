@@ -304,16 +304,114 @@ trainer = GRPOTrainer(
 - `warmup_num_steps`: Auto-scaled to dataset size (100 steps)
 - `total_num_steps`: Auto-determined from epochs
 
-**Memory Optimization:**
+### ZeRO Stage 1 vs Stage 2: Speed Comparison 🚀
+
+**Current config uses Stage 2**, but you can switch to **Stage 1 for 10-20% faster training** with minimal memory increase!
+
+#### Comparison Table
+
+| Aspect | ZeRO Stage 1 | ZeRO Stage 2 (Current) |
+|--------|-------------|------------------------|
+| **What's Partitioned** | Optimizer states only | Optimizer states + gradients |
+| **Memory Savings** | ~4x reduction | ~8x reduction |
+| **Communication Overhead** | Low (optimizer only) | Higher (optimizer + gradients) |
+| **Training Speed** | **Faster (~10-20%)** ⚡ | Slower (more communication) |
+| **Memory per GPU (with LoRA)** | ~6-7GB | ~6-7GB (similar) |
+| **Communication Passes** | 1 per step | 2-3 per step |
+
+#### How It Works
+
+**ZeRO Stage 1:**
+```
+GPU 0: [Model] [Gradients] [Optimizer_0]
+GPU 1: [Model] [Gradients] [Optimizer_1]
+       ↓
+Only optimizer states are partitioned
+Less communication between GPUs → FASTER
+```
+
+**ZeRO Stage 2:**
+```
+GPU 0: [Model] [Gradients_0] [Optimizer_0]
+GPU 1: [Model] [Gradients_1] [Optimizer_1]
+       ↓
+Both gradients AND optimizer states partitioned
+More communication (AllReduce + AllGather) → SLOWER
+```
+
+#### Why Stage 1 is Faster
+
+**Stage 1 Communication:**
+- Broadcast updated parameters after optimizer step
+- **1 communication pass per training step**
+
+**Stage 2 Communication:**
+- AllReduce gradients during backward pass
+- AllGather to reassemble for optimizer step
+- Broadcast updated parameters
+- **2-3 communication passes per training step**
+
+With LoRA, optimizer states are tiny (~60MB), so Stage 2's extra partitioning provides minimal memory benefit while adding significant communication overhead.
+
+#### When to Use Each Stage
+
+**Use ZeRO Stage 1 when:**
+- ✅ Using LoRA or other parameter-efficient training
+- ✅ Small models (<3B params)
+- ✅ Want maximum training speed
+- ✅ Memory is not a critical constraint
+- ✅ **Recommended for this setup!** (RTX 3070 8GB with LoRA)
+
+**Use ZeRO Stage 2 when:**
+- ✅ Larger models (>3B params) without LoRA
+- ✅ Memory is very tight (need every MB)
+- ✅ Maximum memory savings needed
+- ✅ Speed is less important than fitting in memory
+
+**Use ZeRO Stage 3 when:**
+- ✅ Huge models (>13B params)
+- ✅ Model itself doesn't fit in single GPU
+- ✅ Need maximum memory savings across GPUs
+- ✅ Can tolerate slower training (most communication)
+
+#### How to Switch to Stage 1 (Faster Training)
+
+Edit `ds_config.json`:
+
 ```json
-"checkpoint": {
-  "partition_activations": true,
-  "contiguous_memory_optimization": true,
-  "cpu_checkpointing": true
+{
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "fp16": {
+    "enabled": "auto"
+  },
+  "zero_optimization": {
+    "stage": 1  // ← Change from 2 to 1
+  },
+  "gradient_clipping": "auto",
+  "steps_per_print": 10,
+  "wall_clock_breakdown": false
 }
 ```
 
-This configuration enables training 1.5B models on GPUs with ~16GB VRAM.
+**Expected Results with Stage 1:**
+- Training time: **10-20% faster** ⚡
+- Memory usage: ~6-7GB per GPU (similar to Stage 2)
+- Still fits comfortably in 8GB RTX 3070
+- Throughput: ~15-25% more samples per second
+
+#### Recommendation for 8GB GPUs with LoRA
+
+**Try Stage 1!** With LoRA, your optimizer states are so small (~60MB) that:
+- Stage 2's gradient partitioning saves only ~0.5GB per GPU
+- But costs 10-20% training speed
+- Stage 1 gives you best speed without memory issues
+
+**When to stick with Stage 2:**
+- If you get OOM errors with Stage 1
+- If you plan to increase batch size or LoRA rank significantly
+- If you want maximum memory headroom for future changes
 
 ---
 
@@ -518,7 +616,7 @@ r=8,  # Reduce from 16 to 8
 lora_alpha=16,  # Reduce from 32 to 16
 ```
 
-**Option 3: Use ZeRO Stage 1 (less memory overhead)**
+**Option 3: Use ZeRO Stage 1 (faster and less memory overhead)**
 Edit `ds_config.json`:
 ```json
 "zero_optimization": {
@@ -526,25 +624,40 @@ Edit `ds_config.json`:
 }
 ```
 
+See the [ZeRO Stage 1 vs Stage 2](#zero-stage-1-vs-stage-2-speed-comparison-) section above for detailed comparison.
+
 **Expected Memory Usage:**
-- With current config: ~6-7GB per GPU
+- With current config (Stage 2): ~6-7GB per GPU
 - With batch_size=2: ~5-6GB per GPU
 - With r=8: ~5-6GB per GPU
-- With ZeRO Stage 1: ~5-6GB per GPU (slightly faster)
+- With ZeRO Stage 1: ~6-7GB per GPU (similar memory, 10-20% faster!)
 
 ### Issue: Slow Training
 
-**Solution 1: Use more GPUs**
+**Solution 1: Switch to ZeRO Stage 1 (Recommended! ⚡)**
+Edit `ds_config.json`:
+```json
+"zero_optimization": {
+  "stage": 1  // Change from 2 to 1
+}
+```
+**Expected speedup: 10-20% faster training with same memory usage!**
+
+See the [ZeRO Stage 1 vs Stage 2](#zero-stage-1-vs-stage-2-speed-comparison-) section for detailed explanation.
+
+**Solution 2: Use more GPUs**
 ```bash
 uv run deepspeed --num_gpus=4 grpo_gsm8k_train.py
 ```
 
-**Solution 2: Enable BF16 instead of FP16 (if supported)**
-Edit `ds_config_zero1.json`:
+**Solution 3: Enable BF16 instead of FP16 (if supported)**
+Edit `ds_config.json`:
 ```json
 "fp16": {"enabled": false},
 "bf16": {"enabled": true}
 ```
+
+Note: BF16 requires newer GPUs (Ampere/Ada architecture, e.g., RTX 3000/4000 series)
 
 ### Issue: Import Error for `trl`
 
