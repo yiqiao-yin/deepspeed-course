@@ -44,8 +44,8 @@
 
 ```
 06_huggingface_grpo/
-├── grpo_gsm8k_train.py         # Main training script (GRPO + DeepSpeed)
-├── ds_config_zero1.json         # DeepSpeed ZeRO-1 configuration
+├── grpo_gsm8k_train.py         # Main training script (GRPO + DeepSpeed + LoRA)
+├── ds_config.json               # DeepSpeed ZeRO-2 configuration
 ├── archive/                     # Old experimental scripts
 │   ├── README.md               # Original setup instructions
 │   ├── ds_config_zero2.json    # Alternative ZeRO-2 config
@@ -97,25 +97,9 @@ uv add torch transformers accelerate datasets deepspeed bitsandbytes trl peft
 
 **Note:** `peft` is required for LoRA support.
 
-**Step 4: Ensure DeepSpeed config is named correctly**
+**Step 4: Verify DeepSpeed config exists**
 
-The script references `ds_config.json`. Either:
-
-**Option A: Create symbolic link (recommended)**
-```bash
-ln -s ds_config_zero1.json ds_config.json
-```
-
-**Option B: Rename the file**
-```bash
-cp ds_config_zero1.json ds_config.json
-```
-
-**Option C: Update the script**
-Update line 155 in `grpo_gsm8k_train.py`:
-```python
-deepspeed="ds_config_zero1.json"  # Instead of "ds_config.json"
-```
+The script uses `ds_config.json` which is already in the folder.
 
 ---
 
@@ -282,9 +266,9 @@ trainer = GRPOTrainer(
 
 **Important:** `GRPOTrainer` does **not** accept `deepspeed` as a direct parameter. You must pass it via `GRPOConfig` through the `args` parameter.
 
-### DeepSpeed Config: `ds_config_zero1.json`
+### DeepSpeed Config: `ds_config.json`
 
-**Key Settings (ZeRO-2 with GPU Partitioning):**
+**Key Settings (ZeRO Stage 2 with GPU Partitioning):**
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
@@ -417,7 +401,7 @@ The easiest method is to set these DeepSpeed config values to 'auto'.
 - ❌ Remove `"scheduler"` section from ds_config.json
 - ✅ All training params controlled by `GRPOConfig` in Python script
 
-The current `ds_config_zero1.json` is already configured correctly with all "auto" settings.
+The current `ds_config.json` is already configured correctly with all "auto" settings.
 
 ### Issue: `TypeError: GRPOTrainer.__init__() got an unexpected keyword argument 'deepspeed'`
 
@@ -458,13 +442,10 @@ trainer = GRPOTrainer(
 ### Issue: `FileNotFoundError: ds_config.json`
 
 **Solution:**
+Ensure you're running the script from the `06_huggingface_grpo` folder where `ds_config.json` is located:
 ```bash
-ln -s ds_config_zero1.json ds_config.json
-```
-
-Or update line 155 in `grpo_gsm8k_train.py`:
-```python
-deepspeed="ds_config_zero1.json"
+cd 06_huggingface_grpo
+uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py
 ```
 
 ### Issue: CUDA Version Mismatch with DeepSpeed
@@ -479,7 +460,7 @@ unable to compile cuda/cpp extensions without a matching cuda version.
 **Root Cause:**
 DeepSpeed with CPU optimizer offloading tries to compile CUDA extensions, but your PyTorch was compiled with a different CUDA version than what's installed on your system.
 
-**Solution: Disable CPU Offloading (already done in ds_config_zero1.json)**
+**Solution: Disable CPU Offloading (already done in ds_config.json)**
 
 The config has been updated to remove CPU offloading:
 
@@ -524,7 +505,7 @@ The config has been updated to remove CPU offloading:
 The current script already includes LoRA to solve this. If you're still getting OOM:
 
 **Option 1: Reduce batch size further**
-Edit `grpo_gsm8k_train.py` line 152:
+Edit `grpo_gsm8k_train.py` line 164:
 ```python
 per_device_train_batch_size=2,  # Reduce from 4 to 2
 gradient_accumulation_steps=16,  # Increase from 8 to 16
@@ -537,16 +518,19 @@ r=8,  # Reduce from 16 to 8
 lora_alpha=16,  # Reduce from 32 to 16
 ```
 
-**Option 3: Enable gradient checkpointing**
-Add to `grpo_config`:
-```python
-gradient_checkpointing=True,
+**Option 3: Use ZeRO Stage 1 (less memory overhead)**
+Edit `ds_config.json`:
+```json
+"zero_optimization": {
+  "stage": 1  // Instead of 2
+}
 ```
 
 **Expected Memory Usage:**
-- With current config: ~5-6GB per GPU
-- With batch_size=2: ~4-5GB per GPU
-- With r=8: ~4-5GB per GPU
+- With current config: ~6-7GB per GPU
+- With batch_size=2: ~5-6GB per GPU
+- With r=8: ~5-6GB per GPU
+- With ZeRO Stage 1: ~5-6GB per GPU (slightly faster)
 
 ### Issue: Slow Training
 
