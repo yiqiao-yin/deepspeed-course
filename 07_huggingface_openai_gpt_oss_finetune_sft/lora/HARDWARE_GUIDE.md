@@ -204,6 +204,20 @@ uv run deepspeed --num_gpus=1 train_ds_mistral7b.py
 
 ---
 
+## ⚡ Quick Comparison
+
+| Your Hardware | File to Use | Why |
+|---------------|-------------|-----|
+| **2x H200 (141GB)** | `train_ds_h200.py` | **Optimized batch sizes for speed** ⚡ |
+| **2x H100 (80GB)** | `train_ds_h200.py` | **Optimized batch sizes for speed** ⚡ |
+| **4x A100 (40GB)** | `train_ds.py` | Standard config |
+| **4x RTX 4090 (24GB)** | `train_ds.py` | Standard config |
+| **2x RTX 3090 (24GB)** | `train_ds_mistral7b.py` OR `train_ds.py` | Smaller model or standard |
+| **2x RTX 3070 (8GB)** | `train_ds_mistral7b.py` | Smaller model (Mistral-7B) |
+| **2x RTX 3060 (12GB)** | `train_ds_mistral7b.py` | Smaller model (Mistral-7B) |
+
+---
+
 ## ❓ FAQ
 
 ### Q: Can I use train_ds.py with 2x RTX 3070?
