@@ -118,11 +118,18 @@ def load_model(model_name: str) -> AutoModelForCausalLM:
     """Load the model with bfloat16 (no device_map for DeepSpeed)."""
     logger.info(f"Loading base model: {model_name}")
     # Note: Removed device_map="auto" as DeepSpeed handles device placement
+    # low_cpu_mem_usage=True is critical for large models to avoid OOM during loading
     model_kwargs = {
         "attn_implementation": "eager",
         "torch_dtype": torch.bfloat16,
         "use_cache": False,
+        "low_cpu_mem_usage": True,  # Load model incrementally to reduce memory spikes
     }
+
+    # Only log on main process
+    if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
+        logger.info("Loading with low_cpu_mem_usage=True to prevent OOM")
+
     model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
     logger.info("✅ Model loaded successfully")
     return model
@@ -301,9 +308,11 @@ def evaluate(output_dir: str, tokenizer, prompt: str, reasoning_lang: str) -> No
         "torch_dtype": torch.bfloat16,
         "use_cache": True,
         "device_map": "auto",
+        "low_cpu_mem_usage": True,  # Prevent OOM during model loading
     }
 
     try:
+        logger.info("Loading base model for evaluation...")
         base_model = AutoModelForCausalLM.from_pretrained("openai/gpt-oss-20b", **base_kwargs)
         model = PeftModel.from_pretrained(base_model, output_dir)
         model = model.merge_and_unload()
@@ -382,8 +391,9 @@ def main() -> None:
     # Load and prepare model
     model = load_model(model_name)
 
-    # Optional inference test
-    run_inference(model, tokenizer, prompt="¿Cuál es el capital de Australia?")
+    # Skip pre-training inference test (can cause issues with distributed training)
+    # Uncomment if you want to test inference before training on single GPU:
+    # run_inference(model, tokenizer, prompt="¿Cuál es el capital de Australia?")
 
     # Apply LoRA
     peft_model = apply_lora(model)
