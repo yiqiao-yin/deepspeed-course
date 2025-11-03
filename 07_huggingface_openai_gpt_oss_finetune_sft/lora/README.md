@@ -94,6 +94,12 @@ uv init .
 # Core dependencies
 uv add torch transformers accelerate datasets deepspeed peft trl
 
+# Required: TensorBoard for training logs
+uv add tensorboard
+
+# Required: Fast model downloads from HuggingFace
+uv add hf_transfer
+
 # Optional: Install W&B for experiment tracking
 uv add wandb
 

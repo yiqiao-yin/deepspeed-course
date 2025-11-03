@@ -147,10 +147,13 @@ Both scripts use the same DeepSpeed configuration:
 # Navigate to folder
 cd 07_huggingface_openai_gpt_oss_finetune_sft/lora
 
-# Install dependencies
+# Install core dependencies
 uv add torch transformers accelerate datasets deepspeed peft trl
 
-# Optional: Add W&B
+# Install required packages
+uv add tensorboard hf_transfer
+
+# Optional: Add W&B for experiment tracking
 uv add wandb
 
 # Run training with Mistral-7B
