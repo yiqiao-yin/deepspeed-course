@@ -8,6 +8,7 @@
 | **2x RTX 3090 (24GB)** | `train_ds_mistral7b.py` OR `train_ds.py` | Mistral-7B or GPT-OSS-20B | ~6-7GB or ~20GB/GPU |
 | **4x RTX 4090 (24GB)** | `train_ds.py` | GPT-OSS-20B | ~20GB/GPU ✅ |
 | **4x A100 (40GB)** | `train_ds.py` | GPT-OSS-20B | ~20GB/GPU ✅ |
+| **2x RTX 5090 (64GB)** | `train_ds_h200.py` | GPT-OSS-20B | ~20GB/GPU ⚡ Fast! |
 | **2x H100 (80GB)** | `train_ds_h200.py` | GPT-OSS-20B | ~20GB/GPU ⚡ Fastest! |
 | **2x H200 (141GB)** | `train_ds_h200.py` | GPT-OSS-20B | ~20GB/GPU ⚡ Best! |
 
@@ -213,6 +214,7 @@ uv run deepspeed --num_gpus=1 train_ds_mistral7b.py
 |---------------|-------------|-----|
 | **2x H200 (141GB)** | `train_ds_h200.py` | **Optimized batch sizes for speed** ⚡ |
 | **2x H100 (80GB)** | `train_ds_h200.py` | **Optimized batch sizes for speed** ⚡ |
+| **2x RTX 5090 (64GB)** | `train_ds_h200.py` | **Optimized batch sizes for speed** ⚡ |
 | **4x A100 (40GB)** | `train_ds.py` | Standard config |
 | **4x RTX 4090 (24GB)** | `train_ds.py` | Standard config |
 | **2x RTX 3090 (24GB)** | `train_ds_mistral7b.py` OR `train_ds.py` | Smaller model or standard |
