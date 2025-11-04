@@ -10,15 +10,15 @@ This script supports:
 
 Data Structure:
     data/
-    ├── training/
+    ├── train/
     │   ├── 01/
-    │   │   ├── input.mp4
-    │   │   ├── input.wav
-    │   │   └── output.wav
+    │   │   ├── in.mp4 (or in.MOV)
+    │   │   ├── in.wav
+    │   │   └── out.wav
     │   ├── 02/
-    │   │   ├── input.mp4
-    │   │   ├── input.wav
-    │   │   └── output.wav
+    │   │   ├── in.mp4 (or in.MOV)
+    │   │   ├── in.wav
+    │   │   └── out.wav
     │   └── ...
     └── test/
         └── (same structure)
@@ -184,13 +184,13 @@ def load_audio(audio_path: str, sample_rate: int = 16000, max_duration: float = 
     return waveform
 
 
-def load_dataset_from_folder(data_dir: str, split: str = "training") -> Dataset:
+def load_dataset_from_folder(data_dir: str, split: str = "train") -> Dataset:
     """
     Load video-speech-to-speech dataset from folder structure.
 
     Args:
         data_dir: Root data directory
-        split: "training" or "test"
+        split: "train" or "test"
 
     Returns:
         HuggingFace Dataset with video, input audio, and output audio
@@ -205,31 +205,36 @@ def load_dataset_from_folder(data_dir: str, split: str = "training") -> Dataset:
         if not sample_folder.is_dir():
             continue
 
-        video_file = sample_folder / "input.mp4"
-        input_audio_file = None
-        output_audio_file = None
-
-        # Find input audio (try .wav first, then .mp3)
-        for ext in [".wav", ".mp3"]:
-            if (sample_folder / f"input{ext}").exists():
-                input_audio_file = sample_folder / f"input{ext}"
+        # Find video file (try in.mp4 first, then in.MOV)
+        video_file = None
+        for video_name in ["in.mp4", "in.MOV"]:
+            if (sample_folder / video_name).exists():
+                video_file = sample_folder / video_name
                 break
 
-        # Find output audio (try .wav first, then .mp3)
+        # Find input audio (in.wav or in.mp3)
+        input_audio_file = None
         for ext in [".wav", ".mp3"]:
-            if (sample_folder / f"output{ext}").exists():
-                output_audio_file = sample_folder / f"output{ext}"
+            if (sample_folder / f"in{ext}").exists():
+                input_audio_file = sample_folder / f"in{ext}"
+                break
+
+        # Find output audio (out.wav or out.mp3)
+        output_audio_file = None
+        for ext in [".wav", ".mp3"]:
+            if (sample_folder / f"out{ext}").exists():
+                output_audio_file = sample_folder / f"out{ext}"
                 break
 
         # Validate all files exist
-        if not video_file.exists():
-            logger.warning(f"Missing input.mp4 in {sample_folder}")
+        if video_file is None:
+            logger.warning(f"Missing video file (in.mp4 or in.MOV) in {sample_folder}")
             continue
         if input_audio_file is None:
-            logger.warning(f"Missing input audio in {sample_folder}")
+            logger.warning(f"Missing input audio (in.wav or in.mp3) in {sample_folder}")
             continue
         if output_audio_file is None:
-            logger.warning(f"Missing output audio in {sample_folder}")
+            logger.warning(f"Missing output audio (out.wav or out.mp3) in {sample_folder}")
             continue
 
         samples.append({
@@ -479,10 +484,10 @@ def main() -> None:
 
     # Load dataset
     try:
-        train_dataset = load_dataset_from_folder(data_dir, split="training")
+        train_dataset = load_dataset_from_folder(data_dir, split="train")
     except Exception as e:
         logger.error(f"❌ Failed to load dataset: {e}")
-        logger.error(f"   Make sure data exists at: {data_dir}/training/")
+        logger.error(f"   Make sure data exists at: {data_dir}/train/")
         raise
 
     # Load and prepare model

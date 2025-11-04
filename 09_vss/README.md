@@ -36,9 +36,9 @@ Before starting, please review these critical requirements:
 - **Storage:** 2TB+ (model weights are ~1.1TB)
 
 ### 2. Data Structure
-- Must follow exact naming: `input.mp4`, `input.wav`/`input.mp3`, `output.wav`/`output.mp3`
+- Must follow exact naming: `in.mp4` or `in.MOV` (video), `in.wav`/`in.mp3` (input audio), `out.wav`/`out.mp3` (output audio)
 - Each sample in its own numbered folder: `01`, `02`, `03`, etc.
-- Place in `data/training/` and optionally `data/test/`
+- Place in `data/train/` and optionally `data/test/`
 
 ### 3. Model Loading
 - First run will download ~1.1TB from HuggingFace Hub
@@ -89,29 +89,29 @@ Organize your data as follows:
 
 ```
 data/
-├── training/
+├── train/
 │   ├── 01/
-│   │   ├── input.mp4      # Video input
-│   │   ├── input.wav      # Audio input (or .mp3)
-│   │   └── output.wav     # Target audio output (or .mp3)
+│   │   ├── in.mp4         # Video input (or in.MOV)
+│   │   ├── in.wav         # Audio input (or in.mp3)
+│   │   └── out.wav        # Target audio output (or out.mp3)
 │   ├── 02/
-│   │   ├── input.mp4
-│   │   ├── input.wav
-│   │   └── output.wav
+│   │   ├── in.mp4
+│   │   ├── in.wav
+│   │   └── out.wav
 │   ├── 03/
-│   │   ├── input.mp4
-│   │   ├── input.mp3      # .mp3 also supported
-│   │   └── output.mp3     # .mp3 also supported
+│   │   ├── in.MOV         # .MOV also supported
+│   │   ├── in.mp3         # .mp3 also supported
+│   │   └── out.mp3        # .mp3 also supported
 │   └── ...
 └── test/
     └── (same structure)
 ```
 
 **Requirements:**
-- Each sample folder must contain: `input.mp4`, `input.wav` (or `.mp3`), `output.wav` (or `.mp3`)
+- Each sample folder must contain: `in.mp4` or `in.MOV` (video), `in.wav` or `in.mp3` (input audio), `out.wav` or `out.mp3` (output audio)
 - Folder names can be numeric (01, 02, ...) or any unique identifier
 - Audio files can be `.wav` or `.mp3` (will be automatically resampled to 16kHz)
-- Video files must be `.mp4` format
+- Video files can be `.mp4` or `.MOV` format
 
 ---
 
@@ -175,15 +175,18 @@ uv add huggingface_hub
 
 ```bash
 # Create data directory structure
-mkdir -p data/training data/test
+mkdir -p data/train data/test
 
 # Add your samples (example)
-mkdir -p data/training/01
-cp /path/to/video.mp4 data/training/01/input.mp4
-cp /path/to/input_audio.wav data/training/01/input.wav
-cp /path/to/output_audio.wav data/training/01/output.wav
+mkdir -p data/train/01
+cp /path/to/video.mp4 data/train/01/in.mp4
+cp /path/to/input_audio.wav data/train/01/in.wav
+cp /path/to/output_audio.wav data/train/01/out.wav
 
 # Repeat for more samples...
+
+# Or if you already have data on Windows, copy it:
+# cp -r /mnt/c/Users/your-username/Desktop/data/train data/
 ```
 
 ### 4. Configure Environment Variables
@@ -449,16 +452,16 @@ huggingface-cli login
 **Solutions:**
 ```bash
 # A. Verify data structure
-ls -R data/training/
+ls -R data/train/
 
 # B. Check file naming (must be exact)
-# Correct: input.mp4, input.wav, output.wav
-# Wrong: Input.mp4, audio.wav, target.mp3
+# Correct: in.mp4 (or in.MOV), in.wav, out.wav
+# Wrong: input.mp4, Input.wav, output.wav
 
 # C. Ensure at least one complete sample exists
-data/training/01/input.mp4   ✅
-data/training/01/input.wav   ✅
-data/training/01/output.wav  ✅
+data/train/01/in.mp4   ✅
+data/train/01/in.wav   ✅
+data/train/01/out.wav  ✅
 ```
 
 ### 4. DeepSpeed Initialization Fails
