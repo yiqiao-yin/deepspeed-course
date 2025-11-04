@@ -106,6 +106,15 @@ deepspeed-course/
 │   └── README.md                      # Complete guide: LoRA + DeepSpeed + W&B + ZeRO stages
 │
 ├── 07_huggingface_openai_gpt_oss_finetune_sft/  # SFT examples
+│   └── lora/                          # LoRA fine-tuning with PEFT
+│       ├── train_ds.py                # GPT-OSS-20B training (4x A100/RTX 4090)
+│       ├── train_ds_mistral7b.py      # Mistral-7B for 8GB GPUs (2x RTX 3070)
+│       ├── train_ds_h200.py           # Optimized for datacenter GPUs (H200/H100/RTX 5090)
+│       ├── ds_config.json             # DeepSpeed ZeRO-2 config with BF16
+│       ├── run_deepspeed.sh           # SLURM batch script (CoreWeave/HPC)
+│       ├── HARDWARE_GUIDE.md          # Hardware selection & comparison tables
+│       └── README.md                  # Complete guide: LoRA + DeepSpeed + W&B
+│
 ├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
 │
 ├── 08_vtt/                            # Video-Text-to-Text Training
