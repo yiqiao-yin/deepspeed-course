@@ -1,0 +1,70 @@
+{
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": 1.0,
+  "fp16": {
+    "enabled": false
+  },
+  "bf16": {
+    "enabled": true
+  },
+  "zero_optimization": {
+    "stage": 3,
+    "offload_optimizer": {
+      "device": "cpu",
+      "pin_memory": true,
+      "buffer_count": 4,
+      "fast_init": false
+    },
+    "offload_param": {
+      "device": "cpu",
+      "pin_memory": true,
+      "buffer_count": 5,
+      "buffer_size": 1e8,
+      "max_in_cpu": 1e9
+    },
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": 5e7,
+    "stage3_prefetch_bucket_size": 5e7,
+    "stage3_param_persistence_threshold": 1e5,
+    "stage3_max_live_parameters": 5e8,
+    "stage3_max_reuse_distance": 5e8,
+    "stage3_gather_16bit_weights_on_model_save": true,
+    "memory_efficient_linear": true,
+    "sub_group_size": 5e8
+  },
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "cpu_checkpointing": false,
+    "contiguous_memory_optimization": true,
+    "synchronize_checkpoint_boundary": true
+  },
+  "aio": {
+    "block_size": 1048576,
+    "queue_depth": 16,
+    "thread_count": 2,
+    "single_submit": false,
+    "overlap_events": true
+  },
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "warmup_min_lr": "auto",
+      "warmup_max_lr": "auto",
+      "warmup_num_steps": "auto",
+      "total_num_steps": "auto"
+    }
+  },
+  "steps_per_print": 1,
+  "wall_clock_breakdown": true,
+  "tensorboard": {
+    "enabled": true,
+    "output_path": "./tensorboard_logs/",
+    "job_name": "longcat_vss_2xB200"
+  },
+  "comms_logger": {
+    "enabled": false
+  }
+}
