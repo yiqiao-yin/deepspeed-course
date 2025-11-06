@@ -132,6 +132,21 @@ deepspeed-course/
 │       │
 │       └── README.md                   # Comparison: LLaVA vs Seq2Seq
 │
+├── 09_vss/                            # Video-Speech-to-Speech (VSS) Training
+│   ├── train_ds.py                    # LongCat-Flash-Omni 560B training (8+ GPUs)
+│   ├── train_ds_2xB200.py             # Conservative config for 2x B200 GPUs
+│   ├── ds_config.json                 # DeepSpeed ZeRO-3 standard config
+│   ├── ds_config_2xB200.json          # DeepSpeed ZeRO-3 for 2x B200 (aggressive CPU offload)
+│   ├── run_2xB200.sh                  # Automated launch script for 2x B200
+│   ├── check_storage.sh               # Storage verification utility
+│   ├── README.md                      # Complete guide: LongCat-Flash-Omni + LoRA
+│   ├── README_2xB200.md               # 2x B200 specific guide with memory analysis
+│   ├── QUICKSTART_2xB200.md           # Quick start for 2x B200 setup
+│   └── data/                          # Training data folder
+│       └── train/                     # 8 sample videos with audio I/O
+│           ├── 01/{in.mp4, in.wav, out.wav}
+│           └── ...
+│
 └── README.md                          # This file
 ```
 
