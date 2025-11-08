@@ -195,8 +195,8 @@ def create_visualizations(analysis_df, ticker, ma_periods, use_wandb):
     plt.close()
 
     # Only log to wandb if it's initialized
-    if use_wandb and wandb.run is not None:
-        wandb.log({"time_series_plots": wandb.Image('time_series_plots.png')})
+    # if use_wandb and wandb.run is not None:
+    #     wandb.log({"time_series_plots": wandb.Image('time_series_plots.png')})
 
     # Plot 2: Distribution
     plt.figure(figsize=(12, 6))
@@ -212,8 +212,8 @@ def create_visualizations(analysis_df, ticker, ma_periods, use_wandb):
     plt.close()
 
     # Only log to wandb if it's initialized
-    if use_wandb and wandb.run is not None:
-        wandb.log({"distribution_plots": wandb.Image('distribution_plots.png')})
+    # if use_wandb and wandb.run is not None:
+    #     wandb.log({"distribution_plots": wandb.Image('distribution_plots.png')})
 
     print("   ✅ Visualizations created and saved")
 
@@ -571,7 +571,7 @@ def main():
             "final/test_loss": avg_test_loss,
             "final/test_rmse": test_rmse,
             "final/epochs_completed": len(train_losses),
-            "training_history": wandb.Image('training_history.png')
+            # "training_history": wandb.Image('training_history.png')
         })
 
         wandb.run.summary["best_val_loss"] = best_val_loss

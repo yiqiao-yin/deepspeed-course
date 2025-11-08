@@ -157,8 +157,8 @@ def main():
     plt.savefig('time_series_plots.png')
     plt.close()
 
-    if use_wandb:
-        wandb.log({"time_series_plots": wandb.Image('time_series_plots.png')})
+    # if use_wandb:
+    #     wandb.log({"time_series_plots": wandb.Image('time_series_plots.png')})
 
     # Check the distribution of average delta
     plt.figure(figsize=(12, 6))
@@ -173,8 +173,8 @@ def main():
     plt.savefig('distribution_plots.png')
     plt.close()
 
-    if use_wandb:
-        wandb.log({"distribution_plots": wandb.Image('distribution_plots.png')})
+    # if use_wandb:
+    #     wandb.log({"distribution_plots": wandb.Image('distribution_plots.png')})
 
     # Prepare data for time series forecasting
     def create_sequences(data, seq_length):
@@ -319,8 +319,8 @@ def main():
     plt.savefig('training_history.png')
     plt.close()
 
-    if use_wandb:
-        wandb.log({"training_history": wandb.Image('training_history.png')})
+    # if use_wandb:
+    #     wandb.log({"training_history": wandb.Image('training_history.png')})
 
     # Plot predictions vs actual
     # Create a dataframe with actual and predicted values
@@ -344,8 +344,9 @@ def main():
     plt.savefig('prediction_results.png')
     plt.close()
 
+    # if use_wandb:
+    #     wandb.log({"prediction_results": wandb.Image('prediction_results.png')})
     if use_wandb:
-        wandb.log({"prediction_results": wandb.Image('prediction_results.png')})
         wandb.finish()
 
     print("Analysis complete. Check the generated plots.")
