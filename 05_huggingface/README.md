@@ -1,6 +1,14 @@
-# README
+# HuggingFace + DeepSpeed Fine-tuning
 
-This markdown file walks through how to use `deepseed` to finetune. First, it is assumed you have this image `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04` installed. Additionally, we assume you have `uv` installed as well. 
+This guide walks through how to use **DeepSpeed** with **HuggingFace Transformers** to fine-tune large language models efficiently on multi-GPU setups.
+
+## Prerequisites
+
+- Docker image: `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04` (or similar)
+- `uv` package manager installed
+- At least 2 GPUs recommended (see [HARDWARE_REQUIREMENTS.md](HARDWARE_REQUIREMENTS.md))
+- HuggingFace account with API token (optional, for model download and upload)
+- Weights & Biases account with API key (optional, for experiment tracking) 
 
 ## Project Starter
 
@@ -26,6 +34,12 @@ Next, add packages or dependencies
 
 ```bash
 cd project_name
+uv add torch transformers accelerate datasets deepspeed bitsandbytes trl unsloth wandb
+```
+
+Or add them individually:
+
+```bash
 uv add torch
 uv add transformers
 uv add accelerate
@@ -34,12 +48,7 @@ uv add deepspeed
 uv add bitsandbytes
 uv add trl
 uv add unsloth
-```
-
-Or in one line, we have
-
-```bash
-uv add torch transformers accelerate datasets deepspeed bitsandbytes trl unsloth
+uv add wandb  # Optional, for experiment tracking
 ```
 
 We can examine the package dependency trees.
@@ -139,24 +148,188 @@ deepspeed-project v0.1.0
 │   ├── pyarrow v20.0.0
 ```
 
-Afterwards, you should be able to expect the following folder structure.
+Afterwards, you should be able to expect the following folder structure:
 
 ```bash
-root@1b0c67c74d6a:/workspace/deepspeed_project# ls -l
-total 448
--rw-r--r-- 1 root root      0 May  9 17:22 README.md
--rw-r--r-- 1 root root    318 May  9 17:30 ds_config_zero1.json
--rw-r--r-- 1 root root    413 May  9 17:32 main.py
--rw-r--r-- 1 root root    357 May  9 17:27 pyproject.toml
-drwxr-xr-x 2 root root     10 May  9 17:39 results
--rw-r--r-- 1 root root   1418 May  9 18:10 train_ds.py
--rw-r--r-- 1 root root 439339 May  9 17:27 uv.lock
+project_name/
+├── README.md
+├── ds_config.json           # DeepSpeed configuration
+├── train_ds.py              # Training script
+├── pyproject.toml           # UV project configuration
+├── uv.lock                  # UV lock file
+└── results/                 # Training outputs
 ```
 
-## Run Project
+## DeepSpeed Configuration
 
-Use `uv` to run project.
+The `ds_config.json` file controls DeepSpeed optimization settings. The most important parameter is the **ZeRO optimization stage**:
+
+### ZeRO Optimization Stages
+
+**Stage 1** - Optimizer State Partitioning:
+- Partitions optimizer states across GPUs
+- **Memory savings**: ~4x reduction
+- **Recommended for**: Models that fit in GPU memory but optimizer states don't
+- **Use case**: Smaller models (1B-7B parameters) on GPUs with limited memory
+
+```json
+{
+  "zero_optimization": {
+    "stage": 1
+  }
+}
+```
+
+**Stage 2** - Optimizer + Gradient Partitioning:
+- Partitions both optimizer states AND gradients across GPUs
+- **Memory savings**: ~8x reduction
+- **Recommended for**: Medium models (7B-13B parameters) or limited GPU memory
+- **Use case**: Llama-3.2-3B on 2x RTX 4090 or similar
+
+```json
+{
+  "zero_optimization": {
+    "stage": 2
+  }
+}
+```
+
+**Stage 3** - Optimizer + Gradient + Parameter Partitioning:
+- Partitions optimizer states, gradients, AND model parameters across GPUs
+- **Memory savings**: Linear with number of GPUs
+- **Recommended for**: Very large models (13B+ parameters)
+- **Use case**: Large models that don't fit in single GPU memory
+- **Note**: Slightly slower due to increased communication
+
+```json
+{
+  "zero_optimization": {
+    "stage": 3
+  }
+}
+```
+
+### Switching ZeRO Stages
+
+To change the ZeRO stage, simply edit `ds_config.json`:
+
+```json
+{
+  "train_batch_size": 32,
+  "gradient_accumulation_steps": 1,
+  "fp16": {
+    "enabled": false
+  },
+  "zero_optimization": {
+    "stage": 2  # Change this to 1, 2, or 3
+  }
+}
+```
+
+## Environment Setup
+
+Before running the training script, set up your API tokens:
+
+### Required: HuggingFace Token
 
 ```bash
-uv run main.py
+export HF_TOKEN="your_huggingface_token_here"
 ```
+
+Get your token from: https://huggingface.co/settings/tokens
+
+### Optional: Weights & Biases API Key
+
+For experiment tracking and visualization:
+
+```bash
+export WANDB_API_KEY="your_wandb_api_key_here"
+```
+
+Get your API key from: https://wandb.ai/authorize
+
+If you don't set `WANDB_API_KEY`, the script will run without W&B tracking.
+
+## Run Training
+
+### Option 1: Using DeepSpeed Launcher (Recommended for 2+ GPUs)
+
+For multi-GPU training with 2 GPUs:
+
+```bash
+uv run deepspeed --num_gpus=2 train_ds.py
+```
+
+For all available GPUs:
+
+```bash
+uv run deepspeed --num_gpus=$(nvidia-smi --list-gpus | wc -l) train_ds.py
+```
+
+### Option 2: Using Standard Python (Single GPU)
+
+```bash
+uv run python train_ds.py
+```
+
+### Option 3: Manual DeepSpeed Configuration
+
+With custom DeepSpeed launcher arguments:
+
+```bash
+uv run deepspeed \
+  --num_gpus=2 \
+  --master_port=29500 \
+  train_ds.py
+```
+
+## Monitoring Training
+
+### Local Monitoring
+
+Watch GPU utilization:
+
+```bash
+watch -n 1 nvidia-smi
+```
+
+### W&B Dashboard (if enabled)
+
+After starting training with `WANDB_API_KEY` set, you'll see:
+
+```
+✅ Weights & Biases: Enabled
+📈 W&B Run initialized: llama-3.2-3b-warren-buffett
+   View at: https://wandb.ai/your-username/huggingface-deepspeed-finetuning/runs/xxxxx
+```
+
+Visit the URL to see real-time metrics, including:
+- Training loss
+- Learning rate
+- GPU utilization
+- System metrics
+
+## Common Issues
+
+### Out of Memory (OOM)
+
+Try these in order:
+1. Reduce `per_device_train_batch_size` in `train_ds.py`
+2. Increase `gradient_accumulation_steps` in `ds_config.json`
+3. Switch to higher ZeRO stage (1 → 2 → 3)
+4. Enable FP16/BF16 mixed precision in `ds_config.json`
+
+### NCCL Errors
+
+If you see NCCL timeout errors:
+
+```bash
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+```
+
+Then rerun the training command.
+
+## Hardware Requirements
+
+See [HARDWARE_REQUIREMENTS.md](HARDWARE_REQUIREMENTS.md) for detailed GPU requirements and recommendations for different models.
