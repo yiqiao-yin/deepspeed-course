@@ -98,6 +98,12 @@ deepspeed-course/
 │   ├── tool_augmented_dataset.json    # Function calling training data
 │   └── README.md                      # Complete TRL + DeepSpeed guide
 │
+├── 05_huggingface_ocr/                # Vision-Language Model Fine-tuning
+│   ├── train_ds.py                    # Qwen2-VL OCR training (2x RTX 4000 GPUs)
+│   ├── submit_job.sh                  # SLURM batch script for CoreWeave
+│   ├── README.md                      # Complete uv setup guide with DeepSpeed
+│   └── HARDWARE_REQUIREMENTS.md       # GPU comparison table and recommendations
+│
 ├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
 │   ├── grpo_gsm8k_train.py            # Memory-efficient GRPO training with LoRA
 │   ├── ds_config.json                 # DeepSpeed ZeRO-2 config (tested on RTX 3070 8GB)
