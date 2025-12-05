@@ -253,14 +253,14 @@ Where:
 ```mermaid
 graph TB
     subgraph "Single RNN Cell"
-        XT[x_t] -->|"W_xh"| ADD((+))
-        HT1[h_{t-1}] -->|"W_hh"| ADD
-        B[b_h] --> ADD
-        ADD --> TANH[tanh]
-        TANH --> HT[h_t]
+        XT["x(t)"] -->|"W_xh"| ADD((+))
+        HT1["h(t-1)"] -->|"W_hh"| ADD
+        B["b_h"] --> ADD
+        ADD --> TANH["tanh"]
+        TANH --> HT["h(t)"]
         HT -->|"W_hy"| ADD2((+))
-        B2[b_y] --> ADD2
-        ADD2 --> YT[y_t]
+        B2["b_y"] --> ADD2
+        ADD2 --> YT["y(t)"]
     end
 
     style HT fill:#e1f5fe
@@ -510,30 +510,30 @@ LSTMs solve the vanishing gradient problem by introducing **gates** that control
 ```mermaid
 graph TB
     subgraph "LSTM Cell"
-        XT[x_t] --> FG[Forget Gate]
-        XT --> IG[Input Gate]
-        XT --> OG[Output Gate]
-        XT --> CG[Candidate]
+        XT["x(t)"] --> FG["Forget Gate"]
+        XT --> IG["Input Gate"]
+        XT --> OG["Output Gate"]
+        XT --> CG["Candidate"]
 
-        HT1[h_{t-1}] --> FG
+        HT1["h(t-1)"] --> FG
         HT1 --> IG
         HT1 --> OG
         HT1 --> CG
 
-        CT1[c_{t-1}] --> MUL1((×))
+        CT1["c(t-1)"] --> MUL1(("×"))
         FG --> MUL1
 
-        CG --> MUL2((×))
+        CG --> MUL2(("×"))
         IG --> MUL2
 
         MUL1 --> ADD((+))
         MUL2 --> ADD
-        ADD --> CT[c_t]
+        ADD --> CT["c(t)"]
 
-        CT --> TANH[tanh]
-        TANH --> MUL3((×))
+        CT --> TANH["tanh"]
+        TANH --> MUL3(("×"))
         OG --> MUL3
-        MUL3 --> HT[h_t]
+        MUL3 --> HT["h(t)"]
     end
 
     style CT fill:#fff9c4
@@ -615,26 +615,26 @@ GRU combines the forget and input gates into a single **update gate**:
 ```mermaid
 graph TB
     subgraph "GRU Cell"
-        XT[x_t] --> ZG[Update Gate z]
-        XT --> RG[Reset Gate r]
-        XT --> CG[Candidate h̃]
+        XT["x(t)"] --> ZG["Update Gate z"]
+        XT --> RG["Reset Gate r"]
+        XT --> CG["Candidate h~"]
 
-        HT1[h_{t-1}] --> ZG
+        HT1["h(t-1)"] --> ZG
         HT1 --> RG
-        RG --> MUL1((×))
+        RG --> MUL1(("×"))
         HT1 --> MUL1
         MUL1 --> CG
 
-        ZG --> MUL2((×))
+        ZG --> MUL2(("×"))
         HT1 --> MUL2
 
-        ZG --> INV[1-z]
-        INV --> MUL3((×))
+        ZG --> INV["1-z"]
+        INV --> MUL3(("×"))
         CG --> MUL3
 
         MUL2 --> ADD((+))
         MUL3 --> ADD
-        ADD --> HT[h_t]
+        ADD --> HT["h(t)"]
     end
 
     style HT fill:#e1f5fe
