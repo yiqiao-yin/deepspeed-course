@@ -30,8 +30,18 @@
   background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
 }
 
+.hero .hero__title,
+.hero .hero__subtitle {
+  color: #ffffff;
+}
+
 [data-theme='dark'] .hero {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+[data-theme='dark'] .hero .hero__title,
+[data-theme='dark'] .hero .hero__subtitle {
+  color: #ffffff;
 }
 
 /* Feature cards */
