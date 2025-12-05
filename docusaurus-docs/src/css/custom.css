@@ -1,0 +1,81 @@
+/**
+ * DeepSpeed Course - Custom Docusaurus Theme
+ */
+
+:root {
+  --ifm-color-primary: #0066cc;
+  --ifm-color-primary-dark: #005bb5;
+  --ifm-color-primary-darker: #0056ab;
+  --ifm-color-primary-darkest: #00478c;
+  --ifm-color-primary-light: #0071e3;
+  --ifm-color-primary-lighter: #0077ed;
+  --ifm-color-primary-lightest: #1a8cff;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #4da6ff;
+  --ifm-color-primary-dark: #2e97ff;
+  --ifm-color-primary-darker: #1f8eff;
+  --ifm-color-primary-darkest: #0077e6;
+  --ifm-color-primary-light: #6cb5ff;
+  --ifm-color-primary-lighter: #7bbeff;
+  --ifm-color-primary-lightest: #a3d4ff;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Hero section styling */
+.hero {
+  background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+/* Feature cards */
+.feature-card {
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: var(--ifm-card-background-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Code block improvements */
+.prism-code {
+  font-size: 14px;
+}
+
+/* Sidebar improvements */
+.menu__link {
+  font-size: 0.95rem;
+}
+
+/* Table of contents */
+.table-of-contents {
+  font-size: 0.9rem;
+}
+
+/* Search bar styling */
+.navbar__search-input {
+  background-color: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+}
+
+/* Admonition improvements */
+.admonition {
+  border-radius: 8px;
+}
+
+/* Footer links */
+.footer__link-item {
+  font-size: 0.95rem;
+}
