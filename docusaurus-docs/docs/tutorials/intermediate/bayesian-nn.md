@@ -74,9 +74,9 @@ graph TB
         COMBINE --> POSTERIOR
     end
 
-    style PRIOR fill:#e3f2fd
-    style POSTERIOR fill:#c8e6c9
-    style LIKELIHOOD fill:#fff9c4
+    style PRIOR fill:#0f2f4d,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    style POSTERIOR fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    style LIKELIHOOD fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 ```
 
 | Aspect | Frequentist | Bayesian |
@@ -192,8 +192,8 @@ graph TB
         COMPUTE -->|"U ≥ α"| REJECT
     end
 
-    style ACCEPT fill:#c8e6c9
-    style REJECT fill:#ffcdd2
+    style ACCEPT fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    style REJECT fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
 ```
 
 ---
@@ -252,8 +252,8 @@ graph LR
         NN2 --> OUTPUT2["Predictive distribution<br/>P(y|x,D)"]
     end
 
-    style OUTPUT1 fill:#ffcdd2
-    style OUTPUT2 fill:#c8e6c9
+    style OUTPUT1 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style OUTPUT2 fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### The Bayesian Predictive Distribution
@@ -305,8 +305,8 @@ graph TB
         EPIS --> EPIS_EX["Reduces with<br/>more data"]
     end
 
-    style ALEA fill:#ffcdd2
-    style EPIS fill:#c8e6c9
+    style ALEA fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style EPIS fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 ---
@@ -343,9 +343,9 @@ graph LR
         HOT["T = 4 (Hot)<br/>Nearly flat<br/>Free exploration"]
     end
 
-    style COLD fill:#bbdefb
-    style WARM fill:#fff9c4
-    style HOT fill:#ffcdd2
+    style COLD fill:#1b4a75,stroke:#5590c0,stroke-width:1.5px,color:#ffffff
+    style WARM fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style HOT fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
 ```
 
 ### Visualizing Temperature Effects
@@ -730,8 +730,8 @@ graph TB
         GPU2 <-->|"Swap"| GPU3
     end
 
-    style GPU0 fill:#bbdefb
-    style GPU3 fill:#ffcdd2
+    style GPU0 fill:#1b4a75,stroke:#5590c0,stroke-width:1.5px,color:#ffffff
+    style GPU3 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
 ```
 
 | # GPUs | Temperature Range | Benefit |

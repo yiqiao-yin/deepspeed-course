@@ -42,8 +42,8 @@ flowchart LR
         FC --> O2[Output]
     end
 
-    style I1 fill:#ffcdd2
-    style I2 fill:#c8e6c9
+    style I1 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style I2 fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 ---
@@ -129,8 +129,8 @@ flowchart LR
 
     P1 --> P2 --> P3 --> P4
 
-    style P1 fill:#e3f2fd
-    style P4 fill:#c8e6c9
+    style P1 fill:#0f2f4d,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    style P4 fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Step-by-step example:**
@@ -192,7 +192,7 @@ flowchart TB
         G["Single Channel<br/>H × W<br/>Values: 0-255"]
     end
 
-    style G fill:#e0e0e0
+    style G fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
 ```
 
 #### RGB Color Images
@@ -218,9 +218,9 @@ flowchart LR
     B --> STACK
     STACK --> IMG["3 × H × W"]
 
-    style R fill:#ffcdd2
-    style G fill:#c8e6c9
-    style B fill:#bbdefb
+    style R fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style G fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    style B fill:#1b4a75,stroke:#5590c0,stroke-width:1.5px,color:#ffffff
 ```
 
 #### Batch of Images
@@ -299,8 +299,8 @@ flowchart TB
         SP["Same Padding<br/>5×5 → 5×5"]
     end
 
-    style NP fill:#ffcdd2
-    style SP fill:#c8e6c9
+    style NP fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style SP fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### Multiple Channels and Filters
@@ -391,8 +391,8 @@ flowchart LR
 
     INPUT --> |"Take max<br/>in each 2×2 region"| OUTPUT
 
-    style INPUT fill:#e3f2fd
-    style OUTPUT fill:#c8e6c9
+    style INPUT fill:#0f2f4d,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    style OUTPUT fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Example**: 2×2 Max Pooling on a 4×4 input:
@@ -435,9 +435,9 @@ flowchart TB
 
     L1 --> L2 --> L3
 
-    style L1 fill:#ffcdd2
-    style L2 fill:#fff9c4
-    style L3 fill:#c8e6c9
+    style L1 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style L2 fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style L3 fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Receptive field calculation** (for stacked 3×3 convolutions with stride 1):
@@ -471,9 +471,9 @@ flowchart LR
 
     E --> M --> D
 
-    style E fill:#ffcdd2
-    style M fill:#fff9c4
-    style D fill:#c8e6c9
+    style E fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style M fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style D fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 | Layer Depth | Features Learned | Example |
@@ -580,9 +580,9 @@ Where $n_{in} = C_{in} \times k_h \times k_w$ for convolutional layers.
 flowchart LR
     CONV["Conv2d"] --> BN["BatchNorm"] --> RELU["ReLU"] --> POOL["MaxPool"]
 
-    style CONV fill:#e3f2fd
-    style RELU fill:#fff9c4
-    style POOL fill:#c8e6c9
+    style CONV fill:#0f2f4d,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    style RELU fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style POOL fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### Batch Normalization
@@ -685,8 +685,8 @@ flowchart TB
     POOL1 --> CONV2 --> RELU2 --> POOL2
     POOL2 --> FLAT --> FC1 --> RELU3 --> FC2 --> OUTPUT
 
-    style INPUT fill:#e3f2fd
-    style OUTPUT fill:#c8e6c9
+    style INPUT fill:#0f2f4d,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    style OUTPUT fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Dimension calculations:**
@@ -741,8 +741,8 @@ flowchart LR
         W["Warmup<br/>(Linear)"] --> C["Cosine Decay"]
     end
 
-    style W fill:#fff9c4
-    style C fill:#c8e6c9
+    style W fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style C fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Mathematical formulation:**

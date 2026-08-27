@@ -20,11 +20,13 @@ const config = {
   trailingSlash: false,
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
 
   // Enable Mermaid diagrams
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
 
   i18n: {
@@ -82,9 +84,70 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: 'img/favicon.png',
-      // Mermaid configuration
+      // Mermaid configuration.
+      // ELK layout + a dark-blue-on-black palette with white type and grey
+      // arrows. Every diagram in the book inherits this; per-diagram `style`
+      // and `classDef` lines only vary the *shade*, never leave the palette.
+      // ELK comes from the optional @mermaid-js/layout-elk peer dependency —
+      // if that package is ever removed, Mermaid silently falls back to dagre.
       mermaid: {
-        theme: {light: 'dark', dark: 'dark'},
+        theme: {light: 'base', dark: 'base'},
+        options: {
+          layout: 'elk',
+          elk: {
+            mergeEdges: false,
+            nodePlacementStrategy: 'LINEAR_SEGMENTS',
+          },
+          flowchart: {
+            curve: 'basis',
+            padding: 16,
+            nodeSpacing: 55,
+            rankSpacing: 70,
+            useMaxWidth: true,
+          },
+          themeVariables: {
+            darkMode: true,
+            background: '#000000',
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
+            fontSize: '15px',
+
+            // Nodes — mid dark blue, white type, lighter blue border
+            primaryColor: '#16324f',
+            mainBkg: '#16324f',
+            primaryTextColor: '#ffffff',
+            primaryBorderColor: '#3f6f9f',
+            nodeBorder: '#3f6f9f',
+            nodeTextColor: '#ffffff',
+            secondaryColor: '#1e4468',
+            secondaryTextColor: '#ffffff',
+            secondaryBorderColor: '#4a7fb0',
+            tertiaryColor: '#0d2138',
+            tertiaryTextColor: '#ffffff',
+            tertiaryBorderColor: '#2f5a85',
+
+            // Subgraphs / containers — deepest blue so nodes sit on top of them
+            clusterBkg: '#08182a',
+            clusterBorder: '#2d5a86',
+
+            // Type
+            textColor: '#ffffff',
+            titleColor: '#ffffff',
+            labelTextColor: '#ffffff',
+
+            // Edges — neutral grey, clearly subordinate to the blue boxes
+            lineColor: '#98a6b5',
+            edgeLabelBackground: '#08182a',
+            arrowheadColor: '#98a6b5',
+
+            // State diagram parity
+            labelBackgroundColor: '#08182a',
+            compositeBackground: '#0d2138',
+            compositeTitleBackground: '#08182a',
+            compositeBorder: '#2d5a86',
+            altBackground: '#0d2138',
+          },
+        },
       },
       navbar: {
         title: 'DeepSpeed Course',

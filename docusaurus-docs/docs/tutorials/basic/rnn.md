@@ -184,7 +184,7 @@ graph LR
         H --> Y((y_t))
     end
 
-    style H fill:#e1f5fe
+    style H fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
 ```
 
 This compact representation emphasizes:
@@ -215,10 +215,10 @@ graph LR
         H4 --> Y4[y₄]
     end
 
-    style H1 fill:#e1f5fe
-    style H2 fill:#e1f5fe
-    style H3 fill:#e1f5fe
-    style H4 fill:#e1f5fe
+    style H1 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style H2 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style H3 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style H4 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
 ```
 
 **Key Insight:** The **same weights** $W_{hh}$ are used at every time step. This is called **weight tying** or **parameter sharing**.
@@ -263,8 +263,8 @@ graph TB
         ADD2 --> YT["y(t)"]
     end
 
-    style HT fill:#e1f5fe
-    style HT1 fill:#e1f5fe
+    style HT fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style HT1 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### Why Weight Sharing Matters
@@ -409,10 +409,10 @@ graph RL
         H2 -->|"∂h₂/∂h₁"| H1
     end
 
-    style LT fill:#ffcdd2
-    style L3 fill:#ffcdd2
-    style L2 fill:#ffcdd2
-    style L1 fill:#ffcdd2
+    style LT fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style L3 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style L2 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    style L1 fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
 ```
 
 ### Complete BPTT Equations
@@ -536,10 +536,10 @@ graph TB
         MUL3 --> HT["h(t)"]
     end
 
-    style CT fill:#fff9c4
-    style CT1 fill:#fff9c4
-    style HT fill:#e1f5fe
-    style HT1 fill:#e1f5fe
+    style CT fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style CT1 fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    style HT fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style HT1 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### LSTM Equations
@@ -637,8 +637,8 @@ graph TB
         ADD --> HT["h(t)"]
     end
 
-    style HT fill:#e1f5fe
-    style HT1 fill:#e1f5fe
+    style HT fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
+    style HT1 fill:#12395c,stroke:#4a7fb0,stroke-width:1.5px,color:#ffffff
 ```
 
 ### GRU Equations

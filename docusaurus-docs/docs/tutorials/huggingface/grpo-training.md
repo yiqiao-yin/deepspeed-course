@@ -4,615 +4,511 @@ sidebar_position: 4
 
 # GRPO Training
 
-Memory-efficient GRPO (Group Relative Policy Optimization) fine-tuning for mathematical reasoning.
+Group Relative Policy Optimization — derived from the policy gradient theorem, situated against PPO, DPO and RLOO, with its known biases stated and its memory footprint accounted for. Then a memory-efficient implementation on GSM8K with LoRA and DeepSpeed ZeRO-2.
 
-## Overview
+**Model:** Qwen-1.5B (distilled) · **Dataset:** GSM8K · **Target:** 8 GB GPU
 
-This example demonstrates:
-- GRPO algorithm implementation
-- LoRA for parameter efficiency
-- ZeRO-2 with CPU offloading
-- Training on consumer GPUs (8GB+)
+:::danger Correction to a widespread misconception
+GRPO is frequently described — including in earlier versions of this page — as *"eliminating the reference model, so no KL term is needed."* **This is wrong.** The objective published in DeepSeekMath (Shao et al., 2024, Eq. 3) contains an explicit $\beta\,\mathbb{D}_{\mathrm{KL}}\!\left[\pi_\theta \,\|\, \pi_{\text{ref}}\right]$ term and requires a frozen reference model.
 
-**Model:** Qwen-1.5B (distilled)
-**Dataset:** GSM8K (8K math reasoning samples)
-**Target:** 8GB GPU support
+What GRPO eliminates is the **critic** (value network) — a *trainable* model the same size as the policy. That is where the memory saving comes from, and it is a much stronger claim than dropping a frozen reference. The distinction is developed in [§5](#5-what-grpo-actually-removes-a-memory-accounting).
+:::
 
 ---
 
-## The Evolution of LLM Alignment
+## 1. Why Reinforcement Learning At All
 
-### From Pre-training to Alignment
-
-Large Language Models (LLMs) are trained in multiple stages:
+An LLM is trained in stages, and each stage optimizes a different objective:
 
 ```mermaid
-graph LR
-    subgraph "LLM Training Pipeline"
-        PT["Pre-training<br/>(Next token prediction)"]
-        SFT["Supervised Fine-tuning<br/>(Instruction following)"]
-        RLHF["RLHF/GRPO<br/>(Human preference alignment)"]
+flowchart LR
+    subgraph PIPE["LLM training pipeline"]
+        direction LR
+        PT["Pre-training<br/>maximize log p(x)<br/>trillions of web tokens"]
+        SFT["Supervised fine-tuning<br/>maximize log p(y|x) on demos<br/>behaviour cloning"]
+        RL["RL alignment — PPO / GRPO<br/>maximize E[R(x,y)]<br/>optimizes the metric you care about"]
     end
 
-    PT --> SFT --> RLHF
+    PT --> SFT --> RL
 
-    style PT fill:#e3f2fd
-    style SFT fill:#fff9c4
-    style RLHF fill:#c8e6c9
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class PT base
+    class SFT steel
+    class RL bright
+    class PIPE deep
 ```
 
-| Stage | Objective | Data |
-|-------|-----------|------|
-| Pre-training | Predict next token | Trillions of tokens from web |
-| SFT | Follow instructions | Human-written responses |
-| RLHF/GRPO | Align with preferences | Human preference comparisons |
+The reason RL is not redundant with SFT is a **distribution mismatch**. SFT is maximum likelihood on a fixed corpus of demonstrations — behaviour cloning. It trains the model on the *demonstrator's* state distribution, but at inference the model must act on states induced by *its own* previous tokens. Errors compound: this is the classic covariate-shift argument of DAgger (Ross et al., 2011), and in the sequence setting it is exposure bias.
 
-### Why Do We Need Alignment?
+More fundamentally, SFT can only imitate. If a correct answer is reachable by a reasoning chain no human wrote down, likelihood training on human chains cannot find it. RL optimizes $\mathbb{E}_{y\sim\pi_\theta}[R(x,y)]$ — the quantity you actually care about — over the model's own output distribution, and can therefore discover behaviours absent from the demonstration set.
 
-Pre-trained models learn to predict text, but they don't learn:
-- Which responses humans **prefer**
-- How to be **helpful** vs just fluent
-- How to avoid **harmful** outputs
-- How to reason **step-by-step**
+For mathematical reasoning this is especially compelling, because $R$ need not be learned at all: **the answer is checkable**. That is the regime GRPO was designed for.
 
-**The Alignment Problem:** How do we make models that do what we *want*, not just what they *predict*?
+## 2. From Policy Gradients to PPO
 
----
+### 2.1 The policy gradient theorem
 
-## Reinforcement Learning from Human Feedback (RLHF)
+Treat generation as a finite-horizon MDP: state $s_t = (q, o_{<t})$ is the prompt plus tokens so far, action $a_t = o_t$ is the next token, and the policy is the LM itself, $\pi_\theta(o_t \mid q, o_{<t})$. We maximize
 
-### The Standard RLHF Pipeline
+$$
+J(\theta) = \mathbb{E}_{q \sim P(Q),\; o \sim \pi_\theta(\cdot\mid q)}\bigl[R(q, o)\bigr]
+$$
 
-Traditional RLHF involves three components:
+The score-function identity $\nabla_\theta \pi_\theta = \pi_\theta \nabla_\theta \log \pi_\theta$ gives the REINFORCE estimator (Williams, 1992):
+
+$$
+\nabla_\theta J(\theta) = \mathbb{E}\left[R(q,o)\sum_{t=1}^{|o|}\nabla_\theta \log \pi_\theta(o_t \mid q, o_{<t})\right]
+$$
+
+This is unbiased and essentially unusable on its own: its variance scales with the magnitude of $R$ and with sequence length. With $|o| = 512$ tokens, a single scalar reward must be credited across 512 factors.
+
+### 2.2 Baselines and why they are free
+
+For any function $b(s)$ that does not depend on the action,
+
+$$
+\mathbb{E}_{a\sim\pi_\theta}\bigl[\nabla_\theta\log\pi_\theta(a\mid s)\,b(s)\bigr]
+= b(s)\sum_a \pi_\theta(a\mid s)\frac{\nabla_\theta\pi_\theta(a\mid s)}{\pi_\theta(a\mid s)}
+= b(s)\,\nabla_\theta\!\!\underbrace{\sum_a \pi_\theta(a\mid s)}_{=\,1} = 0
+$$
+
+So replacing $R$ with the **advantage** $A = R - b(s)$ leaves the gradient unbiased while changing its variance. Choosing $b$ well is the entire game. **This identity is the hinge of the whole page: PPO, GRPO and RLOO differ almost exclusively in how they construct $b$.**
+
+| Method | Baseline $b$ | Cost |
+|---|---|---|
+| REINFORCE | $0$ | None; variance is enormous |
+| Actor–critic / PPO | $V_\psi(s)$, a learned value network | A second trainable model of policy size |
+| RLOO | Mean reward of the *other* $G-1$ samples | $G$ samples per prompt, no extra model |
+| **GRPO** | Mean reward of the group, then divided by group std | $G$ samples per prompt, no extra model |
+
+### 2.3 PPO
+
+PPO (Schulman et al., 2017) fixes a second problem: a large policy step can collapse the policy, and the sampled data is only valid near $\pi_{\theta_{\text{old}}}$. Define the importance ratio
+
+$$
+\rho_t(\theta) = \frac{\pi_\theta(o_t \mid q, o_{<t})}{\pi_{\theta_{\text{old}}}(o_t \mid q, o_{<t})}
+$$
+
+and optimize the clipped surrogate — the objective the DeepSeekMath paper states as its Eq. 1:
+
+$$
+\mathcal{J}_{\text{PPO}}(\theta) = \mathbb{E}\left[\frac{1}{|o|}\sum_{t=1}^{|o|}\min\Bigl(\rho_t(\theta)A_t,\;\operatorname{clip}\bigl(\rho_t(\theta), 1-\varepsilon, 1+\varepsilon\bigr)A_t\Bigr)\right]
+$$
+
+The $\min$ with a clipped copy creates a pessimistic bound: once the ratio moves beyond $1\pm\varepsilon$ in the direction that would *improve* the surrogate, the gradient is cut off. Typically $\varepsilon = 0.2$.
+
+In RLHF, $A_t$ comes from GAE (Schulman et al., 2016) over a learned critic $V_\psi$. **That critic is the problem.** It is initialized from the policy, is the same size, and is trained concurrently — so it carries a full $16\Psi$ of model states. It is also genuinely hard to fit: it must predict the expected future reward of a partial generation, from a sparse terminal signal, on a non-stationary distribution.
 
 ```mermaid
-graph TB
-    subgraph "Standard RLHF"
-        POLICY["Policy Model π(a|s)<br/>(The LLM being trained)"]
-        REWARD["Reward Model R(x,y)<br/>(Learned from preferences)"]
-        REF["Reference Model π_ref<br/>(Frozen SFT model)"]
-
-        PROMPT["Prompt x"] --> POLICY
-        POLICY -->|"Generate response y"| REWARD
-        REWARD -->|"Compute reward r"| PPO["PPO Update"]
-        REF -->|"KL penalty"| PPO
-        PPO -->|"Update weights"| POLICY
+flowchart TB
+    subgraph PPOSYS["PPO / RLHF — four models resident"]
+        direction TB
+        POLICY["Policy pi_theta<br/>TRAINABLE — 16 Psi"]
+        CRITIC["Critic V_psi<br/>TRAINABLE — 16 Psi<br/>the component GRPO removes"]
+        RM["Reward model R_phi<br/>frozen — 2 Psi"]
+        REF["Reference pi_ref<br/>frozen — 2 Psi"]
     end
 
-    style POLICY fill:#c8e6c9
-    style REWARD fill:#fff9c4
-    style REF fill:#e3f2fd
+    PROMPT["Prompt q"] --> POLICY
+    POLICY -->|"rollout o"| RM
+    RM -->|"scalar reward"| ADV["GAE advantage"]
+    CRITIC -->|"value baseline V(s_t)"| ADV
+    REF -->|"KL penalty"| ADV
+    ADV -->|"clipped surrogate"| POLICY
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef dark fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    class POLICY bright
+    class CRITIC dark
+    class RM,REF base
+    class PROMPT,ADV steel
+    class PPOSYS deep
 ```
 
-### The PPO Objective
+## 3. Direct Preference Optimization — the other escape route
 
-Proximal Policy Optimization (PPO) maximizes:
-
-$$
-\mathcal{L}_{\text{PPO}} = \mathbb{E}_{(x,y) \sim \pi_\theta} \left[ R(x, y) - \beta \cdot D_{KL}(\pi_\theta \| \pi_{ref}) \right]
-$$
-
-Where:
-- $R(x, y)$ is the reward for response $y$ to prompt $x$
-- $D_{KL}(\pi_\theta \| \pi_{ref})$ prevents the policy from drifting too far from the reference
-- $\beta$ controls the strength of the KL penalty
-
-### Problems with Standard RLHF
-
-| Issue | Description |
-|-------|-------------|
-| **Reward Model Required** | Must train a separate reward model on preference data |
-| **Training Instability** | PPO is notoriously unstable with language models |
-| **Memory Intensive** | Need 3 models in memory: policy, reward, reference |
-| **Reward Hacking** | Model may exploit reward model weaknesses |
-| **Variance** | High variance in gradient estimates |
-
----
-
-## Direct Preference Optimization (DPO)
-
-### Eliminating the Reward Model
-
-DPO showed that the reward model can be **implicitly** derived from preferences:
+DPO (Rafailov et al., 2023) takes a different exit. Under the KL-regularized RL objective the optimal policy has a closed form,
 
 $$
-R(x, y) = \beta \log \frac{\pi_\theta(y|x)}{\pi_{ref}(y|x)} + \beta \log Z(x)
+\pi^{*}(y\mid x) = \frac{1}{Z(x)}\pi_{\text{ref}}(y\mid x)\exp\!\left(\tfrac{1}{\beta}R(x,y)\right)
 $$
 
-This leads to the DPO loss:
+which can be inverted for the implied reward,
 
 $$
-\mathcal{L}_{\text{DPO}} = -\mathbb{E}_{(x, y_w, y_l)} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)} \right) \right]
+R(x,y) = \beta\log\frac{\pi^{*}(y\mid x)}{\pi_{\text{ref}}(y\mid x)} + \beta\log Z(x)
 $$
 
-Where:
-- $y_w$ is the **preferred** (winning) response
-- $y_l$ is the **rejected** (losing) response
-- $\sigma$ is the sigmoid function
+Substituting into a Bradley–Terry preference model, the intractable $Z(x)$ cancels between the two responses, leaving a supervised objective:
 
-### DPO Advantages
+$$
+\mathcal{L}_{\text{DPO}} = -\mathbb{E}_{(x,y_w,y_l)}\left[\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right)\right]
+$$
 
-- No reward model needed
-- Simpler training pipeline
-- More stable than PPO
+No rollouts, no reward model, no critic — DPO is a classification loss on a **fixed** preference dataset.
 
-### DPO Limitations
+Its limitation is exactly what makes GRPO attractive for math. DPO is **off-policy and offline**: it can only learn from preference pairs already collected, cannot query a verifier during training, and cannot exploit a scalar reward that is cheap to evaluate on new samples. When you have a ground-truth checker, throwing it away to collect pairwise human preferences is a strange trade.
 
-- Requires **paired preferences** (winner vs loser)
-- Cannot easily incorporate **reward signals** from verifiers
-- Limited to **pairwise** comparisons
+## 4. GRPO
 
----
+### 4.1 The idea
 
-## Group Relative Policy Optimization (GRPO)
+Ask what the critic is *for*. It supplies a baseline: an estimate of the expected reward from state $s$. But if you are willing to sample $G$ responses to the *same* prompt, you can estimate that expectation by Monte Carlo — directly, with no learned model:
 
-### The Key Innovation
+$$
+V(q) \approx \bar r = \frac{1}{G}\sum_{i=1}^{G} r_i
+$$
 
-GRPO, introduced by DeepSeek, addresses limitations of both PPO and DPO by:
+**Replace a learned function approximator with an empirical mean over a group of rollouts.** That is GRPO in one sentence. It exploits a property special to LLM alignment: unlike a robotics episode, generating $G$ samples from the same prompt is cheap and embarrassingly parallel.
 
-1. **Generating multiple responses** per prompt (a "group")
-2. **Computing rewards** for each response (can use any reward function)
-3. **Normalizing rewards** within each group (relative ranking)
-4. **Eliminating the reference model** (no KL divergence term needed)
+### 4.2 The objective
+
+For prompt $q$, sample a group $\{o_1,\dots,o_G\}\sim\pi_{\theta_{\text{old}}}(\cdot\mid q)$ and score each with $r_i = R(q, o_i)$. Under **outcome supervision**, every token of $o_i$ receives the same normalized advantage:
+
+$$
+\hat A_{i,t} = \tilde r_i = \frac{r_i - \operatorname{mean}(\mathbf{r})}{\operatorname{std}(\mathbf{r})}, \qquad \mathbf{r} = (r_1,\dots,r_G)
+$$
+
+Writing $\rho_{i,t}(\theta) = \dfrac{\pi_\theta(o_{i,t}\mid q, o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t}\mid q, o_{i,<t})}$, the GRPO objective (Shao et al., 2024, Eq. 3) is
+
+$$
+\mathcal{J}_{\text{GRPO}}(\theta) = \mathbb{E}\Biggl[\frac{1}{G}\sum_{i=1}^{G}\frac{1}{|o_i|}\sum_{t=1}^{|o_i|}\Bigl\{\min\bigl(\rho_{i,t}\hat A_{i,t},\;\operatorname{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon)\hat A_{i,t}\bigr) - \beta\,\mathbb{D}_{\mathrm{KL}}\bigl[\pi_\theta \,\|\, \pi_{\text{ref}}\bigr]\Bigr\}\Biggr]
+$$
+
+Compare term by term with $\mathcal{J}_{\text{PPO}}$: the clipped surrogate is **identical**. Exactly two things changed.
+
+1. $A_t$ from a learned critic $\longrightarrow$ $\hat A_{i,t}$ from group statistics.
+2. The KL penalty moved *out of the reward* and *into the loss*, as an explicit term with its own estimator.
+
+Everything else — the ratio, the clip, $\varepsilon$ — is PPO.
 
 ```mermaid
-graph TB
-    subgraph "GRPO Pipeline"
-        PROMPT["Prompt x"]
-        GEN["Generate G responses<br/>y₁, y₂, ..., yG"]
-        REWARD["Compute rewards<br/>r₁, r₂, ..., rG"]
-        NORM["Normalize within group<br/>Advantages A₁, A₂, ..., AG"]
-        UPDATE["Policy gradient update<br/>using advantages"]
-
-        PROMPT --> GEN
-        GEN --> REWARD
-        REWARD --> NORM
-        NORM --> UPDATE
+flowchart TB
+    subgraph GRPOSYS["GRPO — the critic is gone, the reference model is NOT"]
+        direction TB
+        POLICY["Policy pi_theta<br/>TRAINABLE — 16 Psi"]
+        REF["Reference pi_ref<br/>frozen — 2 Psi<br/>STILL REQUIRED for the KL term"]
+        VERIF["Reward R(q,o)<br/>a verifier — zero parameters<br/>for math: string match on the answer"]
     end
 
-    style GEN fill:#e3f2fd
-    style NORM fill:#c8e6c9
+    Q["Prompt q"] --> GEN["Sample a group of G responses<br/>from pi_theta_old"]
+    GEN --> VERIF
+    VERIF --> NORM["Group-relative advantage<br/>A_i = (r_i - mean) / std"]
+    NORM --> LOSS["Clipped surrogate<br/>minus beta times KL"]
+    REF --> LOSS
+    LOSS -->|"update"| POLICY
+    POLICY --> GEN
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class POLICY bright
+    class REF,VERIF base
+    class Q,GEN,NORM,LOSS steel
+    class GRPOSYS deep
 ```
 
-### Why "Group Relative"?
+### 4.3 The KL estimator — why it is not what you would write
 
-The key insight is that **absolute reward values don't matter** — only the **relative ranking** within a group matters.
-
-For a prompt $x$ with $G$ generated responses $\{y_1, y_2, \ldots, y_G\}$:
+Naively, $\mathbb{D}_{\mathrm{KL}}$ is estimated by the sample mean of $\log\frac{\pi_\theta}{\pi_{\text{ref}}}$. GRPO instead uses (Eq. 4):
 
 $$
-\bar{r} = \frac{1}{G} \sum_{i=1}^{G} r_i, \quad \sigma_r = \sqrt{\frac{1}{G} \sum_{i=1}^{G} (r_i - \bar{r})^2}
+\mathbb{D}_{\mathrm{KL}}\bigl[\pi_\theta\|\pi_{\text{ref}}\bigr] = \frac{\pi_{\text{ref}}(o_{i,t}\mid q, o_{i,<t})}{\pi_\theta(o_{i,t}\mid q, o_{i,<t})} - \log\frac{\pi_{\text{ref}}(o_{i,t}\mid q, o_{i,<t})}{\pi_\theta(o_{i,t}\mid q, o_{i,<t})} - 1
 $$
 
-The **advantage** for each response:
+This is Schulman's **k3** estimator. Writing $u = \log\frac{\pi_{\text{ref}}}{\pi_\theta}$, the three candidates are
 
-$$
-A_i = \frac{r_i - \bar{r}}{\sigma_r}
-$$
+| Estimator | Form | Unbiased? | Variance | Sign |
+|---|---|---|---|---|
+| k1 | $-u$ | Yes | High | Can be **negative** |
+| k2 | $\tfrac{1}{2}u^2$ | No | Low | Always $\ge 0$ |
+| **k3** | $e^{u} - u - 1$ | **Yes** | Low | Always $\ge 0$ |
 
-This normalization:
-- Makes training **scale-invariant** to reward magnitude
-- Provides **natural baseline subtraction** (reduces variance)
-- Creates **contrastive signal** within each group
+k3 is unbiased *and* guaranteed non-negative, because $e^u - u - 1 \ge 0$ for all real $u$ with equality only at $u=0$. That non-negativity matters: k1 fluctuates in sign sample-to-sample, and a "penalty" that is sometimes a bonus is a poor regularizer.
 
-### The GRPO Objective
-
-GRPO maximizes the following objective:
-
-$$
-\mathcal{L}_{\text{GRPO}} = \mathbb{E}_{x \sim \mathcal{D}} \left[ \mathbb{E}_{y_1, \ldots, y_G \sim \pi_\theta(\cdot|x)} \left[ \frac{1}{G} \sum_{i=1}^{G} A_i \cdot \log \pi_\theta(y_i | x) \right] \right]
-$$
-
-Breaking this down:
-- Sample a prompt $x$ from the dataset
-- Generate $G$ responses from the current policy
-- Compute normalized advantages $A_i$ for each response
-- Update policy to increase probability of high-advantage responses
-
-### Policy Gradient Derivation
-
-The gradient of the GRPO objective is:
-
-$$
-\nabla_\theta \mathcal{L}_{\text{GRPO}} = \mathbb{E} \left[ \frac{1}{G} \sum_{i=1}^{G} A_i \cdot \nabla_\theta \log \pi_\theta(y_i | x) \right]
-$$
-
-This is a **REINFORCE-style** gradient where:
-- Positive advantages → increase response probability
-- Negative advantages → decrease response probability
-- Zero-mean advantages → natural variance reduction
-
-### Why No Reference Model?
-
-Traditional RLHF uses a KL penalty to prevent the policy from deviating too far:
-
-$$
-\mathcal{L}_{\text{RLHF}} = R(x,y) - \beta \cdot D_{KL}(\pi_\theta \| \pi_{ref})
-$$
-
-GRPO achieves similar regularization through:
-1. **Group normalization** — relative advantages prevent extreme updates
-2. **Clipping** — limits the size of policy updates (like PPO)
-3. **Small learning rates** — gradual policy changes
-
-This eliminates the need to keep a reference model in memory!
-
----
-
-## GRPO vs Other Methods
-
-### Comparison Table
-
-| Aspect | PPO (RLHF) | DPO | GRPO |
-|--------|-----------|-----|------|
-| Reward Model | Required | Not needed | Optional (can use verifiers) |
-| Reference Model | Required | Required | Not needed |
-| Memory (3B model) | ~36GB | ~24GB | ~12GB |
-| Training Stability | Low | High | High |
-| Reward Type | Learned | Implicit | Flexible (verifier, LLM judge, etc.) |
-| Data Format | Single responses | Paired preferences | Multiple responses per prompt |
-
-### When to Use GRPO
-
-GRPO is particularly effective for:
-
-| Use Case | Why GRPO Works Well |
-|----------|---------------------|
-| **Math reasoning** | Can use answer verification as reward |
-| **Code generation** | Can use test execution as reward |
-| **Factual QA** | Can use retrieval verification as reward |
-| **Reasoning chains** | Can reward correct intermediate steps |
-
----
-
-## Mathematical Reasoning with GRPO
-
-### The GSM8K Task
-
-GSM8K contains grade-school math word problems:
-
-```
-Question: Janet's ducks lay 16 eggs per day. She eats 3 for breakfast
-every morning and bakes muffins for her friends every day with 4 eggs.
-She sells the remainder at the farmers' market for $2 per egg. How much
-does she make every day?
-
-Answer: Janet has 16 - 3 - 4 = 9 eggs remaining.
-She makes 9 * 2 = $18 every day.
-#### 18
-```
-
-### Reward Function for Math
-
-For math problems, we can use a **verifiable reward**:
-
-$$
-R(x, y) = \begin{cases}
-1 & \text{if extracted answer matches ground truth} \\
-0 & \text{otherwise}
-\end{cases}
-$$
+:::note This is the fix for the naive implementation
+A KL penalty written as `kl = (old_log_probs - log_probs).mean()` is k1 — high variance and sign-unstable. Prefer:
 
 ```python
-def compute_reward(response: str, ground_truth: str) -> float:
-    """Binary reward based on answer correctness."""
-    # Extract the final answer (after ####)
-    extracted = extract_answer(response)
-
-    # Compare with ground truth
-    if extracted == ground_truth:
-        return 1.0
-    else:
-        return 0.0
+log_ratio = ref_logprobs - policy_logprobs        # u
+kl = torch.exp(log_ratio) - log_ratio - 1.0       # k3: unbiased, non-negative
 ```
+:::
 
-### Why GRPO Excels at Math
+### 4.4 Relation to RLOO
 
-```mermaid
-graph TB
-    subgraph "GRPO for Math Reasoning"
-        PROMPT["Math problem x"]
+RLOO (Ahmadian et al., 2024) uses the **leave-one-out** baseline
 
-        subgraph "Generate Group"
-            Y1["Response y₁<br/>Answer: 18 ✓"]
-            Y2["Response y₂<br/>Answer: 15 ✗"]
-            Y3["Response y₃<br/>Answer: 18 ✓"]
-            Y4["Response y₄<br/>Answer: 20 ✗"]
-        end
+$$
+b_i = \frac{1}{G-1}\sum_{j\ne i} r_j \quad\Longrightarrow\quad A_i^{\text{RLOO}} = r_i - b_i = \frac{G}{G-1}\bigl(r_i - \bar r\bigr)
+$$
 
-        subgraph "Compute Rewards"
-            R1["r₁ = 1"]
-            R2["r₂ = 0"]
-            R3["r₃ = 1"]
-            R4["r₄ = 0"]
-        end
+Since $b_i$ excludes $r_i$, it is *independent of the action being scored* and the baseline identity of §2.2 applies exactly — RLOO's advantage is **strictly unbiased**. GRPO's $\bar r$ includes $r_i$, so $\hat A_i$ is weakly correlated with $o_i$ and carries an $O(1/G)$ bias. Note the two differ only by the constant factor $\tfrac{G}{G-1}$, which is absorbed into the learning rate — so before std-normalization, **GRPO's advantage is RLOO's up to a scalar.** The real divergence is the $1/\operatorname{std}(\mathbf{r})$ factor, and that turns out to be the contentious part.
 
-        subgraph "Normalize (mean=0.5)"
-            A1["A₁ = +1"]
-            A2["A₂ = -1"]
-            A3["A₃ = +1"]
-            A4["A₄ = -1"]
-        end
+## 5. What GRPO Actually Removes: A Memory Accounting
 
-        PROMPT --> Y1
-        PROMPT --> Y2
-        PROMPT --> Y3
-        PROMPT --> Y4
+Use the mixed-precision Adam accounting from [ZeRO Stages](/docs/getting-started/deepspeed-zero-stages): a **trainable** model costs $16\Psi$ bytes of model states; a **frozen** model in BF16 costs $2\Psi$.
 
-        Y1 --> R1
-        Y2 --> R2
-        Y3 --> R3
-        Y4 --> R4
+| Component | PPO / RLHF | GRPO | DPO |
+|---|---|---|---|
+| Policy (trainable) | $16\Psi$ | $16\Psi$ | $16\Psi$ |
+| **Critic (trainable)** | $16\Psi$ | — | — |
+| Reward model (frozen) | $2\Psi$ | $0$ — a verifier | — |
+| Reference (frozen) | $2\Psi$ | $2\Psi$ | $2\Psi$ |
+| **Total model states** | $\mathbf{36\Psi}$ | $\mathbf{18\Psi}$ | $\mathbf{18\Psi}$ |
 
-        R1 --> A1
-        R2 --> A2
-        R3 --> A3
-        R4 --> A4
-    end
+For $\Psi = 1.5\times10^9$: PPO $\approx$ 54 GB, GRPO $\approx$ 27 GB. **GRPO halves model-state memory, and the entire saving is the critic.** Dropping a frozen reference model would have saved $2\Psi$ — about 6% — which is why the "no reference model" framing both misstates the algorithm and undersells it.
 
-    style Y1 fill:#c8e6c9
-    style Y3 fill:#c8e6c9
-    style Y2 fill:#ffcdd2
-    style Y4 fill:#ffcdd2
-```
+Two caveats that keep this honest:
 
-The model learns to:
-- **Increase probability** of reasoning chains that lead to correct answers
-- **Decrease probability** of reasoning chains that lead to wrong answers
-- **Generalize** correct reasoning patterns across problems
+- GRPO's *activation* memory is worse than PPO's per optimizer step, because it holds $G$ rollouts per prompt rather than one. Model states fall; rollout buffers rise. Budget for both.
+- With **LoRA**, only adapter parameters are trainable, so the $16\Psi$ terms collapse to $16\Psi_{\text{LoRA}} + 2\Psi_{\text{base}}$. The critic's removal still matters, but proportionally less — and the reference model can often be obtained *for free* by disabling the adapters, since the frozen base weights **are** $\pi_{\text{ref}}$. See §8.
 
----
+## 6. A Worked Numerical Example
 
-## GRPO Training Algorithm
+Take GSM8K with binary verifier reward and group size $G=4$.
 
-### Complete Algorithm
+**Prompt.** *Janet's ducks lay 16 eggs per day. She eats 3 for breakfast and bakes muffins with 4. She sells the rest at \$2 per egg. How much does she make daily?* Ground truth: **18**.
 
-```
-Algorithm: GRPO Training
+**Rollouts and rewards.**
 
-Input: Dataset D, Policy π_θ, Group size G, Learning rate α
-Output: Trained policy π_θ
+| $i$ | Final answer | $r_i$ |
+|---|---|---|
+| 1 | 18 ✓ | 1 |
+| 2 | 15 ✗ | 0 |
+| 3 | 18 ✓ | 1 |
+| 4 | 20 ✗ | 0 |
 
-1. For each training iteration:
+$\bar r = 0.5$. The **population** standard deviation is
 
-   # Sample batch of prompts
-   2. Sample batch B = {x₁, x₂, ..., xₙ} from D
+$$
+\operatorname{std}_{\text{pop}} = \sqrt{\tfrac{1}{4}\bigl[(0.5)^2 + (0.5)^2 + (0.5)^2 + (0.5)^2\bigr]} = 0.5
+$$
 
-   # Generate response groups
-   3. For each prompt xᵢ in B:
-      - Generate G responses: {yᵢ₁, yᵢ₂, ..., yᵢG} ~ π_θ(·|xᵢ)
+giving advantages
 
-   # Compute rewards
-   4. For each response yᵢⱼ:
-      - Compute reward rᵢⱼ = R(xᵢ, yᵢⱼ)
+$$
+\hat{\mathbf A} = \frac{(1,0,1,0) - 0.5}{0.5} = (+1,\,-1,\,+1,\,-1)
+$$
 
-   # Normalize within groups
-   5. For each prompt xᵢ:
-      - Compute mean: r̄ᵢ = (1/G) Σⱼ rᵢⱼ
-      - Compute std: σᵢ = sqrt((1/G) Σⱼ (rᵢⱼ - r̄ᵢ)²)
-      - Compute advantages: Aᵢⱼ = (rᵢⱼ - r̄ᵢ) / (σᵢ + ε)
+Every token of responses 1 and 3 is reinforced with weight $+1$; every token of 2 and 4 is suppressed with weight $-1$. No critic was consulted, and the absolute scale of $R$ never entered.
 
-   # Policy gradient update
-   6. Compute loss: L = -(1/NG) Σᵢ Σⱼ Aᵢⱼ · log π_θ(yᵢⱼ|xᵢ)
+:::warning `torch.std` uses Bessel's correction — this is a real bug source
+PyTorch's `Tensor.std()` defaults to `unbiased=True`, dividing by $G-1$, not $G$. On the same data:
 
-   7. Update: θ ← θ - α · ∇_θ L
+$$
+\operatorname{std}_{\text{sample}} = \sqrt{\tfrac{1}{3}\bigl[4\times 0.25\bigr]} = 0.577 \;\Longrightarrow\; \hat{\mathbf A} = (\pm 0.866)
+$$
 
-8. Return π_θ
-```
+A **13% smaller** effective advantage than the paper's formula, i.e. a silently reduced learning rate — and the discrepancy grows as $G$ shrinks. Write `rewards.std(dim=1, unbiased=False)` (or `correction=0`) to match the published objective, and be aware that library implementations differ on this point.
+:::
 
-### Key Implementation Details
+### 6.1 The degenerate-group problem
 
-#### Response Generation
+Now suppose all four rollouts are correct: $\mathbf r = (1,1,1,1)$. Then $\bar r = 1$, $\operatorname{std} = 0$, and
 
-```python
-def generate_group(model, prompt, group_size=4, temperature=0.7):
-    """Generate multiple responses for a single prompt."""
-    responses = []
-    for _ in range(group_size):
-        response = model.generate(
-            prompt,
-            max_new_tokens=256,
-            temperature=temperature,
-            do_sample=True
-        )
-        responses.append(response)
-    return responses
-```
+$$
+\hat A_i = \frac{1 - 1}{0 + \epsilon} = 0 \quad \text{for every } i
+$$
 
-#### Advantage Computation
+**The gradient is exactly zero. The prompt contributes nothing.** The same holds if all four are wrong. This is not a numerical edge case — it is structural, and it governs how much of your compute does useful work.
 
-```python
-def compute_advantages(rewards: torch.Tensor, eps: float = 1e-8):
-    """
-    Compute normalized advantages within each group.
+Model each rollout as $r_i \sim \mathrm{Bernoulli}(p)$ i.i.d. within a group, where $p$ is the model's per-sample success rate on that prompt. A group is degenerate iff all $G$ samples agree:
 
-    Args:
-        rewards: Tensor of shape [batch_size, group_size]
+$$
+\Pr[\text{degenerate}] = p^{G} + (1-p)^{G}
+$$
 
-    Returns:
-        advantages: Tensor of shape [batch_size, group_size]
-    """
-    # Compute mean and std within each group (along group dimension)
-    mean = rewards.mean(dim=1, keepdim=True)
-    std = rewards.std(dim=1, keepdim=True)
+| $p$ | $G=4$ | $G=8$ | $G=16$ |
+|---|---|---|---|
+| 0.1 | 65.6% | 43.0% | 18.5% |
+| 0.3 | 24.8% | 5.8% | 0.33% |
+| 0.5 | **12.5%** | 0.78% | 0.003% |
+| 0.7 | 24.8% | 5.8% | 0.33% |
+| 0.9 | 65.6% | 43.0% | 18.5% |
 
-    # Normalize
-    advantages = (rewards - mean) / (std + eps)
+Three consequences worth internalizing:
 
-    return advantages
-```
+1. **Signal is maximized at $p = 0.5$.** GRPO learns most from problems the model solves about half the time — a formal statement of "train at the edge of competence."
+2. **Success is self-defeating.** As training drives $p \to 0.9$, roughly two-thirds of groups at $G=4$ become degenerate. Throughput of *useful gradient* collapses precisely because the model improved. Reward curves flattening late in training often reflect this, not a converged policy.
+3. **Group size is variance-reduction with sharply diminishing returns.** Going $4 \to 8$ at $p=0.9$ takes waste from 65.6% to 43.0%; $8 \to 16$ takes it to 18.5%. Each doubling doubles rollout cost, and rollout dominates GRPO wall-clock.
 
-#### GRPO Loss
+The practical remedies follow directly: **filter degenerate groups** before the optimizer step (DAPO's dynamic sampling, Yu et al., 2025), **curriculum** toward problems near $p\approx0.5$, and raise $G$ only once filtering is in place.
 
-```python
-def grpo_loss(log_probs: torch.Tensor, advantages: torch.Tensor):
-    """
-    Compute GRPO policy gradient loss.
+For a full simulation of this effect with runnable code, see the [worked example page](/docs/tutorials/huggingface/grpo-worked-example).
 
-    Args:
-        log_probs: Log probabilities of responses [batch, group_size]
-        advantages: Normalized advantages [batch, group_size]
+## 7. Known Biases: The Dr. GRPO Critique
 
-    Returns:
-        loss: Scalar loss value
-    """
-    # Policy gradient: maximize advantage-weighted log probs
-    # Negate for minimization
-    loss = -(advantages * log_probs).mean()
+Liu et al. (2025) show that two normalizers in the objective are not innocuous.
 
-    return loss
-```
+**Length normalization $1/|o_i|$.** For a response with *negative* advantage, dividing the summed per-token loss by $|o_i|$ means a longer wrong answer receives a *smaller per-token penalty*. Gradient descent therefore finds it cheaper to be wrong at length, and incorrect responses grow monotonically during training — the widely-observed "length inflation" of R1-Zero-style runs, which is easy to misread as emergent deliberation.
 
----
+**Standard-deviation normalization $1/\operatorname{std}(\mathbf r)$.** Under binary rewards $\operatorname{std}(\mathbf{r}) \approx \sqrt{\hat p(1-\hat p)}$, minimized when $\hat p$ is near 0 or 1. Dividing by it **up-weights** questions that are nearly-always-solved or nearly-never-solved, and down-weights the informative middle — the opposite of the curriculum you want, and in direct tension with the §6.1 analysis.
 
-## Distributed GRPO Training
+**Dr. GRPO** removes both, using an unnormalized sum of token-level surrogates and a mean-only baseline:
 
-### Why Distributed Training?
+$$
+\hat A_{i,t}^{\text{Dr.GRPO}} = r_i - \operatorname{mean}(\mathbf r)
+$$
 
-GRPO benefits significantly from distributed training:
+The authors report matched reasoning accuracy at substantially better token efficiency, and RL-tuned Qwen2.5-Math-7B to state-of-the-art on MATH in 27 hours on 8×A100.
 
-| Aspect | Single GPU | Multi-GPU |
-|--------|-----------|-----------|
-| **Batch diversity** | Limited prompts | More diverse prompts |
-| **Response diversity** | Same model generates all | Can use model parallelism |
-| **Memory** | Limited by single GPU | Aggregate across GPUs |
-| **Throughput** | Sequential generation | Parallel generation |
+:::tip Practical reading
+If you observe response length climbing while accuracy plateaus, suspect the $1/|o_i|$ term before you conclude the model is "learning to think longer." Both `scale_rewards=False` (drop std normalization) and length-normalization variants are exposed by TRL's `GRPOConfig`.
+:::
 
-### DeepSpeed ZeRO for GRPO
+## 8. Implementation
 
-```mermaid
-graph TB
-    subgraph "ZeRO-2 Memory Distribution"
-        GPU0["GPU 0<br/>Parameters + Gradients₀ + Optimizer₀"]
-        GPU1["GPU 1<br/>Parameters + Gradients₁ + Optimizer₁"]
-        GPU2["GPU 2<br/>Parameters + Gradients₂ + Optimizer₂"]
-        GPU3["GPU 3<br/>Parameters + Gradients₃ + Optimizer₃"]
-
-        GPU0 <--> GPU1
-        GPU1 <--> GPU2
-        GPU2 <--> GPU3
-    end
-
-    style GPU0 fill:#e3f2fd
-    style GPU1 fill:#e3f2fd
-    style GPU2 fill:#e3f2fd
-    style GPU3 fill:#e3f2fd
-```
-
-### Training Strategy
-
-For GRPO with DeepSpeed:
-
-1. **Each GPU** generates responses for a subset of prompts
-2. **All-reduce** aggregates rewards across GPUs
-3. **ZeRO** partitions optimizer states and gradients
-4. **Gradient accumulation** enables large effective batch sizes
-
-```python
-# Distributed GRPO training loop
-for batch in dataloader:
-    prompts = batch["prompts"]
-
-    # Each GPU generates for its local prompts
-    responses = generate_group(model, prompts, group_size=4)
-
-    # Compute rewards (can be done locally)
-    rewards = compute_rewards(responses, batch["answers"])
-
-    # Normalize advantages within each group
-    advantages = compute_advantages(rewards)
-
-    # Compute log probabilities
-    log_probs = compute_log_probs(model, prompts, responses)
-
-    # GRPO loss
-    loss = grpo_loss(log_probs, advantages)
-
-    # DeepSpeed backward (handles gradient accumulation)
-    model.backward(loss)
-    model.step()
-```
-
----
-
-## Quick Start
+### 8.1 Quick start
 
 ```bash
 cd 06_huggingface_grpo
 
-# SLURM submission
+# SLURM (CoreWeave / HPC)
 sbatch run_deepspeed.sh
 
-# Direct execution
+# Direct (RunPod / single pod)
 deepspeed --num_gpus=1 grpo_gsm8k_train.py
 ```
 
-## LoRA Configuration
+### 8.2 The verifier reward
+
+$$
+R(q, o) = \begin{cases}1 & \text{extracted answer} = \text{ground truth}\\ 0 & \text{otherwise}\end{cases}
+$$
+
+```python
+def compute_reward(response: str, ground_truth: str) -> float:
+    """Binary verifier reward: the answer follows '####' in GSM8K."""
+    extracted = extract_answer(response)
+    return 1.0 if extracted == ground_truth else 0.0
+```
+
+This is the whole reason GRPO suits math. $R$ has **no parameters**, cannot be reward-hacked in the usual sense, and never drifts — three failure modes of learned reward models eliminated by construction. (It can still be *gamed*: a model that emits a guessed integer with no reasoning scores 1 whenever it is lucky, which is what format and process rewards are for.)
+
+### 8.3 Advantage computation
+
+```python
+def compute_advantages(rewards: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Group-relative advantages, matching DeepSeekMath Eq. 5.
+
+    Args:
+        rewards: [batch_size, group_size]
+    Returns:
+        advantages: [batch_size, group_size]
+    """
+    mean = rewards.mean(dim=1, keepdim=True)
+    # correction=0 -> population std, as in the paper. The PyTorch default
+    # (Bessel-corrected) shrinks advantages by sqrt((G-1)/G); see section 6.
+    std = rewards.std(dim=1, keepdim=True, correction=0)
+    return (rewards - mean) / (std + eps)
+
+
+def nondegenerate_mask(rewards: torch.Tensor, tol: float = 1e-6) -> torch.Tensor:
+    """Groups whose rewards are not all identical contribute zero gradient."""
+    return rewards.std(dim=1, correction=0) > tol
+```
+
+### 8.4 The loss
+
+```python
+def grpo_loss(
+    logprobs:      torch.Tensor,  # [B, G, T] under pi_theta
+    old_logprobs:  torch.Tensor,  # [B, G, T] under pi_theta_old (detached)
+    ref_logprobs:  torch.Tensor,  # [B, G, T] under pi_ref       (detached)
+    advantages:    torch.Tensor,  # [B, G]
+    mask:          torch.Tensor,  # [B, G, T] 1 for real tokens
+    epsilon: float = 0.2,
+    beta: float = 0.04,
+) -> torch.Tensor:
+    """Clipped surrogate plus a k3 KL penalty — DeepSeekMath Eq. 3 and 4."""
+    adv = advantages.unsqueeze(-1)                       # broadcast over tokens
+
+    ratio = torch.exp(logprobs - old_logprobs)
+    surrogate = torch.min(
+        ratio * adv,
+        torch.clamp(ratio, 1.0 - epsilon, 1.0 + epsilon) * adv,
+    )
+
+    # k3: unbiased AND non-negative. Do not use (ref - policy).mean() here.
+    log_ratio = ref_logprobs - logprobs
+    kl = torch.exp(log_ratio) - log_ratio - 1.0
+
+    per_token = surrogate - beta * kl
+    # Per-sequence mean, i.e. the 1/|o_i| of Eq. 3. Dropping this denominator
+    # in favour of a plain sum is the Dr. GRPO variant; see section 7.
+    per_seq = (per_token * mask).sum(-1) / mask.sum(-1).clamp(min=1)
+
+    return -per_seq.mean()                               # maximize -> minimize
+```
+
+### 8.5 LoRA
+
+$$
+W_{\text{eff}} = W_{\text{frozen}} + \Delta W = W_{\text{frozen}} + \frac{\alpha}{r}BA, \qquad B\in\mathbb{R}^{d\times r},\; A\in\mathbb{R}^{r\times k},\; r \ll \min(d,k)
+$$
 
 ```python
 from peft import LoraConfig
 
 lora_config = LoraConfig(
-    r=16,                    # Rank of update matrices
-    lora_alpha=32,           # Scaling factor
-    target_modules=[         # Which layers to adapt
-        "q_proj", "k_proj",
-        "v_proj", "o_proj"
-    ],
-    lora_dropout=0.05,       # Regularization
-    bias="none",             # Don't train biases
-    task_type="CAUSAL_LM"
+    r=16,                                   # rank
+    lora_alpha=32,                          # scaling; effective factor alpha/r = 2
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
 )
 ```
 
-### Why LoRA for GRPO?
-
-LoRA (Low-Rank Adaptation) is essential for memory-efficient GRPO:
-
-$$
-W_{new} = W_{frozen} + \Delta W = W_{frozen} + BA
-$$
-
-Where:
-- $W_{frozen} \in \mathbb{R}^{d \times k}$ is the pre-trained weight (frozen)
-- $B \in \mathbb{R}^{d \times r}$ and $A \in \mathbb{R}^{r \times k}$ are trainable
-- $r \ll \min(d, k)$ is the low rank
-
-Benefits for GRPO:
-- Only trains ~1% of parameters
-- Fits on 8GB GPUs
-- Fast iterations for RL training
-- Can merge back into base model
+$A$ is initialized Gaussian and $B$ to **zero**, so $\Delta W = 0$ at step 0 and training starts exactly at the base model — essential in RL, where a perturbed initial policy produces garbage rollouts and a reward signal with no gradient.
 
 ```mermaid
-graph LR
-    subgraph "LoRA Update"
-        X["Input x"] --> W["Frozen W"]
-        X --> A["A (r×k)"]
-        A --> B["B (d×r)"]
-        W --> ADD((+))
-        B --> ADD
-        ADD --> Y["Output"]
+flowchart LR
+    subgraph LORA["LoRA — the frozen path plus a rank-r correction"]
+        direction LR
+        X["Input x"]
+        W["Frozen W<br/>d x k — no gradient"]
+        A["A — r x k<br/>Gaussian init"]
+        B["B — d x r<br/>ZERO init"]
+        ADD(("+"))
+        Y["Output"]
     end
 
-    style W fill:#e3f2fd
-    style A fill:#c8e6c9
-    style B fill:#c8e6c9
+    X --> W --> ADD
+    X --> A --> B --> ADD
+    ADD --> Y
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class X,W base
+    class A,B steel
+    class ADD,Y bright
+    class LORA deep
 ```
 
----
+:::tip LoRA gives you the reference model for free
+$\pi_{\text{ref}}$ is the base model. With LoRA the base weights are already resident and frozen, so disabling the adapters — `with model.disable_adapter():` — yields $\pi_{\text{ref}}$ logprobs with **no second copy of the model**. The $2\Psi$ reference term in §5 drops to zero. This, not the critic removal, is what actually gets 1.5B-parameter GRPO onto an 8 GB card.
+:::
 
-## DeepSpeed Configuration
+### 8.6 DeepSpeed configuration
 
 ```json
 {
-  "bf16": {"enabled": true},
+  "bf16": { "enabled": true },
   "zero_optimization": {
     "stage": 2,
-    "offload_optimizer": {
-      "device": "cpu",
-      "pin_memory": true
-    },
+    "offload_optimizer": { "device": "cpu", "pin_memory": true },
     "contiguous_gradients": true,
     "overlap_comm": true
   },
@@ -622,208 +518,144 @@ graph LR
 }
 ```
 
-### Configuration Breakdown
+| Setting | Rationale |
+|---|---|
+| `bf16` | Avoids FP16 loss-scaling entirely. RL losses are dominated by a small clipped surrogate plus a KL term; the dynamic loss-scale controller interacts badly with the resulting spiky gradients. Prefer BF16 for RL on Ampere+. |
+| `stage: 2` | With LoRA, $\Psi_{\text{trainable}}$ is tiny, so Stage 3 would pay $3\Psi$ of parameter-gather traffic on weights that never receive a gradient. Stage 2 is the right point. |
+| `offload_optimizer` | Moves the (small, LoRA-sized) Adam states off the GPU to leave room for rollout buffers. |
+| `gradient_accumulation_steps: 8` | GRPO gradients are high-variance; a large effective batch is the primary stabilizer. |
+| `train_micro_batch_size_per_gpu: 1` | Each micro-batch already holds $G$ rollouts, so the real activation load is $G\times$ this. |
+| `gradient_clipping: 1.0` | Non-negotiable in RL — a single anomalous group can produce an enormous update. |
 
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `bf16.enabled` | true | Memory-efficient training |
-| `zero_optimization.stage` | 2 | Partition gradients + optimizer |
-| `offload_optimizer.device` | cpu | Move optimizer states to CPU |
-| `gradient_accumulation_steps` | 8 | Effective batch size = 8 |
-| `train_micro_batch_size_per_gpu` | 1 | Fit in limited GPU memory |
+:::warning The batch-size invariant still applies
+$\texttt{train\_batch\_size} = \texttt{micro\_batch} \times \texttt{grad\_accum} \times N_{\text{gpus}}$. The config above resolves to $1\times8\times N$. Launching with a different `--num_gpus` without updating it aborts at startup.
+:::
 
-### Memory Savings
+### 8.7 Hyperparameters
+
+| Parameter | Value | Note |
+|---|---|---|
+| Base LR | 5e-5 | LoRA tolerates ~10× the LR of full fine-tuning |
+| LoRA rank $r$ | 16 | |
+| Group size $G$ | 4 | Raise to 8–16 with degenerate-group filtering (§6.1) |
+| Clip $\varepsilon$ | 0.2 | PPO default; inherited unchanged |
+| KL coefficient $\beta$ | 0.04 | Lower for verifiable rewards, where drift is less dangerous |
+| Sampling temperature | 0.7–1.0 | **Must be $>0$.** Greedy decoding gives $\operatorname{std}(\mathbf r)=0$ for every group |
+| Gradient accumulation | 8 | |
+| Epochs | 3 | |
+
+### 8.8 Memory ladder
 
 ```mermaid
-graph TB
-    subgraph "Memory Comparison (1.5B Model)"
-        FULL["Full Fine-tuning<br/>~24GB GPU"]
-        LORA["+ LoRA<br/>~16GB GPU"]
-        ZERO["+ ZeRO-2<br/>~12GB GPU"]
-        OFFLOAD["+ CPU Offload<br/>~8GB GPU"]
-    end
+flowchart LR
+    FULL["Full fine-tuning<br/>~24 GB"]
+    LORA["plus LoRA<br/>~16 GB<br/>trainable Psi collapses"]
+    ZERO["plus ZeRO-2<br/>~12 GB<br/>partition grads and optimizer"]
+    OFF["plus CPU offload<br/>~8 GB<br/>Adam states to host RAM"]
 
-    FULL --> LORA --> ZERO --> OFFLOAD
+    FULL --> LORA --> ZERO --> OFF
 
-    style FULL fill:#ffcdd2
-    style LORA fill:#fff9c4
-    style ZERO fill:#c8e6c9
-    style OFFLOAD fill:#c8e6c9
+    classDef dark fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class FULL dark
+    class LORA steel
+    class ZERO base
+    class OFF bright
 ```
 
----
-
-## GSM8K Dataset
-
-Mathematical word problems with chain-of-thought solutions:
-
-```
-Q: Janet's ducks lay 16 eggs per day. She eats three for breakfast
-every morning and bakes muffins for her friends. How many eggs does
-she have left?
-
-A: Janet starts with 16 eggs. She eats 3. So she has 16 - 3 = 13.
-#### 13
-```
-
-### Dataset Statistics
-
-| Property | Value |
-|----------|-------|
-| Training samples | 7,473 |
-| Test samples | 1,319 |
-| Average question length | 46 words |
-| Average solution length | 3.5 steps |
-
----
-
-## Memory Requirements
-
-| Configuration | GPU Memory | System RAM |
-|--------------|------------|------------|
+| Configuration | GPU memory | System RAM |
+|---|---|---|
 | Full model | 24 GB | 32 GB |
 | LoRA + ZeRO-2 | 12 GB | 32 GB |
-| LoRA + Offload | 8 GB | 64 GB |
+| LoRA + offload | 8 GB | 64 GB |
 
-## Training Parameters
-
-| Parameter | Value |
-|-----------|-------|
-| Base LR | 5e-5 |
-| LoRA rank | 16 |
-| Group size | 4 |
-| Batch size | 1 per GPU |
-| Gradient accum | 8 |
-| Epochs | 3 |
-
----
-
-## Monitoring GRPO Training
-
-### Key Metrics
+## 9. Monitoring
 
 ```python
-# Metrics to track during GRPO training
 metrics = {
-    "reward/mean": rewards.mean(),           # Average reward
-    "reward/std": rewards.std(),             # Reward variance
-    "advantage/mean": advantages.mean(),     # Should be ~0
-    "advantage/std": advantages.std(),       # Should be ~1
-    "policy/entropy": -log_probs.mean(),     # Exploration
-    "accuracy": (rewards > 0).float().mean() # Task performance
+    "reward/mean":        rewards.mean(),
+    "reward/std":         rewards.std(),
+    "advantage/mean":     advantages.mean(),        # must be ~0 by construction
+    "advantage/std":      advantages.std(),         # ~1 with population std
+    "groups/degenerate":  (rewards.std(dim=1, correction=0) < 1e-6).float().mean(),
+    "policy/entropy":     entropy.mean(),
+    "kl/ref":             kl.mean(),                # k3, so must be >= 0
+    "ratio/clipfrac":     ((ratio - 1).abs() > 0.2).float().mean(),
+    "completion/length":  mask.sum(-1).float().mean(),
+    "accuracy":           (rewards > 0).float().mean(),
 }
 ```
 
-### Expected Training Curves
+Diagnostics, in order of how much they tell you:
+
+- **`groups/degenerate`** — the §6.1 quantity. Rising toward 1 means most compute is producing no gradient. Raise $G$, filter, or rebalance the curriculum.
+- **`advantage/mean` $\ne 0$** — an arithmetic bug. It is zero by construction; a nonzero value means normalization is over the wrong axis.
+- **`kl/ref` negative** — you are using k1, not k3. See §4.3.
+- **`ratio/clipfrac` > 0.3** — $\pi_\theta$ has moved too far from $\pi_{\theta_{\text{old}}}$; lower the LR or take fewer inner epochs per rollout batch.
+- **`completion/length` climbing while `accuracy` is flat** — the §7 length bias, not emergent reasoning.
+
+Expected trajectory on GSM8K with this configuration:
 
 ```
-Epoch 1:
-  Accuracy: 0.35 → 0.45
-  Reward mean: 0.35 → 0.45
+Epoch 1:  accuracy 0.35 -> 0.45
+Epoch 2:  accuracy 0.45 -> 0.55
+Epoch 3:  accuracy 0.55 -> 0.62
 
-Epoch 2:
-  Accuracy: 0.45 → 0.55
-  Reward mean: 0.45 → 0.55
-
-Epoch 3:
-  Accuracy: 0.55 → 0.62
-  Reward mean: 0.55 → 0.62
-
-Final GSM8K Accuracy: ~62% (from ~35% baseline)
+Final GSM8K accuracy ~62%, from a ~35% baseline
 ```
 
----
+## 10. Troubleshooting
 
-## Advanced GRPO Techniques
+**All advantages are zero.** Temperature is 0 or too low, so every rollout in a group is identical. Set `temperature >= 0.7`, `do_sample=True`. Then check §6.1 — if the model is at $p\approx 0.9$, degenerate groups are expected and you need filtering, not a decoding change.
 
-### KL Penalty (Optional)
+**Reward rises, held-out accuracy does not.** Reward hacking. With a verifier the usual culprit is format exploitation — the model emits a bare number with no reasoning and is right by chance. Add a format reward, or evaluate under a stricter extractor.
 
-For more stable training, add a KL penalty:
+**KL explodes and output degenerates.** $\beta$ too low or LR too high. Raise $\beta$, and verify you are using the k3 estimator; a sign-unstable k1 penalty will not hold the policy in place.
 
-$$
-\mathcal{L} = \mathcal{L}_{\text{GRPO}} + \beta \cdot D_{KL}(\pi_\theta \| \pi_{old})
-$$
+**Training destabilizes late.** Often the §7 std-normalization bias concentrating updates on extreme-$p$ questions. Try `scale_rewards=False` (Dr. GRPO).
 
-```python
-def grpo_loss_with_kl(log_probs, old_log_probs, advantages, beta=0.01):
-    # GRPO term
-    pg_loss = -(advantages * log_probs).mean()
+**Out of memory.** GRPO's footprint is dominated by $G$ rollouts, not model states. Reduce $G$ or `max_new_tokens` before touching the ZeRO stage; enable gradient checkpointing. See the [OOM diagnosis flow](/docs/tutorials/basic/neural-network#92-diagnosis).
 
-    # KL penalty (approximate)
-    kl = (old_log_probs - log_probs).mean()
+## 11. Summary
 
-    return pg_loss + beta * kl
-```
-
-### Reward Shaping
-
-For complex tasks, combine multiple reward signals:
-
-$$
-R(x, y) = w_1 \cdot R_{correctness} + w_2 \cdot R_{format} + w_3 \cdot R_{length}
-$$
-
-```python
-def compute_shaped_reward(response, ground_truth):
-    # Primary: answer correctness
-    r_correct = 1.0 if extract_answer(response) == ground_truth else 0.0
-
-    # Secondary: proper formatting
-    r_format = 0.1 if "####" in response else 0.0
-
-    # Tertiary: reasonable length
-    r_length = 0.05 if 50 < len(response) < 500 else 0.0
-
-    return r_correct + r_format + r_length
-```
-
----
-
-## Summary: GRPO Key Equations
-
-### Advantage Computation
-$$
-A_i = \frac{r_i - \bar{r}}{\sigma_r}, \quad \bar{r} = \frac{1}{G}\sum_{i=1}^G r_i
-$$
-
-### Policy Gradient
-$$
-\nabla_\theta \mathcal{L} = \mathbb{E}\left[\frac{1}{G}\sum_{i=1}^G A_i \cdot \nabla_\theta \log \pi_\theta(y_i|x)\right]
-$$
-
-### LoRA Update
-$$
-W_{new} = W_{frozen} + BA, \quad B \in \mathbb{R}^{d \times r}, A \in \mathbb{R}^{r \times k}
-$$
-
----
-
-## Troubleshooting
-
-### Low Reward Variance
-
-If all responses get similar rewards:
-- Increase temperature for more diverse generation
-- Use larger group size
-- Check reward function implementation
-
-### Training Instability
-
-- Reduce learning rate
-- Increase gradient accumulation
-- Add KL penalty
-- Use gradient clipping
-
-### Out of Memory
-
-- Enable CPU offloading
-- Reduce group size
-- Use smaller LoRA rank
-- Enable gradient checkpointing
-
----
+1. **GRPO is PPO with the critic replaced by a group mean.** The clipped surrogate is unchanged.
+2. **It does not remove the reference model or the KL term** — it removes the *critic*, halving model states from $36\Psi$ to $18\Psi$. Under LoRA, the reference is then free via adapter disabling.
+3. The KL uses the **k3** estimator: unbiased and non-negative, unlike the naive log-ratio.
+4. **Degenerate groups are the central practical constraint.** $\Pr = p^G + (1-p)^G$; signal peaks at $p=0.5$ and collapses as the model improves.
+5. **Both normalizers are biased.** $1/|o_i|$ inflates the length of wrong answers; $1/\operatorname{std}$ up-weights uninformative questions. Dr. GRPO removes both.
+6. It excels wherever reward is **verifiable** — math, code, structured extraction — because $R$ then has no parameters and cannot drift.
 
 ## Next Steps
 
-- [GPT-OSS Fine-tuning](/docs/tutorials/huggingface/gpt-oss-finetuning) - Larger models
-- [Multi-Agent](/docs/tutorials/huggingface/multi-agent) - Ensemble learning
+- [GRPO: Worked Numerical Example](/docs/tutorials/huggingface/grpo-worked-example) — full simulation of the degenerate-group and estimator-bias effects
+- [DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — the $16\Psi$ accounting used in §5
+- [GPT-OSS Fine-tuning](/docs/tutorials/huggingface/gpt-oss-finetuning) — larger models
+- [Multi-Agent](/docs/tutorials/huggingface/multi-agent) — ensembles
+
+## References
+
+**GRPO and its analysis**
+
+1. Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., et al. (2024). DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models. [arXiv:2402.03300](https://arxiv.org/abs/2402.03300) — introduces GRPO; Eq. 3 (objective), Eq. 4 (k3 KL), Eq. 5 (outcome-supervision advantage).
+2. DeepSeek-AI (2025). DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning. [arXiv:2501.12948](https://arxiv.org/abs/2501.12948) — GRPO at scale with rule-based rewards.
+3. Liu, Z., Chen, C., Li, W., et al. (2025). Understanding R1-Zero-Like Training: A Critical Perspective. [arXiv:2503.20783](https://arxiv.org/abs/2503.20783) — Dr. GRPO; the length- and std-normalization biases of §7.
+4. Yu, Q., Zhang, Z., Zhu, R., et al. (2025). DAPO: An Open-Source LLM Reinforcement Learning System at Scale. [arXiv:2503.14476](https://arxiv.org/abs/2503.14476) — dynamic sampling for degenerate groups, clip-higher, token-level loss.
+
+**Policy gradient foundations**
+
+5. Williams, R. J. (1992). Simple statistical gradient-following algorithms for connectionist reinforcement learning. *Machine Learning*, 8, 229–256. — REINFORCE.
+6. Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). Policy Gradient Methods for Reinforcement Learning with Function Approximation. *NeurIPS 1999*. — the policy gradient theorem and the baseline identity.
+7. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., & Klimov, O. (2017). Proximal Policy Optimization Algorithms. [arXiv:1707.06347](https://arxiv.org/abs/1707.06347)
+8. Schulman, J., Moritz, P., Levine, S., Jordan, M., & Abbeel, P. (2016). High-Dimensional Continuous Control Using Generalized Advantage Estimation. *ICLR 2016*. [arXiv:1506.02438](https://arxiv.org/abs/1506.02438)
+9. Schulman, J. (2020). [Approximating KL Divergence](http://joschu.net/blog/kl-approx.html) — the k1/k2/k3 estimators of §4.3.
+
+**Alternatives and context**
+
+10. Ouyang, L., Wu, J., Jiang, X., et al. (2022). Training language models to follow instructions with human feedback. *NeurIPS 2022*. [arXiv:2203.02155](https://arxiv.org/abs/2203.02155) — InstructGPT; the canonical three-stage RLHF pipeline.
+11. Rafailov, R., Sharma, A., Mitchell, E., Ermon, S., Manning, C. D., & Finn, C. (2023). Direct Preference Optimization: Your Language Model is Secretly a Reward Model. *NeurIPS 2023*. [arXiv:2305.18290](https://arxiv.org/abs/2305.18290)
+12. Ahmadian, A., Cremer, C., Gallé, M., et al. (2024). Back to Basics: Revisiting REINFORCE-Style Optimization for Learning from Human Feedback in LLMs. *ACL 2024*. [arXiv:2402.14740](https://arxiv.org/abs/2402.14740) — RLOO; the leave-one-out baseline of §4.4.
+13. Ross, S., Gordon, G. J., & Bagnell, J. A. (2011). A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. *AISTATS 2011*. [arXiv:1011.0686](https://arxiv.org/abs/1011.0686) — the covariate-shift argument of §1.
+14. Cobbe, K., Kosaraju, V., Bavarian, M., et al. (2021). Training Verifiers to Solve Math Word Problems. [arXiv:2110.14168](https://arxiv.org/abs/2110.14168) — GSM8K.
+15. Hu, E. J., Shen, Y., Wallis, P., et al. (2022). LoRA: Low-Rank Adaptation of Large Language Models. *ICLR 2022*. [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)

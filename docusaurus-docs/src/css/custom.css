@@ -194,7 +194,66 @@ div[class^='codeBlockContainer'] {
   font-size: 0.95rem;
 }
 
-/* Mermaid diagrams render on a dark canvas; keep their frame flush with the page */
+/* ---------------------------------------------------------------------------
+ * Mermaid
+ * The palette itself lives in themeConfig.mermaid.themeVariables (ELK layout,
+ * dark-blue containers, white type, grey arrows). These rules are the safety
+ * net: Mermaid emits a few labels via foreignObject/HTML that inherit page CSS
+ * rather than the SVG theme, and those would otherwise fall back to black text
+ * on a dark-blue box.
+ * ------------------------------------------------------------------------- */
 .docusaurus-mermaid-container {
   background: transparent;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+}
+
+.docusaurus-mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  background: transparent;
+}
+
+/* Node and cluster labels — force white regardless of theme fallbacks */
+.docusaurus-mermaid-container svg .nodeLabel,
+.docusaurus-mermaid-container svg .cluster-label,
+.docusaurus-mermaid-container svg .cluster-label .nodeLabel,
+.docusaurus-mermaid-container svg .label,
+.docusaurus-mermaid-container svg .labelText,
+.docusaurus-mermaid-container svg .stateLabel,
+.docusaurus-mermaid-container svg text {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+/* Edge labels sit on the deepest blue so they stay readable over arrows */
+.docusaurus-mermaid-container svg .edgeLabel,
+.docusaurus-mermaid-container svg .edgeLabel p,
+.docusaurus-mermaid-container svg .edgeLabel rect {
+  color: #ffffff !important;
+  fill: #08182a !important;
+  background-color: #08182a !important;
+}
+
+.docusaurus-mermaid-container svg .edgeLabel .labelBkg {
+  background-color: #08182a !important;
+}
+
+/* Arrows stay neutral grey so the blue boxes carry the emphasis */
+.docusaurus-mermaid-container svg .edgePath .path,
+.docusaurus-mermaid-container svg .flowchart-link,
+.docusaurus-mermaid-container svg .transition {
+  stroke: #98a6b5 !important;
+}
+
+.docusaurus-mermaid-container svg .marker,
+.docusaurus-mermaid-container svg marker path {
+  fill: #98a6b5 !important;
+  stroke: #98a6b5 !important;
+}
+
+/* Subgraph containers — deepest blue, hairline border */
+.docusaurus-mermaid-container svg .cluster rect {
+  fill: #08182a !important;
+  stroke: #2d5a86 !important;
 }

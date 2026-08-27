@@ -5,6 +5,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Getting Started',
+      link: {type: 'generated-index', description: 'Install DeepSpeed, run your first job, and understand ZeRO.'},
       items: [
         'getting-started/installation',
         'getting-started/quick-start',
@@ -14,6 +15,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Tutorials',
+      link: {type: 'generated-index', description: 'Worked examples from a two-parameter linear model up to 560B-parameter multimodal training.'},
       items: [
         {
           type: 'category',
@@ -41,6 +43,7 @@ const sidebars = {
             'tutorials/huggingface/trl-function-calling',
             'tutorials/huggingface/ocr-vision-language',
             'tutorials/huggingface/grpo-training',
+            'tutorials/huggingface/grpo-worked-example',
             'tutorials/huggingface/gpt-oss-finetuning',
             'tutorials/huggingface/multi-agent',
           ],
@@ -58,6 +61,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Guides',
+      link: {type: 'generated-index', description: 'Deploying to SLURM clusters and single-user pods, and choosing hardware.'},
       items: [
         'guides/slurm-deployment',
         'guides/coreweave-setup',
@@ -68,6 +72,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Reference',
+      link: {type: 'generated-index', description: 'DeepSpeed configuration keys and troubleshooting.'},
       items: [
         'reference/deepspeed-config',
         'reference/troubleshooting',
