@@ -4,77 +4,238 @@ sidebar_position: 3
 
 # OCR Vision-Language
 
-Fine-tune Qwen2-VL-2B for OCR and vision-language tasks with DeepSpeed.
+Fine-tuning Qwen2-VL-2B with LoRA and DeepSpeed — and why vision-language models break the memory assumptions that hold for text-only LLMs.
 
-## Overview
+**Model:** `Qwen/Qwen2-VL-2B-Instruct` · **Example:** `05_huggingface_ocr`
 
-This example demonstrates:
-- Vision-language model training
-- Frame extraction from videos
-- Multi-GPU DeepSpeed training
-- Optimized for 2x RTX 4000-series GPUs
+:::warning The bundled dataset is synthetic
+`prepare_dataset()` in `train_ds.py` generates **10 synthetic samples** with the fixed instruction `"Describe this image."` (`--max-samples 10`). It is a **plumbing test**: it verifies that the processor, the DeepSpeed engine, LoRA injection, and the training loop all work end to end on your hardware.
 
-**Model:** Qwen2-VL-2B-Instruct
-**Task:** Optical character recognition and image understanding
+It will not produce a useful OCR model. Getting one means substituting a real dataset — see §6. This page is written to explain the machinery so that substitution is straightforward.
+:::
 
-## Quick Start
+## 1. How a VLM Is Assembled
+
+A vision-language model is three components with a specific division of labour:
+
+```mermaid
+flowchart TB
+    IMG["Input image<br/>variable resolution"]
+    VIT["Vision encoder — ViT<br/>image to patch embeddings<br/>usually FROZEN"]
+    PROJ["Projector / merger<br/>maps vision dim to LLM dim<br/>small, often trained"]
+    TOK["Text tokenizer<br/>prompt to token embeddings"]
+    LLM["Language model<br/>consumes ONE sequence of<br/>image tokens + text tokens<br/>LoRA applied here"]
+    OUT["Generated text"]
+
+    IMG --> VIT --> PROJ --> LLM
+    TOK --> LLM
+    LLM --> OUT
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class IMG,TOK base
+    class VIT,PROJ steel
+    class LLM base
+    class OUT bright
+```
+
+The key idea: **the projector converts image patches into things that look like token embeddings**, so the language model consumes one homogeneous sequence and needs no architectural change. An image becomes, literally, a run of tokens in the prompt.
+
+That single fact drives everything else on this page.
+
+### Qwen2-VL specifics
+
+**Naive dynamic resolution.** Most VLMs resize every image to a fixed square (336×336, say), destroying aspect ratio and detail. Qwen2-VL processes images at their **native resolution**, emitting a variable number of visual tokens. For OCR this is decisive — downsampling a document to 336×336 makes the text unreadable, so no amount of fine-tuning can recover it.
+
+**M-RoPE.** Multimodal Rotary Position Embedding decomposes position into temporal, height, and width components, so the model encodes *2-D* spatial layout rather than a flattened raster order. Again important for documents, where "the number to the right of this label" is a spatial relationship.
+
+## 2. Quick Start
 
 ```bash
 cd 05_huggingface_ocr
 
-# SLURM submission
+# SLURM
 sbatch submit_job.sh
 
-# Direct execution
-deepspeed --num_gpus=2 train_ds.py
+# Direct
+deepspeed --num_gpus=2 train_ds.py --use-lora
 ```
 
-## Hardware Requirements
+Defaults from `train_ds.py`:
 
-| GPU | VRAM | Batch Size | Notes |
-|-----|------|------------|-------|
-| 2x RTX 4090 | 48 GB | 2 | Recommended |
-| 2x RTX 4080 | 32 GB | 1 | With offloading |
-| 1x A100 | 80 GB | 4 | Single GPU |
+| Argument | Default |
+|---|---|
+| `--model-name` | `Qwen/Qwen2-VL-2B-Instruct` |
+| `--use-lora` | off — **pass it explicitly** |
+| `--lora-r` / `--lora-alpha` / `--lora-dropout` | 8 / 16 / 0.05 |
+| `--use-4bit` | off |
+| `--max-samples` | 10 (synthetic) |
+| `--max-length` | 512 |
+| `--batch-size` | 1 |
+| `--gradient-accumulation-steps` | 4 |
+| `--num-epochs` | 10 |
+| `--learning-rate` | 5e-5 |
 
-## DeepSpeed Configuration
+## 3. The Memory Problem Is Sequence Length, Not Parameters
+
+At 2B parameters, model states under LoRA are negligible. **Vision-language training is bound by sequence length**, and by an amount that surprises people.
+
+A single high-resolution image can expand into **thousands** of visual tokens. Where a text prompt might be 100 tokens, the same request with a document image can be 2,000–8,000. And from the [activation memory analysis](/docs/tutorials/basic/neural-network#91-where-the-memory-goes):
+
+$$
+M_{\text{act}} \approx L\cdot b\cdot s\cdot h\cdot c \;+\; \underbrace{L\cdot a\cdot b\cdot s^{2}}_{\text{attention}}
+$$
+
+The attention term is **quadratic in $s$**. Doubling image resolution roughly doubles the visual token count and therefore *quadruples* attention activation memory. This is why `--batch-size 1` with `--gradient-accumulation-steps 4` is the right default: the micro-batch is 1 because one sample can be enormous.
+
+:::tip Bound the token count with `min_pixels` / `max_pixels`
+Dynamic resolution means an unbounded input produces an unbounded sequence — a single 4K screenshot can OOM a run that was stable for a hundred steps. Cap it at the processor:
+
+```python
+processor = Qwen2VLProcessor.from_pretrained(
+    model_name,
+    min_pixels=256 * 28 * 28,      # floor: keep small images legible
+    max_pixels=1280 * 28 * 28,     # ceiling: bounds worst-case sequence length
+)
+```
+
+The `28 × 28` factor is the patch area times the spatial merge. This single setting is the most effective lever on VLM memory — more than batch size, more than ZeRO stage. Raise `max_pixels` for dense documents; lower it if you OOM.
+:::
+
+## 4. LoRA Targets the Language Model Only
+
+```python
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=args.lora_r,
+    lora_alpha=args.lora_alpha,
+    lora_dropout=args.lora_dropout,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                    "gate_proj", "up_proj", "down_proj"],
+    bias="none",
+)
+model = get_peft_model(model, peft_config)
+model.print_trainable_parameters()
+```
+
+Those seven module names are the **attention projections and MLP** of the language decoder. The vision tower's parameters are named differently and receive no adapters, so the ViT stays entirely frozen.
+
+That is the right default, for a reason worth stating: the vision encoder was pretrained on enormous image corpora and already produces good general visual features. What a task-specific fine-tune usually needs to change is **how the language model interprets and verbalizes** those features. Adapting the LLM side is both cheaper and less prone to catastrophic forgetting of visual competence.
+
+:::note When you *should* adapt the vision side
+If your images are far outside the encoder's pretraining distribution — medical scans, satellite imagery, engineering schematics — frozen features may simply lack the needed information, and no amount of LLM adaptation recovers it. Two options: add adapters to the vision tower's projections as well, or unfreeze the **projector** alone, which is small, cheap, and often enough since it is the component that translates between the two representation spaces.
+:::
+
+Also note `gradient_checkpointing_enable()` in the loading path. Given §3, this is not optional — it trades ~33% extra compute for a large reduction in retained activations, and for VLMs the activations *are* the budget.
+
+:::warning `use_cache` and gradient checkpointing conflict
+`use_cache=True` (the generation KV cache) is incompatible with gradient checkpointing and produces a warning plus silently disabled checkpointing in some versions. Set `model.config.use_cache = False` during training and re-enable it for inference.
+:::
+
+## 5. Data Handling
+
+```python
+text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+inputs = self.processor(text=[text], images=[image], return_tensors="pt", ...)
+```
+
+Two things differ from text-only SFT:
+
+**The processor, not the tokenizer.** `Qwen2VLProcessor` bundles an image processor with the tokenizer. It resizes and patchifies the image, and — critically — **expands the `<|image_pad|>` placeholder in the templated text into the exact number of visual token positions that image produced.** Tokenizing text and encoding images separately gets this wrong and produces a shape mismatch, or worse, a silent misalignment.
+
+**Variable sequence lengths.** Different images yield different token counts, so batches need padding and the resulting shape variability interacts badly with the caching allocator — see the [fragmentation note](/docs/tutorials/basic/neural-network#93-reading-the-error-message). Bucketing images by approximate token count materially reduces both padding waste and fragmentation.
+
+Loss masking applies here exactly as in [the SFT page](/docs/tutorials/huggingface/trl-function-calling#4-completion-only-loss-masking), and matters more: you never want gradient on the image tokens or the instruction, only on the assistant's answer.
+
+## 6. Replacing the Synthetic Data
+
+To train an actual OCR model, replace `prepare_dataset()` with a real dataset in `(image, instruction, answer)` form. Reasonable public options:
+
+| Dataset | Contents |
+|---|---|
+| `naver-clova-ix/cord-v2` | Receipts with structured field annotations |
+| `nielsr/docvqa_1200_examples` | Document VQA |
+| `HuggingFaceM4/ChartQA` | Charts with question–answer pairs |
+| `getomni-ai/ocr-benchmark` | General OCR evaluation |
+
+```python
+from datasets import load_dataset
+raw = load_dataset("naver-clova-ix/cord-v2", split="train")
+
+def to_messages(ex):
+    return {"messages": [
+        {"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": "Extract all text from this receipt as JSON."},
+        ]},
+        {"role": "assistant", "content": [{"type": "text", "text": ex["ground_truth"]}]},
+    ], "image": ex["image"]}
+```
+
+Raise `--max-samples`, and expect to lower `max_pixels` as you do.
+
+:::note Evaluate with the right metric
+Token-level cross-entropy is what you optimize; it is not what you care about. For OCR report **character error rate** or **word error rate** — normalized edit distance between prediction and ground truth. For structured extraction report **field-level exact match**, which is what downstream systems actually consume. A model with good perplexity that transposes digits in totals is useless for receipts, and CE will not tell you.
+:::
+
+## 7. DeepSpeed Configuration
+
+ZeRO-2 with BF16 is the right setting, for the reason given in [the overview](/docs/tutorials/huggingface/overview#3-choosing-a-strategy-from-parameter-count): under LoRA the trainable parameter count is tiny, so Stage 3 would `all-gather` the full model in forward and backward — including the entire frozen vision tower — to save memory that was never the constraint.
 
 ```json
 {
-  "bf16": {"enabled": true},
+  "bf16": { "enabled": true },
   "zero_optimization": {
     "stage": 2,
-    "offload_optimizer": {
-      "device": "cpu",
-      "pin_memory": true
-    }
+    "contiguous_gradients": true,
+    "overlap_comm": true
   },
-  "gradient_accumulation_steps": 4,
-  "train_micro_batch_size_per_gpu": 1
+  "gradient_clipping": 1.0,
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto"
 }
 ```
 
-## Vision Processing
+### Hardware
 
-```python
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+| Setup | VRAM | Notes |
+|---|---|---|
+| 2× RTX 4090 | 48 GB | Comfortable with LoRA + checkpointing |
+| 2× RTX 4000-series (16 GB) | 32 GB | The example's target; keep `max_pixels` low |
+| 1× A100 80 GB | 80 GB | Single-GPU, room for larger `max_pixels` |
+| 8 GB card | — | Needs `--use-4bit` (QLoRA) and aggressive pixel caps |
 
-model = Qwen2VLForConditionalGeneration.from_pretrained(
-    "Qwen/Qwen2-VL-2B-Instruct",
-    torch_dtype=torch.bfloat16,
-)
+## 8. Troubleshooting
 
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")
+**OOM after several successful steps.** Almost always a larger-than-usual image. Set `max_pixels` (§3) rather than lowering batch size, which is already 1.
 
-# Process image
-inputs = processor(
-    text="What text is in this image?",
-    images=image,
-    return_tensors="pt"
-)
-```
+**Shape mismatch between image features and input IDs.** Text and images were processed separately. Everything must go through one `processor(...)` call so the image-pad expansion matches.
+
+**`use_cache` warning, memory higher than expected.** `model.config.use_cache = False` during training.
+
+**Loss decreases but output is generic.** Loss masking probably includes the instruction — the model is learning to reproduce a constant prompt. See §5.
+
+**Vision encoder in FP32 while the rest is BF16.** Some VLM loading paths keep the ViT in FP32. Check `model.visual.dtype` and cast if needed; the mismatch costs memory and speed.
+
+**Results look fine but the metric is bad.** You are probably reading cross-entropy. Use CER/WER — §6.
 
 ## Next Steps
 
-- [GRPO Training](/docs/tutorials/huggingface/grpo-training) - Reinforcement learning
-- [Hardware Guide](/docs/guides/hardware-requirements) - GPU selection
+- [Video-Text Training](/docs/tutorials/multimodal/video-text-training) — the same ideas extended over time
+- [TRL Function Calling](/docs/tutorials/huggingface/trl-function-calling) — chat templates and loss masking in the text-only case
+- [ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — why Stage 2 rather than 3 under LoRA
+
+## References
+
+1. Wang, P., Bai, S., Tan, S., et al. (2024). Qwen2-VL: Enhancing Vision-Language Model's Perception of the World at Any Resolution. [arXiv:2409.12191](https://arxiv.org/abs/2409.12191) — naive dynamic resolution and M-RoPE.
+2. Liu, H., Li, C., Wu, Q., & Lee, Y. J. (2023). Visual Instruction Tuning. *NeurIPS 2023*. [arXiv:2304.08485](https://arxiv.org/abs/2304.08485) — LLaVA; the projector design.
+3. Alayrac, J.-B., Donahue, J., Luc, P., et al. (2022). Flamingo: a Visual Language Model for Few-Shot Learning. *NeurIPS 2022*. [arXiv:2204.14198](https://arxiv.org/abs/2204.14198)
+4. Radford, A., Kim, J. W., Hallacy, C., et al. (2021). Learning Transferable Visual Models From Natural Language Supervision. *ICML 2021*. [arXiv:2103.00020](https://arxiv.org/abs/2103.00020) — CLIP, the usual vision tower.
+5. Dosovitskiy, A., Beyer, L., Kolesnikov, A., et al. (2021). An Image is Worth 16x16 Words. *ICLR 2021*. [arXiv:2010.11929](https://arxiv.org/abs/2010.11929)
+6. Kim, G., Hong, T., Yim, M., et al. (2022). OCR-free Document Understanding Transformer. *ECCV 2022*. [arXiv:2111.15664](https://arxiv.org/abs/2111.15664) — Donut, and the CORD benchmark.
+7. Hu, E. J., Shen, Y., Wallis, P., et al. (2022). LoRA. *ICLR 2022*. [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
+8. Chen, T., Xu, B., Zhang, C., & Guestrin, C. (2016). Training Deep Nets with Sublinear Memory Cost. [arXiv:1604.06174](https://arxiv.org/abs/1604.06174) — gradient checkpointing.
+9. Su, J., Lu, Y., Pan, S., et al. (2024). RoFormer: Enhanced Transformer with Rotary Position Embedding. *Neurocomputing*, 568. [arXiv:2104.09864](https://arxiv.org/abs/2104.09864) — RoPE, which M-RoPE extends.
