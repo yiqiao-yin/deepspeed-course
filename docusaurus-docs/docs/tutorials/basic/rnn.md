@@ -463,14 +463,24 @@ This is a **product of $(t-k)$ matrices**. For long sequences, this product eith
 
 ### Mathematical Analysis
 
-Let $\lambda_{max}$ be the largest eigenvalue of $\mathbf{W}_{hh}$. Since $|\tanh'(x)| \leq 1$:
+Write $\gamma = \sup_x |\tanh'(x)| = 1$ (for $\tanh$; $\gamma = \tfrac14$ for sigmoid) and let $\sigma_{\max}$ be the largest **singular value** of $\mathbf{W}_{hh}$ — that is, its spectral norm $\|\mathbf{W}_{hh}\|_2$. Submultiplicativity of the operator norm gives
 
 $$
-\left\| \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_k} \right\| \leq |\lambda_{max}|^{t-k}
+\left\|\frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_k}\right\| \;\le\; \prod_{i=k+1}^{t}\left\|\mathbf{W}_{hh}^{\top}\right\|\left\|\operatorname{diag}(\tanh'(\mathbf{a}_i))\right\| \;\le\; \left(\gamma\,\sigma_{\max}\right)^{t-k}
 $$
 
-- If $|\lambda_{max}| > 1$: gradients grow exponentially (**exploding**)
-- If $|\lambda_{max}| < 1$: gradients shrink exponentially (**vanishing**)
+Following Pascanu, Mikolov & Bengio (2013):
+
+- $\gamma\,\sigma_{\max} < 1$ is **sufficient** for the long-range gradient contributions to vanish exponentially.
+- $\rho(\mathbf{W}_{hh}) > 1/\gamma$, where $\rho$ is the spectral radius (largest $|\lambda|$), is **necessary** for gradients to explode.
+
+:::warning Singular values, not eigenvalues, bound the norm
+It is often written that the bound is $|\lambda_{\max}|^{t-k}$. That is **not correct for a general matrix**, because $\|\mathbf{A}^n\| \le \rho(\mathbf{A})^n$ holds only for *normal* matrices ($\mathbf{A}\mathbf{A}^\top = \mathbf{A}^\top\mathbf{A}$), and a learned $\mathbf{W}_{hh}$ is generically non-normal. Gelfand's formula gives only the asymptotic statement $\lim_{n\to\infty}\|\mathbf{A}^n\|^{1/n} = \rho(\mathbf{A})$.
+
+The gap is not academic. A non-normal matrix with $\rho(\mathbf{A}) < 1$ can still produce **transient amplification** — $\|\mathbf{A}^n\|$ growing by orders of magnitude for moderate $n$ before eventually decaying. Since BPTT truncates at finite horizons of exactly that order, a spectral-radius check can certify stability for a network whose gradients blow up in practice. Use $\sigma_{\max}$ for the bound and $\rho$ only for the asymptotic necessary condition.
+:::
+
+**This is the same Jacobian-product mechanism as depth** in [feedforward networks](/docs/tutorials/basic/neural-network#42-the-algorithm) — but with one critical difference. There, each layer has its own $\mathbf{W}^{[\ell]}$, so the factors are independent and errors can partially cancel. In an RNN the **same** $\mathbf{W}_{hh}$ is reused at every step, so the product is a matrix *power*. There is no cancellation: the behaviour is governed by a single spectrum, and it is exponential in the horizon. Weight sharing is what makes recurrence trainable at all, and it is also what makes this failure mode so severe.
 
 ### Visualization of Gradient Flow
 
@@ -588,13 +598,41 @@ $$
 \mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{c}}_t
 $$
 
-When $\mathbf{f}_t \approx 1$ (forget gate open), gradients flow directly through:
+The update is **additive**, not multiplicative-by-a-weight-matrix. Along the direct path,
 
 $$
-\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}} = \mathbf{f}_t \approx 1
+\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}}\bigg|_{\text{direct}} = \operatorname{diag}(\mathbf{f}_t)
 $$
 
-This avoids the vanishing gradient problem!
+so propagating over $t-k$ steps multiplies **elementwise gates**, not a shared weight matrix:
+
+$$
+\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_k}\bigg|_{\text{direct}} = \prod_{i=k+1}^{t}\operatorname{diag}(\mathbf{f}_i)
+$$
+
+Three things change relative to the vanilla RNN. The product is **diagonal**, so there is no mixing across coordinates and no non-normality. Each factor lies in $(0,1)$ and is **learned per-timestep**, so the network can hold $f_i \approx 1$ on the dimensions it needs to remember while forgetting on others — decay becomes a decision, not a fixed property of a spectrum. And with $f_i \approx 1$ the product is $\approx 1$ over arbitrarily many steps. This is Hochreiter & Schmidhuber's **constant error carousel**.
+
+:::warning $\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1} = \mathbf{f}_t$ is only the *direct* path
+The full derivative is larger: $\mathbf{c}_{t-1}$ also influences $\mathbf{h}_{t-1}$, which feeds all four gate computations at step $t$. So
+
+$$\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}} = \operatorname{diag}(\mathbf{f}_t) + \underbrace{\frac{\partial \mathbf{c}_t}{\partial \mathbf{h}_{t-1}}\frac{\partial \mathbf{h}_{t-1}}{\partial \mathbf{c}_{t-1}}}_{\text{through the gates}}$$
+
+The gating terms *do* still involve weight matrices and saturating nonlinearities, so LSTMs **mitigate** vanishing gradients — they do not eliminate them, and they do not address exploding gradients at all (which is why gradient clipping remains mandatory). The honest claim is that the additive path provides a route along which gradient can survive, and the optimizer can learn to use it.
+:::
+
+:::tip Initialize the forget-gate bias to 1
+With $\mathbf{b}_f = 0$, the sigmoid gives $\mathbf{f}_t \approx 0.5$ at initialization, so memory decays by $2^{-T}$ over $T$ steps — the carousel is closed before training starts, and the network must first learn to open it. Setting $\mathbf{b}_f = 1$ puts $\mathbf{f}_t \approx 0.73$ and biases the cell toward remembering by default.
+
+Gers et al. (2000) proposed this and Jozefowicz et al. (2015) found it the single most valuable LSTM architectural modification in a large search. PyTorch does **not** do it for you — `nn.LSTM` initializes all biases uniformly. Note the layout quirk: PyTorch packs gates as $[i, f, g, o]$ in one tensor, so the forget slice is the second quarter:
+
+```python
+for names in lstm._all_weights:
+    for name in filter(lambda n: "bias" in n, names):
+        bias = getattr(lstm, name)
+        n = bias.size(0)
+        bias.data[n // 4 : n // 2].fill_(1.0)   # forget gate
+```
+:::
 
 ### Gate Interpretations
 
@@ -1076,7 +1114,104 @@ $$
 
 ---
 
+## Where Recurrence Stands Today
+
+### Why transformers displaced RNNs
+
+Not accuracy — **parallelism**. The recurrence $\mathbf{h}_t = f(\mathbf{h}_{t-1}, \mathbf{x}_t)$ is an inherently sequential dependency: step $t$ cannot begin until step $t-1$ finishes. Training on a length-$T$ sequence therefore takes $O(T)$ sequential steps regardless of how many GPUs you have.
+
+Self-attention computes all positions simultaneously — $O(1)$ sequential depth, $O(T^2)$ work. On hardware where FLOPs are abundant and latency is precious, trading more total work for a shorter critical path is overwhelmingly the right bargain.
+
+| | RNN / LSTM | Transformer |
+|---|---|---|
+| Sequential steps (training) | $O(T)$ | $O(1)$ |
+| Work per layer | $O(T \cdot d^2)$ | $O(T^2 d + T d^2)$ |
+| Path length between positions | $O(T)$ | $O(1)$ |
+| Memory during inference | $O(d)$ — fixed | $O(T d)$ — grows with context |
+| Parallel over sequence | **No** | **Yes** |
+
+The path-length row matters independently: in an LSTM, information from position 1 reaching position 1000 traverses 1000 gated updates. In attention it is one hop. Gradient signal degrades over the former and not the latter.
+
+```mermaid
+flowchart TB
+    subgraph SEQ["Recurrence — sequential critical path"]
+        direction LR
+        R1["h1"] --> R2["h2"] --> R3["h3"] --> R4["hT"]
+    end
+
+    subgraph PAR["Self-attention — all positions at once"]
+        direction LR
+        A1["pos 1"]
+        A2["pos 2"]
+        A3["pos 3"]
+        A4["pos T"]
+    end
+
+    ATT["Single attention op<br/>every position sees every other"]
+    A1 --> ATT
+    A2 --> ATT
+    A3 --> ATT
+    A4 --> ATT
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class R1,R2,R3,R4 base
+    class A1,A2,A3,A4 steel
+    class ATT bright
+    class SEQ,PAR deep
+```
+
+### Where recurrence still wins
+
+Read the table's last two rows again. Attention's inference memory grows with context — the KV cache is $O(Td)$ per layer — while an RNN carries a **fixed-size** state no matter how long the stream. For genuinely unbounded input (online sensor data, streaming ASR, embedded inference under a hard memory budget) that is decisive, and it is why LSTMs remain in production in those settings.
+
+This tension drives current work on **state-space models**. S4 (Gu et al., 2022) and Mamba (Gu & Dao, 2023) reformulate a linear recurrence so it can be evaluated as a *convolution* — parallel over the sequence during training, via an associative scan — while retaining constant-memory recurrent inference. The goal is explicitly to keep both columns of that table.
+
+### DeepSpeed considerations specific to RNNs
+
+- **ZeRO Stage 3 is usually a poor fit.** LSTM parameter counts are modest ($4 d(d + m + 1)$ per layer), so model states are rarely the constraint, and Stage 3's per-layer `all-gather` interacts badly with a sequential loop that offers little compute to hide communication behind. Stage 1 or 2.
+- **Activation memory scales with $T$.** BPTT retains every gate activation at every timestep: roughly $O(T \cdot L \cdot b \cdot d)$. Long sequences OOM for the same reason long contexts do — see the [OOM diagnosis flow](/docs/tutorials/basic/neural-network#92-diagnosis). **Truncated BPTT** is the domain-specific fix, capping the retained horizon.
+- **Gradient clipping is not optional.** The exploding half of the problem is not solved by gating. Always set `"gradient_clipping": 1.0`.
+- **cuDNN fuses `nn.LSTM`.** A hand-written Python loop over `nn.LSTMCell` is often 5–10× slower. Keep the fused module unless you need custom cell behaviour.
+
+---
+
 ## Next Steps
 
 - [Stock Prediction](/docs/tutorials/intermediate/stock-prediction) - Real-world RNN application
 - [Bayesian Neural Networks](/docs/tutorials/intermediate/bayesian-nn) - Uncertainty estimation
+- [DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) - Why Stage 2 suits recurrent models
+
+## References
+
+**Recurrent architectures**
+
+1. Elman, J. L. (1990). Finding Structure in Time. *Cognitive Science*, 14(2), 179–211. — the simple recurrent network.
+2. Hochreiter, S., & Schmidhuber, J. (1997). Long Short-Term Memory. *Neural Computation*, 9(8), 1735–1780. — LSTM and the constant error carousel.
+3. Gers, F. A., Schmidhuber, J., & Cummins, F. (2000). Learning to Forget: Continual Prediction with LSTM. *Neural Computation*, 12(10), 2451–2471. — introduces the forget gate.
+4. Cho, K., van Merriënboer, B., Gulcehre, C., et al. (2014). Learning Phrase Representations using RNN Encoder–Decoder for Statistical Machine Translation. *EMNLP 2014*. [arXiv:1406.1078](https://arxiv.org/abs/1406.1078) — GRU.
+5. Schuster, M., & Paliwal, K. K. (1997). Bidirectional Recurrent Neural Networks. *IEEE Trans. Signal Processing*, 45(11), 2673–2681.
+6. Sutskever, I., Vinyals, O., & Le, Q. V. (2014). Sequence to Sequence Learning with Neural Networks. *NeurIPS 2014*. [arXiv:1409.3215](https://arxiv.org/abs/1409.3215)
+
+**Gradient dynamics**
+
+7. Bengio, Y., Simard, P., & Frasconi, P. (1994). Learning long-term dependencies with gradient descent is difficult. *IEEE Trans. Neural Networks*, 5(2), 157–166. — the original vanishing-gradient result.
+8. Hochreiter, S. (1991). *Untersuchungen zu dynamischen neuronalen Netzen*. Diploma thesis, TU Munich. — the first analysis of the problem.
+9. Pascanu, R., Mikolov, T., & Bengio, Y. (2013). On the difficulty of training Recurrent Neural Networks. *ICML 2013*. [arXiv:1211.5063](https://arxiv.org/abs/1211.5063) — the singular-value conditions and gradient clipping.
+10. Werbos, P. J. (1990). Backpropagation through time: what it does and how to do it. *Proceedings of the IEEE*, 78(10), 1550–1560.
+11. Jozefowicz, R., Zaremba, W., & Sutskever, I. (2015). An Empirical Exploration of Recurrent Network Architectures. *ICML 2015*. — the forget-gate bias result.
+12. Le, Q. V., Jaitly, N., & Hinton, G. E. (2015). A Simple Way to Initialize Recurrent Networks of Rectified Linear Units. [arXiv:1504.00941](https://arxiv.org/abs/1504.00941) — identity initialization as an alternative to gating.
+
+**Successors**
+
+13. Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention Is All You Need. *NeurIPS 2017*. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+14. Bahdanau, D., Cho, K., & Bengio, Y. (2015). Neural Machine Translation by Jointly Learning to Align and Translate. *ICLR 2015*. [arXiv:1409.0473](https://arxiv.org/abs/1409.0473) — attention, originally as an RNN augmentation.
+15. Gu, A., Goel, K., & Ré, C. (2022). Efficiently Modeling Long Sequences with Structured State Spaces. *ICLR 2022*. [arXiv:2111.00396](https://arxiv.org/abs/2111.00396) — S4.
+16. Gu, A., & Dao, T. (2023). Mamba: Linear-Time Sequence Modeling with Selective State Spaces. [arXiv:2312.00752](https://arxiv.org/abs/2312.00752)
+
+**Analysis and interpretation**
+
+17. Karpathy, A., Johnson, J., & Fei-Fei, L. (2015). Visualizing and Understanding Recurrent Networks. [arXiv:1506.02078](https://arxiv.org/abs/1506.02078)
+18. Greff, K., Srivastava, R. K., Koutník, J., Steunebrink, B. R., & Schmidhuber, J. (2017). LSTM: A Search Space Odyssey. *IEEE TNNLS*, 28(10), 2222–2232. [arXiv:1503.04069](https://arxiv.org/abs/1503.04069) — ablation of every LSTM component.

@@ -466,7 +466,58 @@ For $K = 4$ GPUs with $T_{min} = 1$ and $T_{max} = 8$:
 
 **Why Geometric Spacing?**
 
-The swap acceptance probability depends on $1/T_i - 1/T_j$. Geometric spacing ensures this difference is roughly constant between adjacent pairs, leading to uniform swap acceptance rates across the ladder.
+Work in inverse temperature $\beta = 1/T$. For a swap between adjacent chains, a second-order expansion of the acceptance rate gives
+
+$$
+\mathbb{E}[\alpha_{\text{swap}}] \;\approx\; \text{function of } \Delta\beta \cdot \varsigma_{\ell}(\beta)
+$$
+
+where $\varsigma_\ell(\beta)$ is the standard deviation of the log-likelihood under chain $\beta$. Acceptance is uniform across the ladder when $\Delta\beta \cdot \varsigma_\ell$ is constant. Because $\varsigma_\ell$ typically scales roughly as $1/\beta$ — hotter chains explore a wider range of likelihoods — holding $\Delta\beta/\beta$ constant does the job, and a **constant ratio** between adjacent temperatures is exactly that. Geometric spacing is therefore an approximation that works well in practice, not an identity.
+
+:::note Sizing the ladder
+Kone & Kofke (2005) and Atchadé et al. (2011) analyse the optimal adjacent-swap acceptance rate and find $\approx 0.23$ under idealized assumptions — the same constant that appears in optimal-scaling results for random-walk Metropolis. In practice anything in **0.2–0.5** is healthy.
+
+Diagnose the ladder by acceptance rate *per adjacent pair*, not on average:
+
+- **A pair below ~0.1** is a bottleneck: the ladder is too sparse there and the chains are effectively disconnected. Insert an intermediate temperature.
+- **A pair above ~0.8** is wasted compute: the two chains sample nearly the same distribution. Remove one.
+
+The number of rungs needed grows roughly as $\sqrt{\text{model dimension}}$, which is why parallel tempering is expensive for large networks and why this example distributes rungs across GPUs.
+:::
+
+:::warning Two tempering conventions — check which one you are implementing
+The $\Delta$ above tempers **only the likelihood**, leaving the prior at full strength:
+
+$$p_\beta(\theta) \propto p(\mathcal{D}\mid\theta)^{\beta}\,p(\theta)$$
+
+The alternative tempers the whole posterior, $p_\beta(\theta) \propto \left[p(\mathcal{D}\mid\theta)p(\theta)\right]^{\beta}$. The first is standard for Bayesian inference — it keeps the prior as a proper regularizer, so hot chains still cannot wander to $\|\theta\| \to \infty$; the second comes from the statistical-physics literature. **They give different swap formulas**: with a tempered prior the $\Delta$ term must include the log-prior difference. Mixing the two — computing $\Delta$ one way while the sampler targets the other — silently breaks detailed balance and the stationary distribution is not the posterior. The formula above is correct for the likelihood-only convention used in this example.
+:::
+
+### Checking that it worked
+
+MCMC gives no convergence guarantee you can check directly; you can only look for evidence of failure. Two standard diagnostics, both of which parallel tempering makes cheap because you already have multiple chains:
+
+**$\hat R$ (Gelman–Rubin), split-$\hat R$ variant.** Compares within-chain to between-chain variance for each scalar quantity of interest:
+
+$$
+\hat R = \sqrt{\frac{\widehat{\operatorname{Var}}^{+}(\psi)}{W}}, \qquad \widehat{\operatorname{Var}}^{+}(\psi) = \frac{n-1}{n}W + \frac{1}{n}B
+$$
+
+with $W$ the mean within-chain variance and $B$ the between-chain variance. $\hat R \to 1$ as chains mix. Vehtari et al. (2021) recommend **$\hat R < 1.01$**, tighter than the older 1.1 threshold.
+
+**Effective sample size.** MCMC draws are autocorrelated, so $n$ samples carry less information than $n$ independent ones:
+
+$$
+n_{\text{eff}} = \frac{n}{1 + 2\sum_{k=1}^{\infty}\rho_k}
+$$
+
+with $\rho_k$ the lag-$k$ autocorrelation. Report $n_{\text{eff}}$, not $n$ — 100,000 draws at $n_{\text{eff}} = 50$ is 50 samples, and the Monte Carlo standard error is $\varsigma/\sqrt{n_{\text{eff}}}$.
+
+:::danger These diagnostics are necessary, not sufficient — and weaker for BNNs
+$\hat R \approx 1$ across chains that all became trapped in the *same* mode says nothing about the modes they all missed. For a neural network this is not a corner case: the posterior has enormous **exact symmetry**, since permuting hidden units and (for odd activations) flipping signs leaves the likelihood unchanged. A network with $H$ hidden units per layer has at least $H!\,2^{H}$ equivalent modes per layer.
+
+Two consequences. Parameter-space $\hat R$ is close to meaningless — chains in permutation-equivalent modes look maximally disagreeing while representing the identical function. And it is why parallel tempering is being used here at all. **Compute diagnostics on function-space quantities** — predictions on held-out inputs, the log-likelihood — which are invariant to these symmetries.
+:::
 
 ---
 
@@ -801,7 +852,115 @@ $$
 - Reduce temperature ratio between adjacent chains
 - Ensure log likelihood computation is correct
 
+---
+
+## How This Compares to Other Bayesian Deep Learning Methods
+
+MCMC with parallel tempering is the *asymptotically exact* option — given enough compute it samples the true posterior. It is also by far the most expensive. Knowing the alternatives clarifies what you are buying.
+
+```mermaid
+flowchart TB
+    POST["The target: p(theta | D)<br/>intractable normalizer"]
+
+    subgraph EXACT["Asymptotically exact — sample the posterior"]
+        direction TB
+        MCMC["MCMC / parallel tempering<br/>THIS TUTORIAL<br/>exact in the limit, very expensive"]
+        SGMCMC["SG-MCMC — SGLD, SGHMC<br/>minibatch gradients<br/>scales, but biased at finite step size"]
+    end
+
+    subgraph APPROX["Approximate — fit a simpler family"]
+        direction TB
+        VI["Variational inference<br/>Bayes by Backprop<br/>fast, mode-seeking, underestimates variance"]
+        LAP["Laplace approximation<br/>Gaussian at the MAP<br/>nearly free post-hoc"]
+        MCD["MC Dropout<br/>dropout at test time<br/>cheapest, weakest guarantees"]
+        ENS["Deep ensembles<br/>N independent trainings<br/>not Bayesian, usually best-calibrated"]
+    end
+
+    POST --> MCMC
+    POST --> SGMCMC
+    POST --> VI
+    POST --> LAP
+    POST --> MCD
+    POST --> ENS
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class POST bright
+    class MCMC,SGMCMC steel
+    class VI,LAP,MCD,ENS base
+    class EXACT,APPROX deep
+```
+
+| Method | Cost vs. one training run | Captures multimodality | Notes |
+|---|---|---|---|
+| Parallel tempering MCMC | $10^2$–$10^4\times$ | **Yes** — the point of the method | Exact in the limit; needs $O(\sqrt{d})$ rungs |
+| SG-MCMC (SGLD/SGHMC) | $2$–$10\times$ | Partially, with cyclical step sizes | Minibatch noise biases the stationary distribution |
+| Variational inference | $2$–$3\times$ | No — mean-field is unimodal | Minimizes $D_{\mathrm{KL}}(q\|p)$, which is **mode-seeking** and systematically under-covers |
+| Laplace approximation | $\approx 1\times$ + curvature | No | Post-hoc on a trained net; only needs a Hessian approximation |
+| MC Dropout | $\approx 1\times$ | No | Interpretable as VI with a very restrictive $q$; cheap but poorly calibrated |
+| Deep ensembles | $N\times$ | **In practice, yes** | Not formally Bayesian, but repeatedly the strongest baseline |
+
+:::note Deep ensembles are the honest baseline
+Lakshminarayanan et al. (2017) showed that simply training $N$ networks from different random initializations and averaging their predictions matches or beats most principled Bayesian approximations on calibration and out-of-distribution detection. Independent initializations land in genuinely different modes, so an ensemble captures the multimodality that mean-field VI cannot — which is arguably why it works (Wilson & Izmailov, 2020, argue it is *better* understood as approximate Bayesian marginalization than as a non-Bayesian trick).
+
+The practical implication for this tutorial: parallel tempering is worth its cost when you need **calibrated posterior samples** — credible intervals with coverage guarantees, decomposition of epistemic and aleatoric uncertainty, small-data regimes where the prior genuinely matters. If you only need good predictive uncertainty on a large dataset, train five networks and average. Be clear about which problem you have.
+:::
+
+:::warning The cold posterior effect
+Wenzel et al. (2020) reported that BNNs frequently predict *better* when the posterior is artificially sharpened — sampling from $p(\theta \mid \mathcal{D})^{1/T}$ with $T < 1$ — than at the true Bayes posterior $T = 1$. Taken at face value this is uncomfortable: exact Bayesian inference underperforming a deliberately wrong tempering.
+
+Subsequent work locates the cause in the modelling assumptions rather than in Bayes. Aitchison (2021) attributes it largely to data augmentation and curation making the effective likelihood mis-specified, and Fortuin et al. (2022) show much of the effect disappears under better-chosen (heavy-tailed, correlated) priors than the default isotropic Gaussian.
+
+For this page the point is practical: if your $T=1$ chain is well-mixed and still predicts worse than a plain MAP estimate, suspect the **prior and likelihood specification** before suspecting the sampler. Note also that the cold-posterior $T$ is the same $T$ as the tempering ladder — the $T=1$ rung is the one you draw inference from, and the rest exist only to help it mix.
+:::
+
 ## Next Steps
 
 - [Stock Prediction](/docs/tutorials/intermediate/stock-prediction) - Real-world application
 - [HuggingFace Overview](/docs/tutorials/huggingface/overview) - Large model training
+- [Basic Neural Network](/docs/tutorials/basic/neural-network#3-loss-functions-what-they-assume-and-when-they-fail) - losses as likelihoods, the frequentist counterpart to this page
+
+## References
+
+**Bayesian inference and MCMC**
+
+1. Metropolis, N., Rosenbluth, A. W., Rosenbluth, M. N., Teller, A. H., & Teller, E. (1953). Equation of State Calculations by Fast Computing Machines. *J. Chemical Physics*, 21(6), 1087–1092.
+2. Hastings, W. K. (1970). Monte Carlo sampling methods using Markov chains and their applications. *Biometrika*, 57(1), 97–109.
+3. Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., & Rubin, D. B. (2013). *Bayesian Data Analysis* (3rd ed.). CRC Press.
+4. Neal, R. M. (2011). MCMC using Hamiltonian dynamics. In *Handbook of Markov Chain Monte Carlo*. [arXiv:1206.1901](https://arxiv.org/abs/1206.1901)
+5. Betancourt, M. (2017). A Conceptual Introduction to Hamiltonian Monte Carlo. [arXiv:1701.02434](https://arxiv.org/abs/1701.02434)
+
+**Parallel tempering / replica exchange**
+
+6. Swendsen, R. H., & Wang, J.-S. (1986). Replica Monte Carlo Simulation of Spin-Glasses. *Physical Review Letters*, 57(21), 2607–2609. — the original method.
+7. Geyer, C. J. (1991). Markov Chain Monte Carlo Maximum Likelihood. *Computing Science and Statistics: Proc. 23rd Symposium on the Interface*. — introduces it to statistics.
+8. Earl, D. J., & Deem, M. W. (2005). Parallel tempering: Theory, applications, and new perspectives. *Phys. Chem. Chem. Phys.*, 7, 3910–3916. — the standard review.
+9. Kone, A., & Kofke, D. A. (2005). Selection of temperature intervals for parallel-tempering simulations. *J. Chemical Physics*, 122(20), 206101. — the ~0.23 acceptance target.
+10. Atchadé, Y. F., Roberts, G. O., & Rosenthal, J. S. (2011). Towards optimal scaling of Metropolis-coupled Markov chain Monte Carlo. *Statistics and Computing*, 21(4), 555–568.
+
+**Convergence diagnostics**
+
+11. Gelman, A., & Rubin, D. B. (1992). Inference from Iterative Simulation Using Multiple Sequences. *Statistical Science*, 7(4), 457–472. — $\hat R$.
+12. Vehtari, A., Gelman, A., Simpson, D., Carpenter, B., & Bürkner, P.-C. (2021). Rank-Normalization, Folding, and Localization: An Improved $\hat{R}$ for Assessing Convergence of MCMC. *Bayesian Analysis*, 16(2), 667–718. [arXiv:1903.08008](https://arxiv.org/abs/1903.08008)
+
+**Bayesian neural networks**
+
+13. MacKay, D. J. C. (1992). A Practical Bayesian Framework for Backpropagation Networks. *Neural Computation*, 4(3), 448–472.
+14. Neal, R. M. (1996). *Bayesian Learning for Neural Networks*. Springer. — HMC for BNNs; the infinite-width/GP correspondence.
+15. Blundell, C., Cornebise, J., Kavukcuoglu, K., & Wierstra, D. (2015). Weight Uncertainty in Neural Networks. *ICML 2015*. [arXiv:1505.05424](https://arxiv.org/abs/1505.05424) — Bayes by Backprop.
+16. Gal, Y., & Ghahramani, Z. (2016). Dropout as a Bayesian Approximation. *ICML 2016*. [arXiv:1506.02142](https://arxiv.org/abs/1506.02142)
+17. Lakshminarayanan, B., Pritzel, A., & Blundell, C. (2017). Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles. *NeurIPS 2017*. [arXiv:1612.01474](https://arxiv.org/abs/1612.01474)
+18. Wilson, A. G., & Izmailov, P. (2020). Bayesian Deep Learning and a Probabilistic Perspective of Generalization. *NeurIPS 2020*. [arXiv:2002.08791](https://arxiv.org/abs/2002.08791)
+19. Izmailov, P., Vikram, S., Hoffman, M. D., & Wilson, A. G. (2021). What Are Bayesian Neural Network Posteriors Really Like? *ICML 2021*. [arXiv:2104.14421](https://arxiv.org/abs/2104.14421) — full-batch HMC as a gold-standard reference.
+20. Kendall, A., & Gal, Y. (2017). What Uncertainties Do We Need in Bayesian Deep Learning for Computer Vision? *NeurIPS 2017*. [arXiv:1703.04977](https://arxiv.org/abs/1703.04977) — the aleatoric/epistemic decomposition.
+
+**Scalable and tempered posteriors**
+
+21. Welling, M., & Teh, Y. W. (2011). Bayesian Learning via Stochastic Gradient Langevin Dynamics. *ICML 2011*. — SGLD.
+22. Chen, T., Fox, E. B., & Guestrin, C. (2014). Stochastic Gradient Hamiltonian Monte Carlo. *ICML 2014*. [arXiv:1402.4102](https://arxiv.org/abs/1402.4102)
+23. Zhang, R., Li, C., Zhang, J., Chen, C., & Wilson, A. G. (2020). Cyclical Stochastic Gradient MCMC for Bayesian Deep Learning. *ICLR 2020*. [arXiv:1902.03932](https://arxiv.org/abs/1902.03932)
+24. Wenzel, F., Roth, K., Veeling, B. S., et al. (2020). How Good is the Bayes Posterior in Deep Neural Networks Really? *ICML 2020*. [arXiv:2002.02405](https://arxiv.org/abs/2002.02405) — the cold posterior effect.
+25. Aitchison, L. (2021). A statistical theory of cold posteriors in deep neural networks. *ICLR 2021*. [arXiv:2008.05912](https://arxiv.org/abs/2008.05912)
+26. Fortuin, V., Garriga-Alonso, A., Ober, S. W., et al. (2022). Bayesian Neural Network Priors Revisited. *ICLR 2022*. [arXiv:2102.06571](https://arxiv.org/abs/2102.06571)
