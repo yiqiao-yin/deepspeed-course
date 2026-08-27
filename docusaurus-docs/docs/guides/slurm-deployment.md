@@ -4,248 +4,307 @@ sidebar_position: 1
 
 # SLURM Deployment
 
-Guide for running DeepSpeed training on SLURM-based HPC clusters.
+Running DeepSpeed on SLURM-managed HPC clusters — the submission model, the resource flags that matter, and how to launch multi-node jobs correctly.
 
-## Overview
+## 1. The Mental Model
 
-SLURM (Simple Linux Utility for Resource Management) is used by HPC clusters like CoreWeave for job scheduling. This guide covers:
-- SLURM basics
-- Job submission
-- Resource management
-- Monitoring
+SLURM clusters are **shared and batch-scheduled**. You do not run training; you *request* that training be run, and a scheduler decides when.
 
-## Basic SLURM Workflow
+```mermaid
+flowchart TB
+    USER["You: ssh to a LOGIN node<br/>no GPUs here"]
+    SUBMIT["sbatch run_deepspeed.sh<br/>request resources"]
+    QUEUE["SLURM queue<br/>priority, fair-share, availability"]
+    COMPUTE["Compute node allocated<br/>GPUs visible here"]
+    RUN["Your job runs<br/>output to logs/"]
+    DONE["Allocation released"]
 
-```bash
-# 1. Submit job
-sbatch run_deepspeed.sh
+    USER --> SUBMIT --> QUEUE --> COMPUTE --> RUN --> DONE
 
-# 2. Monitor queue
-squeue -u $USER
-
-# 3. Check output
-tail -f logs/training_*.out
-
-# 4. Cancel if needed
-scancel <job_id>
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    class USER,SUBMIT base
+    class QUEUE steel
+    class COMPUTE,RUN base
+    class DONE bright
 ```
 
-## SLURM Script Template
+Three consequences that shape everything else:
+
+**Login nodes have no GPUs.** `torch.cuda.is_available()` returns `False` there, and that is correct, not broken. Build environments and edit code on the login node; verify GPU behaviour inside a job.
+
+**Compute nodes are often air-gapped.** Anything that downloads at runtime — `from_pretrained`, `load_dataset`, `yfinance` — will fail. Pre-fetch on the login node and cache to shared storage.
+
+**Jobs are killed at the time limit, without warning by default.** Checkpoint, or lose the run.
+
+## 2. Core Workflow
+
+```bash
+sbatch run_deepspeed.sh          # submit, prints a job ID
+squeue -u $USER                  # what is queued or running
+tail -f logs/basic_nn_12345.out  # follow output
+scancel 12345                    # cancel
+sacct -j 12345                   # what happened after it finished
+```
+
+## 3. Batch Script Anatomy
 
 ```bash
 #!/bin/bash
 #SBATCH --job-name=deepspeed_train
-#SBATCH --gres=gpu:2              # Number of GPUs
-#SBATCH --partition=h200-low      # Partition name
-#SBATCH --time=04:00:00           # Max runtime
-#SBATCH --mem=64G                 # Memory
-#SBATCH --cpus-per-task=16        # CPU cores
-#SBATCH --output=logs/%x_%j.out   # Output file
-#SBATCH --error=logs/%x_%j.err    # Error file
+#SBATCH --partition=h200-low        # queue; see `sinfo`
+#SBATCH --gres=gpu:2                # GPUs PER NODE
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1         # ONE task — DeepSpeed spawns its own workers
+#SBATCH --cpus-per-task=16          # dataloader workers
+#SBATCH --mem=64G
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/%x_%j.out     # %x = job name, %j = job id
+#SBATCH --error=logs/%x_%j.err
 
-# Create logs directory
 mkdir -p logs
 
-# Print job info
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $SLURM_NODELIST"
-echo "GPUs: $CUDA_VISIBLE_DEVICES"
-echo "Start: $(date)"
+echo "Job ID:   $SLURM_JOB_ID"
+echo "Node:     $SLURM_NODELIST"
+echo "GPUs:     $CUDA_VISIBLE_DEVICES"
+echo "Start:    $(date)"
 
-# Activate environment
 source ~/myenv/bin/activate
 
-# Set W&B key (optional)
-export WANDB_API_KEY="your_key"
+export HF_HOME=/scratch/$USER/hf_cache
+export WANDB_API_KEY="your_key"          # or leave unset; scripts skip W&B
 
-# Run training
 deepspeed --num_gpus=2 train_ds.py
 
 echo "End: $(date)"
 ```
 
-## Common SLURM Commands
+:::danger `--ntasks-per-node=1`, not one task per GPU
+This is the most common SLURM/DeepSpeed mistake. The `deepspeed` launcher **spawns one worker process per GPU itself**. If SLURM also starts one task per GPU, you get $N^2$ processes, all fighting for the same devices — usually a hang, sometimes a confusing NCCL error.
 
-### Job Management
+Use `--ntasks-per-node=1` and let DeepSpeed do the process management. (The alternative convention — one SLURM task per GPU driven by `srun` + `torchrun` — is valid too, but do not mix the two.)
+:::
+
+### Resource flags
 
 ```bash
-# Submit job
-sbatch script.sh
+#SBATCH --gres=gpu:1              # 1 GPU, any type
+#SBATCH --gres=gpu:a100:4         # 4 A100s specifically
+#SBATCH --gres=gpu:8              # 8 GPUs per node
 
-# View your jobs
+#SBATCH --mem=64G                 # total host memory
+#SBATCH --mem-per-gpu=32G         # alternative form
+
+#SBATCH --time=00:30:00           # 30 minutes
+#SBATCH --time=1-00:00:00         # 1 day
+```
+
+Sizing guidance:
+
+- **`--cpus-per-task`** — roughly 4–8 per GPU. Too few starves the dataloader and leaves the GPU idle between batches.
+- **`--mem`** — with CPU offload, budget $\approx 12\Psi$ bytes for Adam states. See [Hardware Requirements](/docs/guides/hardware-requirements#host-ram). Under-requesting means the job is killed by the OOM killer, which looks like an unexplained crash.
+- **`--time`** — shorter jobs schedule sooner under backfill. Request what you need plus margin, not the queue maximum.
+
+## 4. Monitoring
+
+```bash
 squeue -u $USER
+squeue -u $USER -o "%.10i %.12P %.20j %.2t %.10M %.6D %R"   # %R = reason if pending
+squeue -j 12345 --start                                      # estimated start time
 
-# Detailed job info
-squeue -u $USER -o "%.18i %.9P %.8j %.8u %.2t %.10M %.6D %R"
-
-# Cancel job
-scancel <job_id>
-
-# Cancel all your jobs
-scancel -u $USER
+scontrol show job 12345                                      # full detail
+sacct -u $USER --format=JobID,JobName,State,ExitCode,Elapsed,MaxRSS
 ```
 
-### Job Information
+`MaxRSS` from `sacct` is how you find out whether the job was near its memory limit — worth checking after any unexplained kill.
+
+### GPU utilization inside a running job
 
 ```bash
-# Job details
-scontrol show job <job_id>
-
-# Why is job pending?
-squeue -j <job_id> --start
-
-# Job history
-sacct -u $USER
-
-# Detailed history
-sacct -u $USER --format=JobID,JobName,State,ExitCode,Elapsed
+srun --jobid=12345 --pty nvidia-smi                    # one look
+srun --jobid=12345 --pty watch -n 2 nvidia-smi         # continuous
 ```
 
-### Output Files
+| Observation | Meaning |
+|---|---|
+| GPU util 90–100% | Compute-bound — healthy |
+| Util oscillating 0 ↔ 100% | **Dataloader-bound.** Raise `--cpus-per-task` and `dataloader_num_workers` |
+| Util steady but low (30–60%) | Communication-bound. See [Stage 3 throughput](/docs/getting-started/deepspeed-zero-stages#43-stage-3-costs-15) |
+| Memory near capacity | One long batch from OOM |
+
+## 5. Interactive Sessions
+
+For debugging, get a shell on a compute node:
 
 ```bash
-# List output files
-ls -lt slurm-*.out
+srun --gres=gpu:1 --mem=32G --cpus-per-task=8 --time=02:00:00 --pty bash
 
-# View latest output
-cat slurm-$(ls -t slurm-*.out | head -1)
-
-# Follow output in real-time
-tail -f slurm-<job_id>.out
-
-# Search for errors
-grep -i error slurm-<job_id>.out
-```
-
-## Resource Specifications
-
-### GPU Options
-
-```bash
-#SBATCH --gres=gpu:1          # 1 GPU (any type)
-#SBATCH --gres=gpu:a100:4     # 4 A100 GPUs
-#SBATCH --gres=gpu:h100:8     # 8 H100 GPUs
-```
-
-### Memory
-
-```bash
-#SBATCH --mem=64G             # Total memory
-#SBATCH --mem-per-cpu=4G      # Per CPU core
-#SBATCH --mem-per-gpu=32G     # Per GPU
-```
-
-### Time Limits
-
-```bash
-#SBATCH --time=00:30:00       # 30 minutes
-#SBATCH --time=04:00:00       # 4 hours
-#SBATCH --time=1-00:00:00     # 1 day
-```
-
-## Interactive Sessions
-
-For debugging or development:
-
-```bash
-# Request interactive GPU session
-srun --gres=gpu:1 --mem=32G --time=02:00:00 --pty bash
-
-# Now you're on a compute node with GPU access
+# now on a compute node, with GPUs
 nvidia-smi
-python train.py
+python hello.py
+deepspeed --num_gpus=1 train_ds.py
 ```
 
-## Multi-Node Training
+Far faster than iterating through the batch queue. Use it to shake out shape errors and config problems, then submit the real run.
+
+## 6. Multi-Node Training
+
+The part most guides get wrong. DeepSpeed's launcher reaches other nodes **over SSH**, using a hostfile — it does not read the SLURM allocation on its own. Passing `--num_nodes=2` inside an `sbatch` script without a hostfile does not work.
+
+### Option A — generate a hostfile from the allocation
 
 ```bash
 #!/bin/bash
+#SBATCH --job-name=ds_multinode
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=64
+#SBATCH --time=08:00:00
+#SBATCH --output=logs/%x_%j.out
 
-# Get master address
-MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
-MASTER_PORT=29500
+mkdir -p logs
+source ~/myenv/bin/activate
 
-# Launch with DeepSpeed
-deepspeed --num_gpus=8 \
-          --num_nodes=2 \
-          --master_addr=$MASTER_ADDR \
-          --master_port=$MASTER_PORT \
+# DeepSpeed hostfile format: "<hostname> slots=<gpus_per_node>"
+GPUS_PER_NODE=8
+HOSTFILE=hostfile.$SLURM_JOB_ID
+scontrol show hostnames "$SLURM_JOB_NODELIST" \
+  | awk -v n=$GPUS_PER_NODE '{print $1" slots="n}' > "$HOSTFILE"
+cat "$HOSTFILE"
+
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
+export MASTER_PORT=29500
+
+deepspeed --hostfile="$HOSTFILE" \
+          --master_addr="$MASTER_ADDR" \
+          --master_port="$MASTER_PORT" \
           train_ds.py
+
+rm -f "$HOSTFILE"
 ```
 
-## GPU Monitoring
+**This requires passwordless SSH between compute nodes.** Many clusters allow it within an allocation; some do not. Test with `ssh <other-node> hostname` from inside a two-node interactive session before committing to this path.
 
-Create a monitoring job:
+### Option B — `srun` + `torchrun` (usually more robust on SLURM)
+
+When SSH between compute nodes is unavailable, let SLURM do the process launching:
 
 ```bash
 #!/bin/bash
-#SBATCH --gres=gpu:1
-#SBATCH --time=00:30:00
-#SBATCH --job-name=gpu_monitor
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=8          # ONE TASK PER GPU in this pattern
+#SBATCH --gres=gpu:8
+#SBATCH --cpus-per-task=8
+#SBATCH --time=08:00:00
 
-while true; do
-    nvidia-smi
-    echo "---"
-    sleep 1
-done
+source ~/myenv/bin/activate
+
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
+export MASTER_PORT=29500
+export WORLD_SIZE=$((SLURM_NNODES * 8))
+
+srun python -u train_ds.py           # torch.distributed reads SLURM env vars
 ```
 
-Key metrics to watch:
-- **GPU Util**: Should be 90-100% during training
-- **Memory**: Watch for OOM
-- **Temperature**: Should stay under 85C
-- **Power**: Indicates GPU load
+Your script then initializes from the environment rather than from the DeepSpeed launcher. Note the `--ntasks-per-node` difference from §3 — in this pattern SLURM spawns the workers, so one task per GPU **is** correct.
 
-## Troubleshooting
+:::tip Which to choose
+Try **Option B** first on an unfamiliar cluster. It uses SLURM's own launcher, needs no SSH trust between nodes, and gives SLURM correct accounting of your processes. Use Option A when you specifically want DeepSpeed's launcher features (`--include`/`--exclude`, per-node environment propagation).
+:::
 
-### Job Stuck in Queue
+### Networking
 
 ```bash
-# Check why
-squeue -j <job_id> --start
-
-# Common reasons:
-# - Resources unavailable
-# - Priority queue
-# - Maintenance
+export NCCL_DEBUG=INFO              # confirm which transport is selected
+export NCCL_SOCKET_IFNAME=ib0       # pin the fast interface
+export NCCL_IB_DISABLE=0            # keep InfiniBand enabled if present
 ```
 
-### Job Failed
+`NCCL_SOCKET_IFNAME` is frequently the fix on multi-homed nodes, where NCCL otherwise selects a management interface with no route between compute nodes. `NCCL_DEBUG=INFO` will show you which it picked.
+
+## 7. Checkpointing and Time Limits
+
+A job killed at its time limit loses everything unless you checkpoint. Two mechanisms:
+
+**Save regularly.**
+
+```python
+model_engine.save_checkpoint("/scratch/$USER/ckpt", tag=f"step_{step}")
+```
+
+DeepSpeed writes sharded checkpoints that reload correctly under the same ZeRO configuration. For Stage 3, remember [`stage3_gather_16bit_weights_on_model_save`](/docs/reference/deepspeed-config#stage-3) if you also want a consolidated export.
+
+**Ask SLURM to warn you before the kill**, then save and requeue:
 
 ```bash
-# Check exit code
-sacct -j <job_id> --format=ExitCode
+#SBATCH --signal=B:USR1@300          # SIGUSR1 300 seconds before the limit
+#SBATCH --requeue
 
-# View error log
-cat slurm-<job_id>.err
+trap 'echo "Time limit approaching — checkpointing"; \
+      touch /scratch/$USER/ckpt/SAVE_NOW; sleep 240; \
+      scontrol requeue $SLURM_JOB_ID' USR1
+
+deepspeed --num_gpus=8 train_ds.py &
+wait
 ```
 
-### GPU Not Detected
+Note the `&` and `wait`: a bash `trap` only fires between commands, so the training must run in the background for the signal to be handled promptly.
+
+## 8. Troubleshooting
+
+**Job pending indefinitely.**
 
 ```bash
-# Verify CUDA_VISIBLE_DEVICES
-echo $CUDA_VISIBLE_DEVICES
-
-# Check nvidia-smi
-nvidia-smi
-
-# Verify in Python
-python -c "import torch; print(torch.cuda.device_count())"
+squeue -j <id> --start
+squeue -u $USER -o "%.10i %.2t %R"     # %R gives the reason
 ```
 
-## Best Practices
+`Resources` means waiting for hardware; `Priority` means other jobs are ahead; `QOSMaxJobsPerUserLimit` means you are at a quota. Requesting fewer GPUs or a shorter time often schedules much sooner via backfill.
 
-1. **Test locally first**: Run small tests before big jobs
-2. **Use checkpointing**: Save progress regularly
-3. **Request appropriate resources**: Don't over-request
-4. **Monitor actively**: Check jobs early
-5. **Clean up**: Remove old output files
+**Job fails immediately.**
+
+```bash
+cat logs/<name>_<id>.err
+sacct -j <id> --format=JobID,State,ExitCode,DerivedExitCode
+```
+
+Exit code 1 is usually a Python error; **137 is SIGKILL, almost always the host OOM killer** — raise `--mem`.
+
+**No GPUs in the job.** Check `--gres` was specified at all, and `echo $CUDA_VISIBLE_DEVICES` inside the job.
+
+**Hangs at startup.** Usually process-count confusion (§3) or NCCL interface selection (§6). Set `NCCL_DEBUG=INFO` and `TORCH_DISTRIBUTED_DEBUG=DETAIL`.
+
+**Downloads fail on the compute node.** Air-gapped. Pre-fetch on the login node:
+
+```bash
+export HF_HOME=/scratch/$USER/hf_cache
+python -c "from transformers import AutoModel; AutoModel.from_pretrained('...')"
+```
+
+**Disk quota exceeded.** `$HOME` is typically a small NFS quota. Point `HF_HOME` and checkpoint paths at scratch or project storage.
+
+## 9. Practices Worth Adopting
+
+1. **Test interactively first** (§5) — never debug through the batch queue.
+2. **Request what you need.** Over-requesting delays scheduling and wastes allocation.
+3. **Name jobs meaningfully** — `%x_%j` in the output path makes logs findable months later.
+4. **Checkpoint on a schedule**, not just at the end.
+5. **Log the environment** at job start — node, GPUs, versions. Invaluable when a run behaves differently a month later.
+6. **Clean up old logs and checkpoints.** Scratch filesystems are usually purged, and quotas are real.
 
 ## Next Steps
 
-- [CoreWeave Setup](/docs/guides/coreweave-setup) - CoreWeave-specific guide
-- [RunPod Setup](/docs/guides/runpod-setup) - Interactive alternative
+- [CoreWeave Setup](/docs/guides/coreweave-setup) — a specific SLURM cluster
+- [RunPod Setup](/docs/guides/runpod-setup) — the non-scheduled alternative
+- [Hardware Requirements](/docs/guides/hardware-requirements) — sizing `--gres` and `--mem`
+- [Troubleshooting](/docs/reference/troubleshooting) — NCCL and distributed issues
+
+## References
+
+1. [SLURM documentation](https://slurm.schedmd.com/documentation.html) — `sbatch`, `srun`, `sacct`.
+2. [DeepSpeed getting started](https://www.deepspeed.ai/getting-started/) — launcher and hostfile format.
+3. [PyTorch distributed elastic](https://pytorch.org/docs/stable/elastic/run.html) — `torchrun`, for the Option B pattern.
+4. [NCCL environment variables](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html)

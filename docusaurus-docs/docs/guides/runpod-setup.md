@@ -4,171 +4,179 @@ sidebar_position: 3
 
 # RunPod Setup
 
-Guide for interactive DeepSpeed development on RunPod.
+Single-tenant GPU pods: immediate access, no scheduler, and a billing model that rewards different habits than a shared cluster.
 
-## Understanding RunPod
+## 1. The Model
 
-RunPod provides dedicated GPU pods:
+```mermaid
+flowchart TB
+    subgraph POD["Your pod — single tenant"]
+        direction TB
+        SHELL["SSH / web terminal / Jupyter<br/>GPUs visible IMMEDIATELY"]
+        GPU["Dedicated GPUs<br/>no queue, no sharing"]
+        NET["Full internet access<br/>downloads work at runtime"]
+    end
 
+    VOL["Network volume — /workspace<br/>PERSISTS across stop/start"]
+    EPH["Container filesystem<br/>DESTROYED on terminate"]
+
+    SHELL --> GPU
+    SHELL --> NET
+    POD --> VOL
+    POD --> EPH
+
+    classDef deep fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef steel fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef dark fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    class SHELL,GPU,NET base
+    class VOL bright
+    class EPH dark
+    class POD deep
 ```
-You SSH directly into YOUR pod
-    ↓
-Pod has dedicated GPU(s)
-    ↓
-Run code immediately
-```
 
-**Key difference from CoreWeave**: No job scheduling - your GPUs are always available.
+Two differences from [CoreWeave](/docs/guides/coreweave-setup) drive everything:
 
-## Recommended Image
+**No scheduler.** You SSH in and GPUs are already there. The `#SBATCH` headers in this course's launcher scripts are inert comments — just run `deepspeed` directly.
 
-Use the PyTorch image for best compatibility:
+**You pay for wall-clock, not compute.** A pod sitting idle at a terminal prompt bills exactly the same as one at 100% utilization. On a shared cluster idle time is free; here it is the main way to waste money.
+
+## 2. Creating a Pod
+
+**Choose a `devel` image.** This matters more than it looks:
 
 ```
 runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04
 ```
 
-## Pod Configurations
+`devel` includes `nvcc`; `runtime` does not. Without `nvcc`, DeepSpeed cannot compile its CUDA extensions and CPU offload in particular will be unavailable. See [Installation §1](/docs/getting-started/installation#1-why-deepspeed-installs-differently).
 
-### High-Performance (Multi-GPU)
+**Attach a network volume** mounted at `/workspace`. Without one, everything is lost on terminate — including a 100 GB model cache you will then re-download.
 
-Best for distributed training:
+**Size the disk for weights.** Container disk defaults are small. Model weights are large: ~14 GB for a 7B in BF16, ~40 GB for gpt-oss-20b, [1.1 TB for LongCat](/docs/tutorials/multimodal/video-speech-training#2-the-memory-problem). Check [Hardware Requirements](/docs/guides/hardware-requirements#storage) before choosing.
 
-| Spec | Value |
-|------|-------|
-| GPUs | 8x H200 SXM |
-| VRAM | 1128 GB |
-| RAM | 2008 GB |
-| vCPU | 224 |
-| Cost | ~$30/hr |
-
-### Cost-Effective (Development)
-
-Best for prototyping:
-
-| Spec | Value |
-|------|-------|
-| GPUs | 10x A40 |
-| VRAM | 480 GB |
-| RAM | 500 GB |
-| vCPU | 90 |
-| Cost | ~$4/hr |
-
-## Getting Started
-
-### 1. Create Pod
-
-1. Go to RunPod dashboard
-2. Select GPU type and count
-3. Choose the PyTorch image
-4. Set disk size (80 GB minimum)
-5. Launch pod
-
-### 2. Connect
+## 3. Setup
 
 ```bash
-# SSH (get command from dashboard)
-ssh root@<pod-ip> -p <port>
+ssh root@<pod-ip> -p <port>          # command is in the dashboard
 
-# Or use web terminal
+nvidia-smi                            # GPUs should be visible immediately
 ```
 
-### 3. Set Up Environment
-
-```bash
-# Clone repository
-git clone https://github.com/yiqiao-yin/deepspeed-course.git
-cd deepspeed-course
-
-# Create environment
-uv venv myenv
-source myenv/bin/activate
-
-# Install dependencies
-uv pip install torch deepspeed wandb
-```
-
-## Running Training
-
-### Direct Execution
-
-```bash
-# Navigate to example
-cd 01_basic_neuralnet
-
-# Single GPU
-deepspeed --num_gpus=1 train_ds.py
-
-# Multi-GPU
-deepspeed --num_gpus=4 train_ds.py
-```
-
-### With W&B
-
-```bash
-export WANDB_API_KEY="your_key"
-deepspeed --num_gpus=2 train_ds.py
-```
-
-### Jupyter Lab
-
-```bash
-# Start Jupyter (usually pre-installed)
-jupyter lab --ip=0.0.0.0 --port=8888 --allow-root
-
-# Access via exposed port in dashboard
-```
-
-## Comparison: RunPod vs CoreWeave
-
-| Aspect | RunPod | CoreWeave |
-|--------|--------|-----------|
-| Access | Immediate | Queue-based |
-| Billing | Pod lifetime | Compute time |
-| GPUs | Dedicated | Shared cluster |
-| Best for | Development | Production |
-| Learning curve | Low | Medium |
-
-## Tips
-
-### Persistent Storage
-
-Use the `/workspace` directory for persistent files:
+Put everything persistent on the volume:
 
 ```bash
 cd /workspace
-git clone ...
+git clone https://github.com/yiqiao-yin/deepspeed-course.git
+cd deepspeed-course
+
+python -m venv /workspace/venv        # on the VOLUME, not in the container
+source /workspace/venv/bin/activate
+
+pip install deepspeed wandb
+ds_report
 ```
 
-### Stop vs Terminate
-
-- **Stop**: Keeps data, pauses billing
-- **Terminate**: Deletes everything
-
-### Cost Management
-
-1. Stop pods when not in use
-2. Use smaller GPUs for development
-3. Scale up only for final training
-
-## Troubleshooting
-
-### CUDA Out of Memory
+:::danger Put the venv and the model cache on `/workspace`
+The default locations — `~/.cache/huggingface`, a venv in `/root` — live on the **container** filesystem and are destroyed when the pod is terminated. Rebuilding an environment and re-downloading 40 GB of weights on every pod is a slow and expensive habit.
 
 ```bash
-# Check GPU memory
-nvidia-smi
+export HF_HOME=/workspace/hf_cache
+export HF_HUB_ENABLE_HF_TRANSFER=1
+echo 'export HF_HOME=/workspace/hf_cache' >> ~/.bashrc
+```
+:::
 
-# Reduce batch size or use ZeRO-3
+Note the base images normally ship PyTorch already, so install `deepspeed` on top rather than reinstalling `torch` — replacing it risks a CUDA mismatch with the image.
+
+## 4. Running
+
+No queue, no submission:
+
+```bash
+cd /workspace/deepspeed-course/01_basic_neuralnet
+
+deepspeed --num_gpus=1 train_ds.py
+deepspeed --num_gpus=4 train_ds.py
 ```
 
-### Pod Won't Start
+The course's `run_deepspeed.sh` scripts work here too — the `#SBATCH` lines are comments, and the body is an ordinary shell script. Just run it with `bash run_deepspeed.sh` rather than `sbatch`.
 
-- Check GPU availability in region
-- Try different GPU type
-- Reduce disk size request
+Remember the [batch invariant](/docs/reference/deepspeed-config#2-batch-size): most configs are pinned to a specific GPU count, so changing `--num_gpus` usually requires editing the config.
+
+### Long runs
+
+The SSH session dying kills the training with it. Use a multiplexer:
+
+```bash
+tmux new -s train
+deepspeed --num_gpus=2 train_ds.py 2>&1 | tee /workspace/train.log
+# Ctrl-B then D to detach; reconnect later with:
+tmux attach -t train
+```
+
+### Jupyter
+
+```bash
+jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+```
+
+Expose port 8888 in the pod configuration. Good for the notebook examples in `05_huggingface_trl`; less good for long training runs, where a dropped browser connection can interrupt the kernel.
+
+## 5. Cost Discipline
+
+Billing is by pod lifetime, so the habits that matter are different from a shared cluster.
+
+**Stop, don't terminate** — Stop pauses billing while preserving the volume. Terminate destroys everything not on a network volume.
+
+**Develop small, train big.** Debug shape errors on a single RTX 4090; move to 4× A100 only once the code runs. A bug found on 8 H100s costs roughly 40× what the same bug costs on one 4090.
+
+**Use the small-model variant first.** `train_ds_mistral7b.py` exercises the same code path as the 20B script at a fraction of the cost.
+
+**Watch the download clock.** Pulling 1.1 TB of weights bills GPU time for hours of pure I/O. Download to a persistent volume once, then reuse it across pods.
+
+**Check utilization.** If `nvidia-smi` shows the GPU oscillating between 0% and 100%, you are dataloader-bound and paying for an idle GPU — raise `dataloader_num_workers`.
+
+```bash
+watch -n 2 nvidia-smi
+```
+
+**Set a spending alert.** The most common expensive mistake is a forgotten running pod.
+
+## 6. RunPod vs CoreWeave
+
+| | RunPod | CoreWeave (SLURM) |
+|---|---|---|
+| Time to first GPU | Seconds | Minutes to hours (queue) |
+| GPUs | Dedicated | Shared, scheduled |
+| Internet on the node | Yes | Often none |
+| Billing | Pod lifetime, idle included | Compute time used |
+| Multi-node | Harder | Well supported |
+| Persistence | Network volume | Shared filesystem |
+| Best for | Development, iteration | Production, large jobs |
+
+A common workflow uses both: iterate on RunPod where the feedback loop is instant, then submit the long production run to CoreWeave where the large allocations and multi-node fabric live. Everything in this course runs on either.
+
+## 7. Troubleshooting
+
+**`nvcc: command not found`.** You are on a `runtime` image. Recreate the pod from a `devel` image, or install the toolkit.
+
+**Environment gone after restarting the pod.** It was on the container filesystem. §3 — put it on `/workspace`.
+
+**Disk full during a model download.** Container disk is small and separate from the volume. Set `HF_HOME=/workspace/hf_cache` and increase the volume.
+
+**Training dies when SSH disconnects.** Use `tmux` (§4).
+
+**Pod will not start.** GPU type unavailable in that region — try another type or region, or reduce the disk request.
+
+**Multi-GPU is slower than single.** Consumer GPUs communicate over PCIe without NVLink, so [ZeRO Stage 3 is often disappointing](/docs/guides/hardware-requirements#consumer) on a 4090 box. Try Stage 2, or a larger per-GPU batch.
+
+**CUDA out of memory.** [OOM diagnosis](/docs/tutorials/basic/neural-network#92-diagnosis) — identify whether you are model-state-, activation-, or fragmentation-bound before reaching for batch size.
 
 ## Next Steps
 
-- [Quick Start](/docs/getting-started/quick-start) - First training run
-- [Hardware Guide](/docs/guides/hardware-requirements) - GPU selection
+- [Quick Start](/docs/getting-started/quick-start) — your first run
+- [Hardware Requirements](/docs/guides/hardware-requirements) — choosing a GPU and disk size
+- [CoreWeave Setup](/docs/guides/coreweave-setup) — the scheduled alternative
+- [Troubleshooting](/docs/reference/troubleshooting)
