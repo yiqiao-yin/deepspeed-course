@@ -687,10 +687,25 @@ This dataset is designed for LLaVA models that support video input through multi
                 truncation=False,
             )
 
-            all_input_ids.append(processed["input_ids"])
-            all_attention_mask.append(
-                processed.get("attention_mask", [1] * len(processed["input_ids"]))
-            )
+            # The processor returns token fields with a BATCH DIMENSION even for
+            # a single text: input_ids is [[t0, t1, ...]], not [t0, t1, ...].
+            # Appending it unwrapped would make each "example" a length-1 list
+            # containing a list, and the collator would then pad every sequence
+            # to length 1 — silently destroying the input. Unwrap it here.
+            input_ids = processed["input_ids"]
+            if input_ids and isinstance(input_ids[0], (list, tuple)):
+                input_ids = input_ids[0]
+
+            attention_mask = processed.get("attention_mask")
+            if attention_mask and isinstance(attention_mask[0], (list, tuple)):
+                attention_mask = attention_mask[0]
+            if attention_mask is None:
+                attention_mask = [1] * len(input_ids)
+
+            # pixel_values has NO batch dimension here — it is already
+            # [num_frames, C, H, W], one entry per image passed in.
+            all_input_ids.append(list(input_ids))
+            all_attention_mask.append(list(attention_mask))
             all_pixel_values.append(processed["pixel_values"])
 
         tokenized = {

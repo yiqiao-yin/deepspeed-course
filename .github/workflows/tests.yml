@@ -1,0 +1,53 @@
+name: Regression Tests
+
+# The suites in tests/ check the LOGIC of the examples — config validity, data
+# handling, reward correctness — without a GPU or a model download. They are
+# cheap enough to run on every push and PR, and they have already caught a
+# config bug that manual review missed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Logic tests (no GPU required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Each test carries PEP 723 inline dependency metadata, so `uv run`
+      # provisions its own environment — nothing to install here.
+      - name: Validate DeepSpeed configs
+        run: uv run tests/test_ds_configs.py
+
+      - name: Stock data — look-ahead bias
+        run: uv run tests/test_stock_leakage.py
+
+      - name: GRPO rewards and model class
+        run: uv run tests/test_grpo_rewards.py
+
+      - name: Video frame extraction
+        run: uv run tests/test_video_frames.py
+
+      - name: Every training script compiles
+        run: |
+          uv run --no-project python -m compileall -q \
+            01_basic_neuralnet 02_basic_convnet 02_basic_convnet_cifar10_examples \
+            03_basic_rnn 04_bayesian_neuralnet 04_intermediate_rnn_stock_data \
+            05_huggingface 05_huggingface_ocr 05_huggingface_trl \
+            06_huggingface_grpo 07_huggingface_openai_gpt_oss_finetune_sft \
+            07_huggingface_trl_multi_agency 08_vtt 09_vss tests

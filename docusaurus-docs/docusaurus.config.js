@@ -19,13 +19,16 @@ const config = {
   deploymentBranch: 'gh-pages',
   trailingSlash: false,
 
-  onBrokenLinks: 'warn',
+  // The book is link-clean, so failures should break the build rather than
+  // scroll past in a log. Also applies to anchors.
+  onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
 
   // Enable Mermaid diagrams
   markdown: {
     mermaid: true,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 

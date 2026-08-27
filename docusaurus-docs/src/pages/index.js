@@ -35,35 +35,39 @@ function HomepageHeader() {
 
 const FeatureList = [
   {
-    title: 'DeepSpeed Distributed Training',
+    title: 'The Memory Arithmetic, Derived',
     description: (
       <>
-        Learn Microsoft DeepSpeed's powerful optimization techniques including ZeRO stages 1-3,
-        mixed precision training (FP16/BF16), and CPU offloading. Train models that wouldn't
-        fit on a single GPU by intelligently partitioning optimizer states, gradients, and
-        parameters across multiple devices.
+        Mixed-precision Adam costs <strong>16 bytes per parameter</strong>, so a
+        7B model needs 112&nbsp;GB of model states before a single activation is
+        allocated. This course derives that number, shows why ZeRO stages 1 and 2
+        eliminate the redundancy at <em>zero</em> extra communication, and why
+        stage 3 costs exactly 1.5&times;. Every recommendation elsewhere follows
+        from it.
       </>
     ),
   },
   {
-    title: 'Multi-GPU & Multi-Node Scaling',
+    title: 'Worked Examples, Honestly Documented',
     description: (
       <>
-        Master distributed training across multiple GPUs and nodes. From single RTX 3070 setups
-        to 8x H200 clusters, learn how to efficiently scale your training with proper batch
-        configuration, gradient accumulation, and NCCL communication optimization. Includes
-        SLURM job scheduling for HPC clusters like CoreWeave and RunPod.
+        Fourteen runnable examples from a two-parameter linear model to a 560B
+        omni-modal system. Including the failures: a CIFAR-10 run that produced
+        NaN at exactly chance accuracy and how it was diagnosed to root cause, a
+        look-ahead-bias bug in the stock example, and which examples are
+        infrastructure tests rather than trainable models.
       </>
     ),
   },
   {
-    title: 'Comprehensive Training Portfolio',
+    title: 'Verifiable Without a Cluster',
     description: (
       <>
-        Progress from basic neural networks to cutting-edge multimodal AI. This course covers
-        CNNs for image classification, LSTMs for time series, Bayesian neural networks,
-        HuggingFace LLM fine-tuning with TRL and GRPO, vision-language models like Qwen2-VL,
-        and video-speech training with 560B parameter models.
+        Most of these examples cannot run on a laptop &mdash; so the repository
+        ships logic tests that validate configs, data handling and reward
+        functions with <strong>no GPU and no model download</strong>. They run in
+        CI on every push, and have already caught a config bug that manual review
+        missed. <code>./tests/run_all.sh</code>
       </>
     ),
   },

@@ -3,6 +3,20 @@
 **Author:** Yiqiao Yin
 [LinkedIn](https://www.linkedin.com/in/yiqiaoyin/) | [YouTube](https://youtube.com/YiqiaoYin/)
 
+### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
+
+The documentation site is the primary way to read this material: 26 pages with
+the memory and communication arithmetic derived in full, ~200 cited papers, and
+diagrams. This README covers setup and cluster operations.
+
+| Start here | |
+|---|---|
+| [DeepSpeed ZeRO Stages](https://yiqiao-yin.github.io/deepspeed-course/docs/getting-started/deepspeed-zero-stages) | Why partitioning works and what each stage costs — everything else references this |
+| [Basic Neural Network](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/basic/neural-network) | The training loop, losses as likelihoods, CUDA OOM as memory accounting |
+| [CIFAR-10](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/basic/cifar10) | A real debugging case study: NaN at 10% accuracy, repaired to 81% |
+| [GRPO Training](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/huggingface/grpo-training) | RL with verifiable rewards |
+| [Troubleshooting](https://yiqiao-yin.github.io/deepspeed-course/docs/reference/troubleshooting) | Symptom-first diagnosis |
+
 ---
 
 ## Table of Contents
@@ -11,6 +25,9 @@
   - [Situation Today](#situation-today-)
   - [Problem Statement](#problem-statement-)
   - [Solution](#solution-)
+- [Environment & Testing](#environment--testing-)
+  - [Package management: uv](#package-management-uv)
+  - [What runs locally, and what does not](#what-runs-locally-and-what-does-not)
 - [Folder Structure](#folder-structure-)
 - [CoreWeave vs RunPod: Understanding the Architectures](#coreweave-vs-runpod-understanding-the-architectures)
   - [CoreWeave: Shared Multi-User HPC Cluster](#coreweave-shared-multi-user-hpc-cluster)
@@ -27,6 +44,8 @@
     - [Beginner Tutorial](#beginner-tutorial-hello-world)
     - [Virtual Environment Setup](#virtual-environment-setup-with-uv)
   - [Runpod](#runpod-)
+- [Example Training Commands](#example-training-commands)
+- [Resources](#resources)
 
 ---
 
@@ -131,7 +150,6 @@ deepspeed-course/
 │   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
 │   └── README.md                      # Stock prediction guide with uv setup
 │
-├── 04_transferlearning/               # (TBD)
 ├── 05_huggingface/                    # HuggingFace examples
 ├── 05_huggingface_trl/                # TRL Function Calling with DeepSpeed
 │   ├── train_trl_deepspeed.py         # SFTTrainer with DeepSpeed + ZeRO-2

@@ -133,7 +133,64 @@ def main() -> int:
         # Single frame
         r.check(len(extract(str(tmp), 1)) == 1, "num_frames=1 works")
 
-        # ---- 3. Failures must RAISE, not return placeholders ----------
+        # ---- 3. preprocess_function unwraps the processor batch dim ----
+        # HuggingFace processors return token fields WITH a batch dimension
+        # even for a single text: input_ids is [[t0, t1, ...]]. Failing to
+        # unwrap it made every sequence a length-1 list containing a list, so
+        # the collator padded everything to length 1 and silently destroyed
+        # the input. Caught only by running on a GPU; guarded here on CPU.
+        preprocess = load_function(
+            SCRIPT, "preprocess_function", class_name="VideoTextTrainer",
+            extra_globals={"List": list, "Dict": dict, "Any": object},
+        )
+
+        class FakeProcessor:
+            """Mimics the nested-output shape of a real HF processor."""
+            def apply_chat_template(self, conversation, **kw):
+                return "<image>" * NUM_FAKE_FRAMES + " describe"
+
+            def __call__(self, images, text, **kw):
+                return {
+                    "input_ids": [[101, 102, 103, 104, 105]],      # NESTED
+                    "attention_mask": [[1, 1, 1, 1, 1]],           # NESTED
+                    "pixel_values": [[0.0]] * len(images),         # per-frame
+                }
+
+        NUM_FAKE_FRAMES = 3
+
+        class FakeTrainer:
+            processor = FakeProcessor()
+
+            def download_and_process_video_frames(self, url, n):
+                return [Image.new("RGB", (8, 8))] * n
+
+        result = preprocess(FakeTrainer(), {
+            "conversation": [[], []],
+            "video_url": ["a.mp4", "b.mp4"],
+            "num_frames": [NUM_FAKE_FRAMES, NUM_FAKE_FRAMES],
+        })
+
+        ids0 = result["input_ids"][0]
+        r.check(
+            all(isinstance(t, int) for t in ids0),
+            "preprocess_function flattens the processor's batch dimension",
+            f"got {ids0!r} — nested lists here pad every sequence to length 1",
+        )
+        r.check(len(ids0) == 5, f"sequence keeps all 5 tokens (got {len(ids0)})")
+        r.check(
+            len(result["attention_mask"][0]) == len(ids0),
+            "attention_mask is flattened and length-matched",
+        )
+        r.check(
+            len(result["labels"][0]) == len(ids0),
+            "labels are length-matched to input_ids",
+        )
+        r.check(
+            len(result["pixel_values"][0]) == NUM_FAKE_FRAMES,
+            "pixel_values keeps one entry per frame (no batch dim to strip)",
+        )
+
+        # ---- 4. Failures must RAISE, not return placeholders ----------
         for bad, label in (
             ("does_not_exist.mp4", "missing file"),
             (__file__, "a non-video file"),
