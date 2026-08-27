@@ -1,7 +1,19 @@
 # Regression Tests
 
-Guards against the specific bugs fixed in this repository. **No GPU required** —
-these cover the pure logic of each fix, not distributed training itself.
+Guards against the specific bugs fixed in this repository.
+
+Two tiers, answering different questions:
+
+| | `tests/*.py` | [`tests/gpu/*.py`](gpu/README.md) |
+|---|---|---|
+| Requires | nothing but `uv` | GPU + model download |
+| Runs in CI | **yes**, every push | no — manual |
+| Answers | *Is the code structurally correct?* | *Does a real model accept what we build?* |
+| Speed | seconds | minutes |
+
+Everything below describes the **CPU tier**. It is what protects the repository
+day to day. See [`gpu/README.md`](gpu/README.md) for the GPU tier and the bug
+that motivated splitting them.
 
 ## Running
 
@@ -21,7 +33,7 @@ environment automatically — nothing to install first.
 | `test_ds_configs.py` | Config errors that abort at startup or silently do the wrong thing, across **every** `ds_config.json` in the repo |
 | `test_stock_leakage.py` | Look-ahead bias from fitting the scaler before the train/test split |
 | `test_grpo_rewards.py` | A PPO value head under GRPO; surface-form and misaligned rewards |
-| `test_video_frames.py` | Frame "extraction" that returns one image repeated, destroying all temporal signal |
+| `test_video_frames.py` | Frame "extraction" that returns one image repeated; and `preprocess_function` failing to unwrap the processor's batch dimension |
 
 ### `test_ds_configs.py`
 

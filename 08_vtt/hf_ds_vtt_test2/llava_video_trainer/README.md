@@ -29,6 +29,7 @@ uv init .
 
 # 4. Add all dependencies (including deepspeed)
 uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv add opencv-python-headless   # REQUIRED for video frame extraction
 
 # 5. Set credentials
 export HF_USER_ID=eagle0504
@@ -117,21 +118,86 @@ config = {
 
 ## 🎬 Video Processing
 
-This script **actually processes video frames**:
+Frames are decoded with OpenCV and sampled uniformly across the clip:
 
 ```python
-def download_and_process_video_frames(self, video_url, num_frames):
-    # Downloads video
-    # Extracts frames as PIL Images
-    # Returns List[PIL.Image]
-    return [frame1, frame2, frame3, frame4, frame5]
+def extract_frames_from_file(video_path, num_frames):
+    # Uniformly spaced indices across the whole clip
+    # cv2 decode -> BGR to RGB -> PIL.Image
+    # Returns exactly num_frames RGB images
 ```
 
-**Features:**
-- Extracts `num_frames` frames from each video (default: 5)
-- Returns PIL Image objects for each frame
-- Handles both image URLs and video URLs
-- Fallback to placeholder if download fails
+**Behaviour:**
+- Extracts `num_frames` uniformly-spaced frames (default: 5)
+- Accepts local paths, remote video URLs, and still images
+- Converts **BGR to RGB** — OpenCV decodes BGR, the vision encoder expects RGB
+- Short clips pad by repeating the last good frame, so the count always matches
+  the number of image tokens in the prompt
+- **Raises on undecodable input. It does NOT substitute a placeholder.**
+
+> ⚠️ **Requires `opencv-python-headless`.** Install it with
+> `uv pip install opencv-python-headless`.
+
+### Why it raises instead of falling back
+
+An earlier version returned a placeholder image repeated `num_frames` times
+whenever it could not decode the input. That is worse than crashing: every
+"video" became N copies of one still image, so the dataset carried **zero
+temporal signal** while training ran normally and the loss went down. A crash is
+a bug report; a silently degenerate dataset is a wasted GPU-week.
+
+---
+
+## 🧪 Testing This Trainer
+
+The vision path has two tiers of test, and the distinction matters.
+
+### CPU — runs in CI, no GPU, no download
+
+```bash
+uv run tests/test_video_frames.py        # from the repository root
+```
+
+Covers the structure: frames are genuinely distinct, BGR→RGB conversion is
+applied, sampling spans the clip, failures raise, `preprocess_function` unwraps
+the processor's batch dimension, and the collator keeps `pixel_values`.
+
+**This is the guard that protects the repository day to day.** It runs on every
+push.
+
+### GPU — manual, needs a real model
+
+```bash
+uv run --with torch --with transformers --with accelerate \
+       --with opencv-python-headless --with pillow \
+       tests/gpu/validate_llava_vision_path.py
+```
+
+Drives the real `preprocess_function` and `LlavaVideoCollator` against an actual
+LLaVA model and asserts that **perturbing `pixel_values` changes the loss** —
+the only way to prove the pixels are truly reaching the model. Skips cleanly
+with exit 0 when no GPU is present.
+
+### The bug this tiering exists to catch
+
+Structural tests alone were not enough. HuggingFace processors return token
+fields **with a batch dimension**:
+
+```python
+processed["input_ids"]    # [[t0, t1, ..., t2937]]  -- nested
+```
+
+`preprocess_function` appended that without unwrapping, so each example became a
+length-1 list containing a list. The collator computed the max length as **1**
+and padded every sequence to a single token.
+
+Nothing raised. Shapes broadcast, the forward pass returned a finite loss, and
+training looked healthy. It surfaced only when a GPU run asserted on the actual
+**sequence length** (1 instead of 2938).
+
+The fix unwraps the batch dimension, and the CPU test now reproduces the nested
+shape with a fake processor — so this specific regression is caught in CI
+**without needing a GPU**. See [`tests/gpu/README.md`](../../../tests/gpu/README.md).
 
 ## 💾 Disk Space Management
 
@@ -156,6 +222,7 @@ cd llava_video_trainer
 pip install uv
 uv init .
 uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv add opencv-python-headless   # REQUIRED for video frame extraction
 
 # Step 2: Set required environment variables
 export HF_USER_ID=eagle0504
@@ -222,6 +289,7 @@ Output:
 pip install uv
 uv init .
 uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv add opencv-python-headless   # REQUIRED for video frame extraction
 
 # Set environment variables
 export HF_USER_ID=your_username
@@ -256,12 +324,14 @@ uv init .
 
 # Add dependencies (updates pyproject.toml and creates uv.lock)
 uv add torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv add opencv-python-headless   # REQUIRED for video frame extraction
 ```
 
-### Option 2: Using `pip`
+### Option 2: Using `uv pip` into an existing environment
 
 ```bash
-pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb hf_transfer
+uv pip install opencv-python-headless   # REQUIRED for video frame extraction
 ```
 
 **Key dependencies:**
