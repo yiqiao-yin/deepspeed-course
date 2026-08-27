@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex';
 const config = {
   title: 'DeepSpeed Course',
   tagline: 'Master distributed deep learning with DeepSpeed',
-  favicon: 'img/ds_course_logo.png',
+  favicon: 'img/favicon.png',
 
   // GitHub Pages deployment config
   url: 'https://yiqiao-yin.github.io',
@@ -81,10 +81,10 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      image: 'img/deepspeed-social-card.png',
+      image: 'img/favicon.png',
       // Mermaid configuration
       mermaid: {
-        theme: {light: 'neutral', dark: 'dark'},
+        theme: {light: 'dark', dark: 'dark'},
       },
       navbar: {
         title: 'DeepSpeed Course',
@@ -174,14 +174,14 @@ const config = {
         copyright: `Copyright © ${new Date().getFullYear()} Yiqiao Yin. DeepSpeed Course - Distributed Deep Learning Training.`,
       },
       prism: {
-        theme: prismThemes.github,
-        darkTheme: prismThemes.dracula,
+        theme: prismThemes.vsDark,
+        darkTheme: prismThemes.vsDark,
         additionalLanguages: ['bash', 'python', 'json'],
       },
       colorMode: {
-        defaultMode: 'light',
-        disableSwitch: false,
-        respectPrefersColorScheme: true,
+        defaultMode: 'dark',
+        disableSwitch: true,
+        respectPrefersColorScheme: false,
       },
     }),
 };
