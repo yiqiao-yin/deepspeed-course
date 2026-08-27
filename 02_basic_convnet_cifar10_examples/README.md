@@ -2,6 +2,45 @@
 
 Train an enhanced CNN on the CIFAR-10 dataset using DeepSpeed with production-ready training features and comprehensive monitoring.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install torchvision
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 2 |
+| Downloads | ~170 MB (CIFAR-10, automatic) |
+
+~269K parameters. `ds_config.json` omits `train_batch_size`, so it is portable across GPU counts — `--num_gpus=1` and `--num_gpus=2` both work.
+
+```bash
+cd 02_basic_convnet_cifar10_examples
+deepspeed --num_gpus=2 cifar10_deepspeed.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Features
 
 - 🖼️ **Real Dataset**: CIFAR-10 (50,000 train + 10,000 test, 32x32 RGB images)

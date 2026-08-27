@@ -2,6 +2,48 @@
 
 Fine-tune Qwen/Qwen3-0.6B for function calling capabilities using TRL's SFTTrainer with DeepSpeed distributed training.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl peft
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | Qwen3-0.6B (~1.2 GB) |
+
+The smallest HuggingFace example here — a single 24 GB card is usually enough.
+
+```bash
+cd 05_huggingface_trl
+deepspeed --num_gpus=2 train_trl_deepspeed.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## 🆕 New: Production-Ready DeepSpeed Scripts
 
 This directory now includes production-ready Python scripts for DeepSpeed distributed training:

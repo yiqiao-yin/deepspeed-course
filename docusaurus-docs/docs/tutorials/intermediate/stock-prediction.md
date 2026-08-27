@@ -148,12 +148,26 @@ Non-negotiable for a ReLU RNN. Orthogonal init sets a good starting point; clipp
 
 **Only the last timestep is used.** `out[:, -1, :]` discards the other 59 hidden states — a many-to-one architecture. The intermediate states still matter, because the last one is a function of all of them, but no loss is applied to them.
 
-## 5. The Bug: Scaler Fitted Before the Split
+## 5. Look-Ahead Bias: Why the Scaler Must Be Fit After the Split
 
 The most important thing on this page.
 
+:::tip Fixed in the repository
+This example **used to** contain the bug described below. It has been corrected —
+the code now splits first and fits the scaler on the training slice only, and
+`tests/test_stock_leakage.py` guards against a regression. The section is kept
+because the mistake is subtle, extremely common in financial ML, and worth being
+able to recognize in other people's code.
+
+```bash
+uv run tests/test_stock_leakage.py
+```
+:::
+
+The original implementation was:
+
 ```python
-# As implemented:
+# BEFORE — leaks the future:
 scaler = MinMaxScaler(feature_range=(0, 1))
 avg_delta_scaled = scaler.fit_transform(analysis_df['avg_delta'].values.reshape(-1, 1))
 
@@ -172,7 +186,7 @@ over **the entire series, including the test period.** The transform applied to 
 
 Why it matters concretely: if AAPL's largest deviation from its moving averages over the whole decade occurs in 2024 (test period), then every training example from 2016 has been normalized using a constant that could not have been known in 2016. The model implicitly learns the scale of future volatility. Reported test error is optimistically biased, and the gap can be large precisely when it matters most — around regime changes and volatility spikes.
 
-**The fix** — fit on training data only, then apply that fitted transform to validation and test:
+**The fix, now in the repository** — fit on training data only, then apply that fitted transform to validation and test:
 
 ```python
 # Split the raw series FIRST
@@ -197,7 +211,12 @@ X_test,  y_test  = create_sequences(test_scaled,  sequence_length)
 **Sequences must not straddle a split boundary.** Building sequences before splitting means the first ~60 test windows contain training-period observations. Constructing sequences within each split, as above, avoids it at the cost of losing `sequence_length` samples per boundary.
 :::
 
-### The other thing missing: a baseline
+### The baseline, now reported
+
+:::tip Also fixed
+The script previously reported a bare RMSE with nothing to compare it against.
+It now also reports the persistence baseline, Theil U, and directional accuracy.
+:::
 
 The script reports test RMSE after inverting the scaling:
 
@@ -343,8 +362,8 @@ Ordered by expected value, not by novelty.
 
 | Change | Why |
 |---|---|
-| **Fix the scaler leak (§5)** | Correctness. Everything else is uninterpretable until this is done |
-| **Add the persistence baseline and Theil U** | You currently cannot tell whether the model works |
+| ~~Fix the scaler leak (§5)~~ | **Done** — split-then-fit, with a regression test |
+| ~~Add the persistence baseline and Theil U~~ | **Done** — reported alongside RMSE |
 | **Walk-forward validation** | One chronological split cannot distinguish skill from a favourable regime |
 | Multivariate input | `input_size=1` uses only $\bar\delta$. Volume, realized volatility, and the individual $\delta_p$ are already computed and discarded |
 | Swap `nn.RNN` → `nn.LSTM`/`nn.GRU` | Gating handles 60-step dependencies far better; see [LSTM](/docs/tutorials/basic/rnn#long-short-term-memory-lstm) |

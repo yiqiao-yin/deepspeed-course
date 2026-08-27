@@ -6,7 +6,9 @@ from transformers import (
     AutoTokenizer, AutoModelForCausalLM,
     StoppingCriteria, StoppingCriteriaList
 )
-from trl import GRPOTrainer, AutoModelForCausalLMWithValueHead
+import re
+
+from trl import GRPOTrainer
 
 
 class StopOnTokens(StoppingCriteria):
@@ -19,19 +21,88 @@ class StopOnTokens(StoppingCriteria):
         return any(input_ids[0, -len(token):].tolist() == token for token in self.stop_token_ids)
 
 
+def extract_final_answer(text: str):
+    """
+    Pull the final numeric answer out of a generated solution.
+
+    Handles the GSM8K '#### <answer>' convention, and otherwise falls back to
+    the last number appearing in the text.
+
+    Returns:
+        The answer as a float, or None if no number is present.
+    """
+    if "####" in text:
+        text = text.split("####")[-1]
+    numbers = re.findall(r"-?\d+(?:\.\d+)?", text.replace(",", ""))
+    if not numbers:
+        return None
+    try:
+        return float(numbers[-1])
+    except ValueError:
+        return None
+
+
+def reward_answer_correct(completions, **kwargs):
+    """
+    Verifiable reward: 1.0 if the final answer matches ground truth, else 0.0.
+
+    This is the reward GRPO is designed for. It has no parameters, so it cannot
+    drift or be reward-hacked by paraphrase, and it measures the thing we
+    actually care about.
+
+    Requires the dataset to carry the reference answer; GRPOTrainer forwards
+    extra dataset columns through **kwargs.
+    """
+    references = kwargs.get("completion") or kwargs.get("answer")
+    if references is None:
+        raise ValueError(
+            "reward_answer_correct needs reference answers. Ensure the dataset "
+            "has a 'completion' (or 'answer') column."
+        )
+
+    rewards = []
+    for prediction, reference in zip(completions, references):
+        predicted = extract_final_answer(str(prediction))
+        expected = extract_final_answer(str(reference))
+        rewards.append(
+            1.0 if (predicted is not None and expected is not None
+                    and abs(predicted - expected) < 1e-6)
+            else 0.0
+        )
+    return rewards
+
+
 def reward_unique_chars(completions, **kwargs):
-    """Dummy reward: number of unique characters in the generated output."""
+    """
+    DUMMY reward: number of unique characters in the generated output.
+
+    Retained only as a smoke test for the training loop. It rewards character
+    diversity, so the optimal policy under it is to emit as many distinct
+    characters as possible — it teaches the model nothing about the task.
+    Use reward_answer_correct for any real run.
+    """
     return [len(set(c)) for c in completions]
 
 
 class MultiAgentLLM:
-    """Multi-agent LLM that performs generation, aggregation, and PPO training."""
+    """
+    Multi-agent LLM: prompt-conditioned agents over one shared set of weights,
+    trained with GRPO.
+
+    Note on the model class: this previously used
+    AutoModelForCausalLMWithValueHead, which attaches a scalar value head — a
+    CRITIC. That is a PPO construct. GRPO exists precisely to remove the critic,
+    replacing the learned baseline V(s) with the group mean reward, which is
+    where its memory saving comes from (model states drop from ~36*Psi to
+    ~18*Psi). Loading a value head under GRPO allocates a head that is never
+    used for advantage estimation.
+    """
 
     def __init__(self, model_name, num_agents=4):
         self.model_name = model_name
         self.num_agents = num_agents
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
 
         # Define stopping criteria for generation
         stop_sequence = "</response>"
@@ -51,14 +122,29 @@ class MultiAgentLLM:
         return outputs
 
     def aggregate_hidden_states(self, agent_outputs):
-        transformer = self.model.base_model
+        """
+        Average final-layer hidden states across agent completions.
+
+        Note: this is an EXPLORATORY analysis utility, not part of training.
+        The GRPO objective operates purely on per-token log-probabilities and
+        scalar rewards; no hidden state enters it. Averaging representations
+        across different completions is also conceptually questionable, since
+        position i in two different sequences corresponds to different tokens
+        in different contexts.
+
+        For genuine ensembling, prefer self-consistency (sample G chains, take
+        the majority final answer) — see Wang et al., 2023.
+        """
         hidden_states = []
 
         with torch.no_grad():
             for output_ids in agent_outputs:
                 output_ids = output_ids.unsqueeze(0)
-                out = transformer(input_ids=output_ids)
-                last_hidden = out.last_hidden_state
+                # output_hidden_states works for any causal LM. The previous
+                # `self.model.base_model` access was specific to the
+                # value-head wrapper that this class no longer uses.
+                out = self.model(input_ids=output_ids, output_hidden_states=True)
+                last_hidden = out.hidden_states[-1]
                 hidden_states.append(last_hidden)
 
         max_len = max(h.shape[1] for h in hidden_states)
@@ -83,12 +169,16 @@ class MultiAgentLLM:
             "completion": completions
         }
 
-        hf_dataset = Dataset.from_dict(formatted_dataset)  # ✅ Correct
-        
-        # Initialize and run GRPOTrainer
+        hf_dataset = Dataset.from_dict(formatted_dataset)
+
+        # Pass the already-loaded model rather than the model NAME. Passing the
+        # name made GRPOTrainer load a SECOND copy of the weights, so the model
+        # constructed in __init__ was never trained — it was used only for
+        # generation and then discarded.
         trainer = GRPOTrainer(
-            model=self.model_name,  # e.g. "eagle0504/qwen-distilled-scout-1.5b-instruct-gen2"
-            reward_funcs=reward_unique_chars,
+            model=self.model,
+            processing_class=self.tokenizer,
+            reward_funcs=reward_answer_correct,   # verifiable, not the dummy
             train_dataset=hf_dataset
         )
     

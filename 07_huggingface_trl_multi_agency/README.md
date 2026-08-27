@@ -2,6 +2,47 @@
 
 Train multi-agent language models using Group Relative Policy Optimization (GRPO) on mathematical reasoning tasks with diverse instruction variants and reward strategies.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install transformers datasets trl
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | n/a — no DeepSpeed launcher |
+| Downloads | Qwen-1.5B (~3 GB) |
+
+This example does NOT use DeepSpeed — TRL's GRPOTrainer is driven directly, so `uv` alone is enough.
+
+```bash
+cd 07_huggingface_trl_multi_agency
+python main.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Features
 
 - 🤖 **Multi-Agent Architecture**: Multiple agents with diverse instruction prompts
@@ -424,7 +465,7 @@ def train_grpo(self, dataset):
     # Initialize trainer
     trainer = GRPOTrainer(
         model=self.model_name,
-        reward_funcs=reward_unique_chars,
+        reward_funcs=reward_answer_correct,   # verifiable, not the dummy
         train_dataset=formatted_dataset
     )
 
@@ -524,11 +565,16 @@ instructions = [
 
 1. **Load Base Model**:
    ```python
-   model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
+   model = AutoModelForCausalLM.from_pretrained(model_name)
    ```
    - Downloads Qwen-1.5B (~3GB)
-   - Adds value head for RL training
    - Initializes tokenizer
+   - **No value head.** A value head is a critic, which is a PPO construct.
+     GRPO replaces the learned baseline `V(s)` with the group mean reward and
+     needs no critic — that removal is where its memory saving comes from
+     (model states drop from roughly 36·Ψ to 18·Ψ). This previously used
+     `AutoModelForCausalLMWithValueHead`, which allocated a head that was
+     never used for advantage estimation.
 
 2. **Prepare Dataset**:
    - **main.py**: Creates synthetic problems

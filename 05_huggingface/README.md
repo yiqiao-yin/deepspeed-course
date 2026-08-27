@@ -2,6 +2,48 @@
 
 This guide walks through how to use **DeepSpeed** with **HuggingFace Transformers** to fine-tune large language models efficiently on multi-GPU setups.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | model weights (GBs) |
+
+Requires a capable GPU and a model download.
+
+```bash
+cd 05_huggingface
+deepspeed --num_gpus=2 train_ds.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Prerequisites
 
 - Docker image: `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04` (or similar)

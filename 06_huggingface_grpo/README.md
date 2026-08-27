@@ -4,6 +4,48 @@
 
 ---
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl peft
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | Qwen-1.5B (~3 GB) |
+
+RL: memory is dominated by G rollouts per prompt, not by model states.
+
+```bash
+cd 06_huggingface_grpo
+deepspeed --num_gpus=2 grpo_gsm8k_train.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Overview
 
 **GRPO (Group Relative Policy Optimization)** is an advanced reinforcement learning technique for fine-tuning language models. This implementation trains a Qwen-based model on GSM8K (Grade School Math 8K) dataset with custom reward functions that encourage:

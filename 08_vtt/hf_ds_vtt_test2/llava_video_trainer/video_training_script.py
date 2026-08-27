@@ -6,7 +6,8 @@ model to Hugging Face Hub. Uses TRL's SFTTrainer with DeepSpeed and Accelerate
 for efficient multi-GPU training.
 
 Requirements:
-    pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+    uv pip install torch datasets transformers trl huggingface_hub accelerate deepspeed pillow requests wandb
+    uv pip install opencv-python-headless   # required for video frame extraction
 
 Environment Variables:
     HF_USER_ID: Hugging Face username
@@ -206,6 +207,64 @@ class RetryHandler:
                     raise
 
         raise last_exception
+
+
+class LlavaVideoCollator:
+    """
+    Collate LLaVA video examples: pad token fields, stack pixel values.
+
+    HuggingFace's DataCollatorForSeq2Seq handles `input_ids`, `attention_mask`
+    and `labels`, but silently drops any other key — including `pixel_values`.
+    Using it for a multimodal model produces a batch with no visual features,
+    and the model then either errors on the mismatched image-token count or
+    trains on text alone.
+
+    Args:
+        tokenizer: Tokenizer supplying the pad token id
+        label_pad_token_id: Value marking positions excluded from the loss
+    """
+
+    def __init__(self, tokenizer, label_pad_token_id: int = -100):
+        self.tokenizer = tokenizer
+        self.label_pad_token_id = label_pad_token_id
+        self.pad_token_id = (
+            tokenizer.pad_token_id
+            if tokenizer.pad_token_id is not None
+            else tokenizer.eos_token_id
+        )
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        max_length = max(len(f["input_ids"]) for f in features)
+
+        input_ids, attention_mask, labels = [], [], []
+        for feature in features:
+            ids = list(feature["input_ids"])
+            mask = list(feature.get("attention_mask", [1] * len(ids)))
+            lab = list(feature.get("labels", ids))
+
+            pad_len = max_length - len(ids)
+            input_ids.append(ids + [self.pad_token_id] * pad_len)
+            attention_mask.append(mask + [0] * pad_len)
+            # Padding must not contribute to the loss.
+            labels.append(lab + [self.label_pad_token_id] * pad_len)
+
+        batch = {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
+        }
+
+        # pixel_values arrive as [num_frames, C, H, W] per example. Concatenate
+        # along the frame axis so the batch carries one image per image token,
+        # which is what LlavaForConditionalGeneration expects.
+        if "pixel_values" in features[0]:
+            pixel_values = [
+                pv if isinstance(pv, torch.Tensor) else torch.tensor(pv)
+                for pv in (f["pixel_values"] for f in features)
+            ]
+            batch["pixel_values"] = torch.cat(pixel_values, dim=0)
+
+        return batch
 
 
 class VideoTextTrainer:
@@ -437,41 +496,142 @@ This dataset is designed for LLaVA models that support video input through multi
         )
         print("✅ Dataset README uploaded successfully")
 
+    @staticmethod
+    def extract_frames_from_file(video_path: str, num_frames: int) -> List[Image.Image]:
+        """
+        Decode a local video file and return `num_frames` uniformly-spaced frames.
+
+        Args:
+            video_path: Path to a local video file (.mp4, .mov, .avi, ...)
+            num_frames: Number of frames to sample
+
+        Returns:
+            List of `num_frames` RGB PIL Images
+
+        Raises:
+            ImportError: if opencv-python is not installed
+            ValueError: if the file cannot be decoded
+
+        Note:
+            Uniform sampling across the full duration is the standard approach
+            for video-language models: adjacent frames in a video are enormously
+            redundant, so a handful of well-spread frames captures most of the
+            semantic content. It is NOT sufficient for tasks needing fine
+            temporal resolution (counting repetitions, distinguishing
+            "picking up" from "putting down") — those need denser sampling.
+        """
+        try:
+            import cv2
+        except ImportError as exc:
+            raise ImportError(
+                "Video frame extraction requires opencv-python.\n"
+                "    pip install opencv-python        (or opencv-python-headless on servers)"
+            ) from exc
+
+        capture = cv2.VideoCapture(video_path)
+        if not capture.isOpened():
+            capture.release()
+            raise ValueError(f"Could not open video file: {video_path}")
+
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            capture.release()
+            raise ValueError(f"No decodable frames in: {video_path}")
+
+        # Uniformly spaced indices across the whole clip, inclusive of both ends.
+        if num_frames == 1:
+            indices = [0]
+        else:
+            indices = [
+                int(round(i * (total_frames - 1) / (num_frames - 1)))
+                for i in range(num_frames)
+            ]
+
+        frames: List[Image.Image] = []
+        for index in indices:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+            ok, frame = capture.read()
+            if not ok:
+                continue
+            # OpenCV decodes to BGR. The vision encoder was pretrained on RGB,
+            # so skipping this conversion silently degrades accuracy rather
+            # than raising an error.
+            frames.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+
+        capture.release()
+
+        if not frames:
+            raise ValueError(f"Decoded zero frames from: {video_path}")
+
+        # Short or partially-unreadable clips: repeat the last good frame so the
+        # caller always receives exactly `num_frames` images. The image-token
+        # count in the prompt is fixed, so the length must match.
+        while len(frames) < num_frames:
+            frames.append(frames[-1])
+
+        return frames[:num_frames]
+
     def download_and_process_video_frames(self, video_url: str, num_frames: int) -> List[Image.Image]:
         """
-        Download video and extract frames (placeholder implementation).
-        
+        Obtain `num_frames` frames for a video URL, local path, or still image.
+
         Args:
-            video_url: URL of the video
+            video_url: URL or local path to a video, or a still-image URL
             num_frames: Number of frames to extract
-            
+
         Returns:
-            List of PIL Images
-            
+            List of `num_frames` RGB PIL Images
+
+        Raises:
+            RuntimeError: if frames cannot be obtained. This is deliberate —
+                see the note below.
+
         Note:
-            This is a simplified implementation. In practice, you'd use opencv-python
-            or similar to extract actual video frames.
+            An earlier version of this function returned the SAME placeholder
+            image repeated `num_frames` times whenever it could not decode the
+            input. That silently removed all temporal signal: training ran and
+            the loss decreased, but the model could not learn anything about
+            motion or change because every "video" was a still image.
+
+            Failing loudly is strictly better. A crash is a bug report; a
+            silently degenerate dataset is a wasted GPU-week.
         """
-        # For this example, we'll use a placeholder image repeated
-        # In practice, you'd extract actual frames from the video
-        try:
-            if video_url.endswith(('.jpg', '.png', '.jpeg')):
-                # If it's an image URL, use it directly
+        # Local file: decode it directly.
+        if os.path.exists(video_url):
+            return self.extract_frames_from_file(video_url, num_frames)
+
+        # Still image (URL): a single image legitimately has no temporal extent,
+        # so repeating it is the correct representation here.
+        if video_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp')):
+            try:
                 response = requests.get(video_url, stream=True, timeout=30)
-                image = Image.open(response.raw)
+                response.raise_for_status()
+                image = Image.open(response.raw).convert('RGB')
                 return [image] * num_frames
-            else:
-                # For video URLs, use a placeholder approach
-                # You should implement actual video frame extraction here
-                placeholder_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-                response = requests.get(placeholder_url, stream=True, timeout=30)
-                image = Image.open(response.raw)
-                return [image] * num_frames
-        except Exception as e:
-            print(f"Warning: Could not download {video_url}, using placeholder. Error: {e}")
-            # Use a solid color placeholder
-            placeholder = Image.new('RGB', (224, 224), color='gray')
-            return [placeholder] * num_frames
+            except Exception as exc:
+                raise RuntimeError(f"Could not fetch image {video_url}: {exc}") from exc
+
+        # Remote video: download to a temporary file, then decode.
+        try:
+            import tempfile
+
+            suffix = os.path.splitext(video_url)[1] or '.mp4'
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+                temp_path = handle.name
+                response = requests.get(video_url, stream=True, timeout=120)
+                response.raise_for_status()
+                for chunk in response.iter_content(chunk_size=1 << 20):
+                    handle.write(chunk)
+            try:
+                return self.extract_frames_from_file(temp_path, num_frames)
+            finally:
+                os.unlink(temp_path)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not extract frames from {video_url}: {exc}\n"
+                f"    Provide a local path or a reachable video URL. Frames are "
+                f"NOT substituted with placeholders — see the docstring."
+            ) from exc
 
     def preprocess_function(self, examples: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -484,39 +644,64 @@ This dataset is designed for LLaVA models that support video input through multi
             Preprocessed examples with tokenized conversations
         """
         batch_conversations = examples["conversation"]
-        batch_video_urls = examples["video_url"] 
+        batch_video_urls = examples["video_url"]
         batch_num_frames = examples["num_frames"]
-        
-        # Process each example individually due to LLaVA's specific requirements
-        batch_texts = []
-        
-        for conversation, video_url, num_frames in zip(batch_conversations, batch_video_urls, batch_num_frames):
-            try:
-                # Apply chat template to get the formatted prompt
-                full_prompt = self.processor.apply_chat_template(
-                    conversation, 
-                    add_generation_prompt=False,
-                    tokenize=False
-                )
-                batch_texts.append(full_prompt)
-                
-            except Exception as e:
-                print(f"Error processing conversation: {e}")
-                # Create a fallback text
-                fallback_text = "What is in this video? There is content in the video."
-                batch_texts.append(fallback_text)
-        
-        # Tokenize the texts
-        tokenized = self.processor.tokenizer(
-            batch_texts,
-            padding=False,  # Don't pad here, let data collator handle it
-            truncation=False,  # Don't truncate
-            return_tensors=None  # Return lists
-        )
-        
-        # For SFTTrainer, we need 'input_ids' and 'labels'
-        # Set labels same as input_ids for causal language modeling
-        tokenized["labels"] = tokenized["input_ids"].copy()
+
+        # ------------------------------------------------------------------
+        # Both the TEXT and the FRAMES are processed here.
+        #
+        # An earlier version tokenized only the text and never called the frame
+        # extractor at all, so `pixel_values` were never produced and the run
+        # was text-only despite the image tokens in the prompt. Each example is
+        # passed through the processor together with its frames so the image
+        # tokens line up with real visual features.
+        #
+        # The processor — not the bare tokenizer — must do this: it expands the
+        # image placeholder in the templated text into the correct number of
+        # visual token positions for the images supplied. Tokenizing text and
+        # encoding images separately produces a silent misalignment.
+        # ------------------------------------------------------------------
+        all_input_ids: List[Any] = []
+        all_attention_mask: List[Any] = []
+        all_pixel_values: List[Any] = []
+
+        for conversation, video_url, num_frames in zip(
+            batch_conversations, batch_video_urls, batch_num_frames
+        ):
+            # Apply chat template to get the formatted prompt
+            full_prompt = self.processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=False,
+                tokenize=False
+            )
+
+            # Decode real frames. This raises on failure rather than silently
+            # substituting placeholders — see download_and_process_video_frames.
+            frames = self.download_and_process_video_frames(video_url, num_frames)
+
+            processed = self.processor(
+                images=frames,
+                text=full_prompt,
+                return_tensors=None,   # plain lists; the collator batches them
+                padding=False,         # collator pads
+                truncation=False,
+            )
+
+            all_input_ids.append(processed["input_ids"])
+            all_attention_mask.append(
+                processed.get("attention_mask", [1] * len(processed["input_ids"]))
+            )
+            all_pixel_values.append(processed["pixel_values"])
+
+        tokenized = {
+            "input_ids": all_input_ids,
+            "attention_mask": all_attention_mask,
+            "pixel_values": all_pixel_values,
+        }
+
+        # Causal LM: labels mirror input_ids. Padding is masked to -100 in the
+        # collator, once the pad length for the batch is known.
+        tokenized["labels"] = [list(ids) for ids in all_input_ids]
         
         return tokenized
 
@@ -760,12 +945,14 @@ This model expects {self.num_frames} frames extracted from each video. For best 
         
         print("🏋️ Initializing LLaVA trainer with DeepSpeed...")
         
-        # Create data collator for LLaVA
-        data_collator = DataCollatorForSeq2Seq(
+        # Create data collator for LLaVA.
+        #
+        # DataCollatorForSeq2Seq only knows about token fields — it would drop
+        # `pixel_values` entirely, which is why the vision path has to be
+        # collated explicitly here.
+        data_collator = LlavaVideoCollator(
             tokenizer=self.processor.tokenizer,
-            model=model,
-            padding=True,
-            return_tensors="pt"
+            label_pad_token_id=-100,
         )
         
         trainer = SFTTrainer(

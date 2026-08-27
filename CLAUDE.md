@@ -33,12 +33,51 @@ sbatch run_deepspeed.sh                              # SLURM, e.g. CoreWeave
 
 SLURM workflow: `sbatch <script>` → `squeue -u $USER` → `tail -f logs/<name>_<jobid>.out` → `scancel <jobid>`. Every batch script does `mkdir -p logs` and writes `logs/*_%j.{out,err}`.
 
-Environments are created with `uv`, not pip/conda:
+## Tooling: always `uv`
+
+Environments and package installs use **`uv`**, never bare `pip` or conda — including
+for throwaway checks:
 
 ```bash
-uv venv myenv && source myenv/bin/activate
-uv pip install torch deepspeed wandb
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed wandb
+
+uv run script.py                    # run a script
+uv run --no-project python -c "..." # one-off, no project env
 ```
+
+Every example README documents its own `uv` setup under **Environment & Local Testing**.
+
+Note that `07_huggingface_trl_multi_agency` does **not** use DeepSpeed — it drives
+TRL's `GRPOTrainer` directly, so `uv` alone suffices. Every other example uses both.
+
+## What can and cannot be run here
+
+This distinction governs how to verify a change:
+
+| Examples | Scale | Verification |
+|---|---|---|
+| `01`–`04` | Synthetic or tiny data, ≤1M params, 1–2 GPUs | **Runnable end to end** on a single machine |
+| `05`–`09` | Real model downloads (GBs to 1.1 TB), multi-GPU, up to 560B params | **Not runnable locally.** Verify logic only |
+
+For the second group, do not attempt a full training run to validate a change —
+it will not fit, and a partial run proves nothing. Write or extend a **logic test**
+in `tests/` instead, which exercises the changed code path without a GPU or a
+model download:
+
+```bash
+./tests/run_all.sh              # all suites
+uv run tests/test_ds_configs.py # one suite
+```
+
+Tests use [PEP 723](https://peps.python.org/pep-0723/) inline dependency metadata,
+so `uv run` provisions each one automatically. `tests/_srcload.py` extracts a single
+function from a training script via `ast` so tests run against the **actual shipped
+source** without importing torch/deepspeed/trl. See `tests/README.md`.
+
+When you change an example, update its README's **Environment & Local Testing**
+section if the dependencies, GPU count, or download size changed.
 
 ## Two target platforms
 

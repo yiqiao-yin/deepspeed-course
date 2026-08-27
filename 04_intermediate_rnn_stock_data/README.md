@@ -2,6 +2,45 @@
 
 This example demonstrates intermediate RNN training for stock price delta prediction using DeepSpeed, W&B tracking, and SLURM job scheduling.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install yfinance pandas scikit-learn matplotlib
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 2 |
+| Downloads | none, but needs NETWORK for yfinance |
+
+~5K parameters. Compute-trivial; the constraint is network access, which HPC compute nodes often lack.
+
+```bash
+cd 04_intermediate_rnn_stock_data
+deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Overview
 
 This project trains a SimpleRNN model to predict stock price deltas (price - moving average) using historical stock data from Yahoo Finance. The model learns temporal patterns in the relationship between current prices and their moving averages across multiple time periods.

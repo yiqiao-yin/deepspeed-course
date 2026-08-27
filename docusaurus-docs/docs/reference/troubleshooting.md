@@ -346,13 +346,13 @@ You are probably reading the wrong metric. Cross-entropy is what you optimize, n
 | Classification | Accuracy, F1, **calibration** |
 | OCR / transcription | Character or word error rate |
 | Structured extraction | Field-level exact match |
-| Time series | RMSE **and** [Theil U vs persistence](/docs/tutorials/intermediate/stock-prediction#the-other-thing-missing-a-baseline) |
+| Time series | RMSE **and** [Theil U vs persistence](/docs/tutorials/intermediate/stock-prediction#the-baseline-now-reported) |
 | Speech generation | WER via ASR, plus MOS or a learned proxy |
 | RL | Held-out accuracy, not training reward |
 
 ### Results too good to be true
 
-Suspect data leakage. For time series the classic is [fitting the scaler before the split](/docs/tutorials/intermediate/stock-prediction#5-the-bug-scaler-fitted-before-the-split). In general: any transform fitted on data that includes the test set.
+Suspect data leakage. For time series the classic is [fitting the scaler before the split](/docs/tutorials/intermediate/stock-prediction#5-look-ahead-bias-why-the-scaler-must-be-fit-after-the-split). In general: any transform fitted on data that includes the test set.
 
 ### Non-deterministic results
 

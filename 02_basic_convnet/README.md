@@ -2,6 +2,45 @@
 
 Train an enhanced CNN for image classification using DeepSpeed on synthetic MNIST-like data with production-ready training features.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install torchvision
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 1 |
+| Downloads | none — synthetic data |
+
+~208K parameters. Runs on any CUDA GPU.
+
+```bash
+cd 02_basic_convnet
+deepspeed --num_gpus=1 train_ds.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Features
 
 - 🖼️ **Image Classification**: Enhanced CNN architecture for 28x28 grayscale image classification

@@ -2,6 +2,48 @@
 
 Minimal Vision-Language Model (VLM) fine-tuning script using DeepSpeed for distributed training on 2 RTX 4000-series NVIDIA GPUs. This example uses the Qwen2-VL-2B-Instruct model for OCR and vision-language tasks.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate peft bitsandbytes qwen-vl-utils
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | Qwen2-VL-2B (~4 GB) |
+
+Vision-language memory is driven by sequence length, not parameters. Cap it with the processor's `min_pixels` / `max_pixels`.
+
+```bash
+cd 05_huggingface_ocr
+deepspeed --num_gpus=2 train_ds.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Prerequisites
 
 - 2x RTX 4000-series NVIDIA GPUs

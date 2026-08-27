@@ -9,9 +9,15 @@ An **exploratory** example: multiple prompt-conditioned agents sharing one set o
 **Model:** Qwen-1.5B · **Example:** `07_huggingface_trl_multi_agency`
 
 :::warning Read this as a research sketch, not a recipe
-Unlike the other examples in this course, this one is not a validated pipeline. `main.py` trains against a **deliberately dummy reward** — `reward_unique_chars` returns the number of distinct characters in the output — and `train_grpo_math.py` uses string similarity to a reference, which is a weak proxy for mathematical correctness.
+This is an exploratory example rather than a validated pipeline. The value is in the design questions it raises. If you want a production GRPO setup, use [GRPO Training](/docs/tutorials/huggingface/grpo-training).
 
-The value here is in the design questions it raises. §4 is honest about which parts are sound, which are vestigial, and what you would change to make it a real experiment. If you want a working GRPO pipeline, use [GRPO Training](/docs/tutorials/huggingface/grpo-training) instead.
+**The concrete defects described in §4 have now been fixed**: the PPO value head is gone, both scripts use a verifiable exact-match reward instead of string similarity, and the reward alignment bug is corrected. `tests/test_grpo_rewards.py` guards all three:
+
+```bash
+uv run tests/test_grpo_rewards.py
+```
+
+§4 keeps the analysis because each mistake is instructive — and because the *conceptual* questions it raises (does agent conditioning actually reduce degenerate groups?) remain open.
 :::
 
 ## 1. What "Multi-Agent" Means Here
@@ -69,14 +75,16 @@ Conditioning each rollout on a *different instruction* induces diversity at the 
 ```bash
 cd 07_huggingface_trl_multi_agency
 
-python main.py              # synthetic data, dummy unique-character reward
-python train_grpo_math.py   # GSM8K-style data, string-similarity reward
+python main.py              # synthetic data
+python train_grpo_math.py   # GSM8K-style data
 ```
 
 | Script | Data | Reward |
 |---|---|---|
-| `main.py` | Synthetic | `reward_unique_chars` — count of distinct characters |
-| `train_grpo_math.py` | GSM8K-style | `difflib` similarity to a reference solution, scaled 0–100 |
+| `main.py` | Synthetic | `reward_answer_correct` — verifiable exact match |
+| `train_grpo_math.py` | GSM8K-style | `reward_answer_correct` — verifiable exact match |
+
+`reward_unique_chars` is retained in `main.py`, explicitly labelled a dummy, as a smoke test for the training loop.
 
 ## 3. The Code
 
@@ -85,7 +93,8 @@ class MultiAgentLLM:
     def __init__(self, model_name, num_agents=4):
         self.num_agents = num_agents
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
+        # Plain causal LM — no value head. GRPO has no critic (see 4.1).
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
 
     def generate_agent_outputs(self, prompt_variants):
         """Generate completions from each agent variant."""
@@ -106,9 +115,10 @@ class StopOnTokens(StoppingCriteria):
 
 ## 4. An Honest Critique
 
-### 4.1 The value head is vestigial
+### 4.1 The value head was vestigial — fixed
 
 ```python
+# BEFORE:
 self.model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
 ```
 
@@ -116,9 +126,11 @@ self.model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
 
 The entire point of GRPO is that it **removes the critic**, replacing the learned baseline $V_\psi(s)$ with the group mean $\bar r$. See [the derivation](/docs/tutorials/huggingface/grpo-training#41-the-idea) and [the memory accounting](/docs/tutorials/huggingface/grpo-training#5-what-grpo-actually-removes-a-memory-accounting): dropping the critic is what takes model states from $36\Psi$ to $18\Psi$.
 
-Loading a value head while training with GRPO allocates a head that is never used for advantage estimation. It is harmless but wasteful, and it signals the code evolved from a PPO example. **Use `AutoModelForCausalLM` with `GRPOTrainer`.**
+Loading a value head while training with GRPO allocates a head that is never used for advantage estimation. It is harmless but wasteful, and it signals the code evolved from a PPO example.
 
-### 4.2 Hidden-state aggregation is not part of GRPO
+**Fixed:** both scripts now use `AutoModelForCausalLM`. A second bug surfaced while making the change — `GRPOTrainer` was being passed the model *name* rather than the loaded model, so it loaded a **second copy of the weights** and the model built in `__init__` was never trained at all. It now receives `model=self.model`.
+
+### 4.2 Hidden-state aggregation is not part of GRPO — documented, retained
 
 ```python
 def aggregate_hidden_states(self, agent_outputs):
@@ -135,13 +147,15 @@ consumes a hidden state. Averaging representations across *different* completion
 
 If the intent is ensembling, the principled versions are **logit averaging at each decoding step** (a genuine product/mixture of experts over the same next-token distribution) or **self-consistency** — sample $G$ chains, take the majority final answer (Wang et al., 2023), which is the standard and very effective method for exactly this setting.
 
-### 4.3 The rewards will not teach mathematics
+### 4.3 The rewards would not teach mathematics — fixed
 
 **`reward_unique_chars`** — the docstring says "Dummy reward". It rewards character diversity, so the optimal policy is to emit as many distinct characters as possible. It is a pipeline smoke test.
 
 **String similarity to a reference** is more defensible but still unsound for math: an answer of `42` and an answer of `-42` are ~95% similar as strings and one of them is wrong; a correct solution written differently from the reference scores poorly. It rewards **surface form**, not correctness — precisely the reward-hacking failure that [verifiable rewards](/docs/tutorials/huggingface/grpo-training#82-the-verifier-reward) are meant to eliminate.
 
-The fix is the one-line function from the GRPO page:
+**Fixed:** both scripts now use the verifiable reward below. A third bug surfaced here too — the old `make_similarity_reward_fn` closed over the dataset's completion list and zipped it *positionally* against generated completions. Since GRPO samples $G$ rollouts per prompt, generation $i$ does not correspond to dataset row $i$, so **every rollout was scored against the wrong reference**. Reading references from `**kwargs`, which the trainer expands to match the generated batch, fixes the alignment.
+
+The reward is the one-line function from the GRPO page:
 
 ```python
 def compute_reward(response: str, ground_truth: str) -> float:
@@ -168,8 +182,8 @@ Also log `groups/degenerate`. The whole hypothesis of this example is that agent
 
 | Change | Why |
 |---|---|
-| Drop `AutoModelForCausalLMWithValueHead` → `AutoModelForCausalLM` | GRPO has no critic (§4.1) |
-| Replace similarity reward with exact-match verification | Correctness, not surface form (§4.3) |
+| ~~Drop `AutoModelForCausalLMWithValueHead`~~ | **Done** — GRPO has no critic (§4.1) |
+| ~~Replace similarity reward with exact-match verification~~ | **Done** — correctness, not surface form (§4.3) |
 | Remove hidden-state aggregation, or replace with self-consistency voting | It has no role in the objective (§4.2) |
 | Normalize advantages **within prompt**, across all agents | Preserves the strategy comparison (§4.4) |
 | Log `groups/degenerate` per condition | Tests the actual hypothesis |

@@ -2,6 +2,44 @@
 
 Train a simple linear regression model using DeepSpeed for distributed training on synthetic data.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 1 |
+| Downloads | none — synthetic data |
+
+Two learnable parameters. Runs on any CUDA GPU in seconds.
+
+```bash
+cd 01_basic_neuralnet
+deepspeed --num_gpus=1 train_ds_enhanced.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Features
 
 - 🎯 **Simple & Educational**: Perfect introduction to DeepSpeed with minimal complexity

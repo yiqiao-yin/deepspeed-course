@@ -4,6 +4,44 @@ This module implements **parallel tempering** (also known as replica exchange MC
 
 ---
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 2 |
+| Downloads | none — synthetic data |
+
+Parallel tempering assigns one temperature per rank, so it is most meaningful with 2+ GPUs, but a single-rank run is valid (one chain, no replica exchange).
+
+```bash
+cd 04_bayesian_neuralnet
+deepspeed --num_gpus=2 parallel_tempering_mcmc.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Problem Statement & Experimental Results
 
 ### The Challenge 🎯

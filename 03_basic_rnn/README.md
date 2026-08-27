@@ -2,6 +2,44 @@
 
 A comprehensive example of training LSTM (Recurrent Neural Network) models using DeepSpeed for distributed training optimization with production-ready features and experiment tracking.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **Yes** |
+| GPUs requested by the launcher | 2 |
+| Downloads | none — synthetic data |
+
+Small LSTM. Runs on one GPU; lower `--num_gpus` and adjust the config accordingly.
+
+```bash
+cd 03_basic_rnn
+deepspeed --num_gpus=2 train_rnn_deepspeed.py
+```
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Overview
 
 This project demonstrates how to:

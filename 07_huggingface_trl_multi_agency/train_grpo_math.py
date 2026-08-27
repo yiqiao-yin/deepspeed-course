@@ -7,8 +7,9 @@ from transformers import (
     StoppingCriteria,
     StoppingCriteriaList,
 )
-from trl import GRPOConfig, GRPOTrainer, AutoModelForCausalLMWithValueHead
-from difflib import SequenceMatcher
+from transformers import AutoModelForCausalLM
+from trl import GRPOConfig, GRPOTrainer
+import re
 
 
 class StopOnTokens(StoppingCriteria):
@@ -22,27 +23,81 @@ class StopOnTokens(StoppingCriteria):
         return any(input_ids[0, -len(token):].tolist() == token for token in self.stop_token_ids)
 
 
-def make_similarity_reward_fn(references):
-    """Returns a reward function that compares completions to references using string similarity."""
+def extract_final_answer(text: str):
+    """
+    Pull the final numeric answer out of a generated solution.
 
-    def reward_fn(completions, **kwargs):
-        rewards = []
-        for pred, ref in zip(completions, references):
-            similarity = SequenceMatcher(None, pred.strip(), ref.strip()).ratio()
-            rewards.append(similarity * 100)  # Scale to 0–100
-        return rewards
+    Handles the GSM8K '#### <answer>' convention and otherwise falls back to
+    the last number in the text.
 
-    return reward_fn
+    Returns:
+        The answer as a float, or None if no number is present.
+    """
+    if "####" in text:
+        text = text.split("####")[-1]
+    numbers = re.findall(r"-?\d+(?:\.\d+)?", text.replace(",", ""))
+    if not numbers:
+        return None
+    try:
+        return float(numbers[-1])
+    except ValueError:
+        return None
+
+
+def reward_answer_correct(completions, **kwargs):
+    """
+    Verifiable reward: 1.0 if the final answer matches ground truth, else 0.0.
+
+    Replaces the previous string-similarity reward, which had two problems.
+
+    1. It rewarded SURFACE FORM rather than correctness. '42' and '-42' are
+       about 95% similar as strings and one of them is wrong; a correct
+       solution phrased differently from the reference scored poorly. That is
+       precisely the reward-hacking failure that verifiable rewards exist to
+       eliminate.
+
+    2. It was MISALIGNED. The old factory closed over the dataset's completion
+       list and zipped it positionally against the generated completions. GRPO
+       samples G rollouts per prompt, so generation i does not correspond to
+       dataset row i and each rollout was scored against the wrong reference.
+
+    Reading references from **kwargs fixes the alignment: GRPOTrainer forwards
+    the dataset columns already expanded to match the generated batch.
+    """
+    references = kwargs.get("completion") or kwargs.get("answer")
+    if references is None:
+        raise ValueError(
+            "reward_answer_correct needs reference answers. Ensure the dataset "
+            "has a 'completion' (or 'answer') column."
+        )
+
+    rewards = []
+    for prediction, reference in zip(completions, references):
+        predicted = extract_final_answer(str(prediction))
+        expected = extract_final_answer(str(reference))
+        rewards.append(
+            1.0 if (predicted is not None and expected is not None
+                    and abs(predicted - expected) < 1e-6)
+            else 0.0
+        )
+    return rewards
 
 
 class MultiAgentLLM:
-    """Multi-agent LLM trainer using GRPO."""
+    """
+    Multi-agent LLM trainer using GRPO.
+
+    Note on the model class: this previously used
+    AutoModelForCausalLMWithValueHead, whose value head is a CRITIC — a PPO
+    construct. GRPO replaces the learned baseline with the group mean reward
+    and needs no critic; that removal is where its memory saving comes from.
+    """
 
     def __init__(self, model_name: str, num_agents: int = 4):
         self.model_name = model_name
         self.num_agents = num_agents
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
 
         # Define stopping criteria
         stop_sequence = "</response>"
@@ -63,15 +118,24 @@ class MultiAgentLLM:
         return outputs
 
     def aggregate_hidden_states(self, agent_outputs):
-        """Average the hidden states across agent completions."""
-        transformer = self.model.base_model
+        """
+        Average final-layer hidden states across agent completions.
+
+        EXPLORATORY analysis utility, not part of training: the GRPO objective
+        consumes only per-token log-probabilities and scalar rewards, so no
+        hidden state enters it. For genuine ensembling prefer self-consistency
+        (sample G chains, majority-vote the final answer).
+        """
         hidden_states = []
 
         with torch.no_grad():
             for output_ids in agent_outputs:
                 output_ids = output_ids.unsqueeze(0)
-                out = transformer(input_ids=output_ids)
-                last_hidden = out.last_hidden_state
+                # output_hidden_states works for any causal LM; the previous
+                # `self.model.base_model` access was specific to the value-head
+                # wrapper this class no longer uses.
+                out = self.model(input_ids=output_ids, output_hidden_states=True)
+                last_hidden = out.hidden_states[-1]
                 hidden_states.append(last_hidden)
 
         max_len = max(h.shape[1] for h in hidden_states)
@@ -110,12 +174,14 @@ class MultiAgentLLM:
             "completion": completions
         })
 
-        reward_fn = make_similarity_reward_fn(completions)
-
+        # Pass the already-loaded model, not the model NAME. Passing the name
+        # made GRPOTrainer load a second copy of the weights, leaving the model
+        # built in __init__ untrained and merely resident in memory.
         trainer = GRPOTrainer(
-            model=self.model_name,
+            model=self.model,
+            processing_class=self.tokenizer,
             train_dataset=formatted_dataset,
-            reward_funcs=reward_fn,
+            reward_funcs=reward_answer_correct,
         )
 
         trainer.train()

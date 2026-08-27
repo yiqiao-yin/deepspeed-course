@@ -122,16 +122,30 @@ for _ in range(self.num_frames):
 
 This is the standard trick for adapting an image VLM to video: a video *is* a sequence of images, and the LLM's positional encoding provides the ordering. It works because the model already knows how to attend across image tokens; it just now has $N$ images instead of one.
 
-:::danger Frame extraction is a placeholder — the current code has no temporal information
-`download_and_process_video_frames()` does **not** decode video. Its own docstring says so:
+:::tip Fixed — frame extraction is now real
+The extractor **used to** be a placeholder. It has been replaced with real
+OpenCV decoding, wired into `preprocess_function` (it was previously never
+called at all), and `tests/test_video_frames.py` verifies that sampled frames
+are genuinely distinct and correctly colour-converted:
+
+```bash
+uv run tests/test_video_frames.py
+```
+
+The description below is kept because "the pipeline runs and the loss decreases,
+but the data carries no signal" is a failure mode worth recognizing.
+:::
+
+:::note What the placeholder used to do
+`download_and_process_video_frames()` did **not** decode video. Its own docstring said so:
 
 > *"This is a simplified implementation. In practice, you'd use opencv-python or similar to extract actual video frames."*
 
-It returns `[image] * num_frames` — **the same image repeated `num_frames` times** — and for non-image URLs it falls back to a fixed COCO photograph, or a solid grey 224×224 placeholder on error.
+It returned `[image] * num_frames` — **the same image repeated `num_frames` times** — falling back to a fixed COCO photograph for non-image URLs, or a solid grey 224×224 square on error. Worse, it was never invoked: `preprocess_function` tokenized text only, so no pixels reached the model at all.
 
-The consequence is that every "video" is $N$ identical frames. The pipeline runs end to end and the loss decreases, but there is **zero temporal signal**, and the model cannot learn anything about motion or change. Treat this as an infrastructure test, exactly like the [synthetic OCR dataset](/docs/tutorials/huggingface/ocr-vision-language).
+The consequence was that every "video" was $N$ identical frames. The pipeline ran end to end and the loss decreased, but there was **zero temporal signal**.
 
-Real extraction is short — replace the function with:
+The replacement, now shipped:
 
 ```python
 import cv2
@@ -159,7 +173,11 @@ def extract_frames(video_path: str, num_frames: int) -> list[Image.Image]:
     return frames
 ```
 
-Note `cv2` returns BGR; forgetting the conversion feeds colour-swapped images to a model pretrained on RGB — a silent accuracy loss rather than an error.
+Note `cv2` returns BGR; forgetting the conversion feeds colour-swapped images to a model pretrained on RGB — a silent accuracy loss rather than an error. The shipped version also **raises** on undecodable input rather than substituting placeholders: a crash is a bug report, a silently degenerate dataset is a wasted GPU-week.
+
+Batching required a companion change. `DataCollatorForSeq2Seq` handles only token
+fields and silently drops `pixel_values`, so a `LlavaVideoCollator` now pads the
+token fields and stacks the visual features.
 :::
 
 The dataset in the example is **four samples**, which is consistent with its purpose as a smoke test.
@@ -216,7 +234,7 @@ At 600M parameters, model states are $16\Psi \approx 9.6$ GB — comfortable on 
 | Generate tags from existing metadata | **Seq2Seq** |
 | Both visual grounding and multilingual output | LLaVA with a multilingual base |
 
-The honest framing: **seq2seq is not a cheap approximation to video understanding — it is a different task.** If a text-only model performs well on your benchmark, that is strong evidence your benchmark is solvable from metadata alone, which is worth knowing before you spend on a VLM. Running the seq2seq model first as a **baseline** is genuinely good practice, in the same spirit as the [persistence baseline](/docs/tutorials/intermediate/stock-prediction#the-other-thing-missing-a-baseline) for time series.
+The honest framing: **seq2seq is not a cheap approximation to video understanding — it is a different task.** If a text-only model performs well on your benchmark, that is strong evidence your benchmark is solvable from metadata alone, which is worth knowing before you spend on a VLM. Running the seq2seq model first as a **baseline** is genuinely good practice, in the same spirit as the [persistence baseline](/docs/tutorials/intermediate/stock-prediction#the-baseline-now-reported) for time series.
 
 ## 7. DeepSpeed Notes
 
@@ -228,7 +246,7 @@ The honest framing: **seq2seq is not a cheap approximation to video understandin
 
 ## 8. Troubleshooting
 
-**Model learns nothing about the video.** Expected with the placeholder frame extractor — §4.
+**Model learns nothing about the video.** This was the placeholder-extractor symptom, now fixed (§4). If it recurs, run `uv run tests/test_video_frames.py`.
 
 **OOM with more frames.** Quadratic, not linear (§3). Halving frames roughly quarters attention memory. Reduce per-frame resolution too.
 

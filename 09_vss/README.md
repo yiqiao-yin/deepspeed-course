@@ -4,6 +4,48 @@ Fine-tune [LongCat-Flash-Omni](https://huggingface.co/meituan-longcat/LongCat-Fl
 
 ---
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl peft torchaudio opencv-python-headless
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | LongCat-Flash-Omni (~1.1 TB) |
+
+Gated on HOST RAM, not GPUs: needs ~3 TB system RAM and 2 TB disk. Run `./check_storage.sh` first.
+
+```bash
+cd 09_vss
+deepspeed --num_gpus=2 train_ds_2xB200.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## 📋 Overview
 
 **Model:** LongCat-Flash-Omni (560B parameters, 27B activated)

@@ -187,14 +187,14 @@ This is the configuration in the repository — `02_basic_convnet_cifar10_exampl
 
 ```json
 {
-  "train_batch_size": 32,
   "train_micro_batch_size_per_gpu": 32,
   "gradient_accumulation_steps": 1,
   "optimizer": {
     "type": "SGD",
     "params": {
       "lr": 0.01,
-      "momentum": 0.9
+      "momentum": 0.9,
+      "weight_decay": 5e-4
     }
   },
   "gradient_clipping": 1.0,
@@ -204,10 +204,18 @@ This is the configuration in the repository — `02_basic_convnet_cifar10_exampl
 }
 ```
 
-:::warning This config is written for one GPU; the SLURM script requests two
-DeepSpeed asserts $\texttt{train\_batch\_size} = \texttt{micro\_batch} \times \texttt{grad\_accum} \times N_{\text{gpus}}$. As written that is $32 = 32\times1\times1$. Running `run_deepspeed.sh` with `--num_gpus=2` requires $32 = 32 \times 1 \times 2$, which is false and aborts at startup.
+:::tip Note what is *absent*: `train_batch_size`
+The config previously hard-coded `train_batch_size: 32`, which only satisfies
+the invariant on **one** GPU — while `run_deepspeed.sh` requests two, so the run
+aborted at startup with `AssertionError: Check batch related parameters`.
 
-Either raise `train_batch_size` to 64, or drop `train_micro_batch_size_per_gpu` to 16, or set one field to `"auto"`. See [the batch-size invariant](/docs/tutorials/basic/neural-network#83-configuration).
+Omitting the field is the portable form: DeepSpeed derives it as
+$\texttt{micro\_batch} \times \texttt{grad\_accum} \times N_{\text{gpus}}$, so the same config
+works at any `--num_gpus` (32 on one GPU, 64 on two). `tests/test_ds_configs.py`
+now checks this invariant against each launcher's actual `--num_gpus` across
+every config in the repository.
+
+Weight decay of $5\times10^{-4}$ has also been added — see §7.
 :::
 
 ### Architecture and dimensions

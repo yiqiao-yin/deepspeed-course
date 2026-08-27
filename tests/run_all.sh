@@ -1,0 +1,43 @@
+#!/bin/bash
+# Run every regression test. Requires only `uv` — each test declares its own
+# dependencies inline (PEP 723), so uv provisions them automatically.
+#
+#     ./tests/run_all.sh
+#
+# No GPU required: these tests cover the pure logic of the fixes, not the
+# distributed training itself.
+
+set -u
+
+cd "$(dirname "$0")/.." || exit 1
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "uv is not installed. Install it with:"
+    echo "    curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+FAILED=0
+TESTS=(
+    tests/test_ds_configs.py
+    tests/test_stock_leakage.py
+    tests/test_grpo_rewards.py
+    tests/test_video_frames.py
+)
+
+for test in "${TESTS[@]}"; do
+    if ! uv run "$test"; then
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo
+echo "========================================================================"
+if [ "$FAILED" -eq 0 ]; then
+    echo "ALL SUITES PASSED"
+else
+    echo "$FAILED SUITE(S) FAILED"
+fi
+echo "========================================================================"
+
+exit "$FAILED"

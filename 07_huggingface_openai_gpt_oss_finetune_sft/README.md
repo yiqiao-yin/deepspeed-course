@@ -2,6 +2,48 @@
 
 Fine-tune OpenAI GPT-OSS-20B on multilingual reasoning using LoRA, TRL SFTTrainer, and DeepSpeed for distributed training.
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl peft
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 4 |
+| Downloads | gpt-oss-20b (~40 GB in BF16) |
+
+Mixture-of-Experts: ALL experts are resident, so size hardware from total parameters, not active ones. Use `lora/train_ds_mistral7b.py` to validate the pipeline cheaply first.
+
+```bash
+cd 07_huggingface_openai_gpt_oss_finetune_sft
+deepspeed --num_gpus=4 lora/train_ds.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../tests/run_all.sh
+```
+
+See [`tests/README.md`](../tests/README.md) for what each suite covers.
+
 ## Features
 
 - 🚀 **Parameter-Efficient**: Uses LoRA (Low-Rank Adaptation) for memory-efficient fine-tuning

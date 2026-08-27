@@ -46,6 +46,49 @@ This repository provides a collection of basic frameworks and examples demonstra
 
 ---
 
+## Environment & Testing 🧪
+
+### Package management: `uv`
+
+Every example uses [`uv`](https://docs.astral.sh/uv/) — not bare `pip` or conda.
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+```
+
+Each example folder's README has an **Environment & Local Testing** section with
+its exact dependencies, GPU requirement, and download size.
+
+All examples use DeepSpeed except `07_huggingface_trl_multi_agency`, which drives
+TRL's `GRPOTrainer` directly and needs only `uv`.
+
+### What runs locally, and what does not
+
+| Examples | Scale | Can you run it on one machine? |
+|---|---|---|
+| `01`–`04` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
+| `05`–`09` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
+
+For the second group a full run is not a practical way to check a change. The
+repository therefore ships **logic tests** that exercise the code paths without a
+GPU or a model download:
+
+```bash
+./tests/run_all.sh                  # 125 checks, no GPU required
+uv run tests/test_ds_configs.py     # a single suite
+```
+
+| Suite | Guards against |
+|---|---|
+| `test_ds_configs.py` | Config errors across **all 14** `ds_config.json` files — batch-invariant mismatches, fp16/bf16 conflicts, stage-3 checkpoints that cannot reload |
+| `test_stock_leakage.py` | Look-ahead bias from fitting a scaler before the train/test split |
+| `test_grpo_rewards.py` | A PPO value head under GRPO; surface-form and misaligned rewards |
+| `test_video_frames.py` | Frame "extraction" that returns one image repeated |
+
+See [`tests/README.md`](tests/README.md).
+
 ## Folder Structure 📁
 
 ```

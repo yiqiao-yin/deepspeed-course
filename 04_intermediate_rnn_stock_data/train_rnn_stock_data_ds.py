@@ -131,9 +131,44 @@ def download_and_prepare_stock_data(ticker, start_date, end_date, ma_periods, se
     analysis_df = analysis_df.dropna()
     print(f"   Data shape after dropping NaNs: {analysis_df.shape}")
 
-    # Normalize the data
+    # ------------------------------------------------------------------
+    # Split FIRST, then scale. This ordering matters and is not cosmetic.
+    #
+    # MinMaxScaler.fit computes (x - min) / (max - min) over whatever it is
+    # given. Fitting it on the full series before splitting would derive those
+    # constants partly from the test period, so every training example would be
+    # normalized using information from the future. That is look-ahead bias:
+    # reported test error comes out optimistically biased, and the distortion
+    # is worst exactly where it matters, around volatility spikes and regime
+    # changes.
+    #
+    # The scaler is therefore fit on the TRAINING SLICE ONLY, and merely
+    # applied (transform, never fit_transform) to validation and test.
+    # ------------------------------------------------------------------
+    avg_delta = analysis_df['avg_delta'].values.reshape(-1, 1)
+
+    n_obs = len(avg_delta)
+    train_end = int(n_obs * 0.7)
+    val_end = int(n_obs * 0.85)
+
     scaler = MinMaxScaler(feature_range=(0, 1))
-    avg_delta_scaled = scaler.fit_transform(analysis_df['avg_delta'].values.reshape(-1, 1))
+    train_scaled = scaler.fit_transform(avg_delta[:train_end])   # fit here ONLY
+    val_scaled = scaler.transform(avg_delta[train_end:val_end])  # transform only
+    test_scaled = scaler.transform(avg_delta[val_end:])          # transform only
+
+    # Values outside [0, 1] in validation/test are EXPECTED and correct: they
+    # mean the model is seeing conditions more extreme than anything in the
+    # training period, which is exactly what an honest split should surface.
+    print(f"\n🔍 Scaler fit on training slice only (first {train_end} observations)")
+    print(f"   Train range after scaling: "
+          f"[{train_scaled.min():.3f}, {train_scaled.max():.3f}]")
+    print(f"   Val range after scaling:   "
+          f"[{val_scaled.min():.3f}, {val_scaled.max():.3f}]")
+    print(f"   Test range after scaling:  "
+          f"[{test_scaled.min():.3f}, {test_scaled.max():.3f}]")
+    if test_scaled.min() < 0 or test_scaled.max() > 1:
+        print("   Note: test values fall outside [0, 1]. This is expected — the "
+              "test period exceeds the training range.")
 
     # Create sequences
     def create_sequences(data, seq_length):
@@ -143,20 +178,15 @@ def download_and_prepare_stock_data(ticker, start_date, end_date, ma_periods, se
             y.append(data[i + seq_length])
         return np.array(X), np.array(y)
 
-    X, y = create_sequences(avg_delta_scaled, sequence_length)
+    # Build sequences WITHIN each split so no window straddles a boundary.
+    # Building them before splitting would leak the tail of the training period
+    # into the first `sequence_length` validation windows (and likewise for
+    # test). The cost is losing `sequence_length` samples per split.
+    X_train, y_train = create_sequences(train_scaled, sequence_length)
+    X_val, y_val = create_sequences(val_scaled, sequence_length)
+    X_test, y_test = create_sequences(test_scaled, sequence_length)
 
-    # Split: 70% train, 15% val, 15% test
-    train_size = int(len(X) * 0.7)
-    val_size = int(len(X) * 0.15)
-
-    X_train = X[:train_size]
-    y_train = y[:train_size]
-    X_val = X[train_size:train_size + val_size]
-    y_val = y[train_size:train_size + val_size]
-    X_test = X[train_size + val_size:]
-    y_test = y[train_size + val_size:]
-
-    print(f"\n📦 Dataset splits:")
+    print(f"\n📦 Dataset splits (chronological, no shuffling):")
     print(f"   Training: {X_train.shape[0]} samples")
     print(f"   Validation: {X_val.shape[0]} samples")
     print(f"   Testing: {X_test.shape[0]} samples")
@@ -543,6 +573,32 @@ def main():
     # Calculate RMSE
     test_rmse = np.sqrt(mean_squared_error(test_actual_inv, test_predict_inv))
 
+    # ------------------------------------------------------------------
+    # Persistence baseline: predict tomorrow = today.
+    #
+    # An RMSE reported on its own carries no information. The target here is
+    # avg_delta, which is smooth by construction (MA_200 moves by at most
+    # (P_t - P_{t-200}) / 200 per day), so consecutive values are highly
+    # correlated whether or not the model learned anything. A naive
+    # "tomorrow equals today" predictor is therefore a strong baseline and a
+    # necessary reference point.
+    #
+    # Theil's U = RMSE_model / RMSE_naive.
+    #   U < 1  -> the model beats persistence and is adding value
+    #   U >= 1 -> a one-line baseline does as well as the trained network
+    # ------------------------------------------------------------------
+    naive_pred = test_actual_inv[:-1]   # today's value as tomorrow's forecast
+    naive_true = test_actual_inv[1:]
+    naive_rmse = np.sqrt(mean_squared_error(naive_true, naive_pred))
+    theil_u = test_rmse / naive_rmse if naive_rmse > 0 else float('inf')
+
+    # Directional accuracy: for a trading signal the SIGN matters more than the
+    # magnitude, and a model can have excellent RMSE while getting turning
+    # points backwards. Compare against 0.5 (a coin flip).
+    actual_delta = np.diff(test_actual_inv.ravel())
+    predicted_delta = (test_predict_inv.ravel()[1:] - test_actual_inv.ravel()[:-1])
+    directional_acc = float(np.mean(np.sign(actual_delta) == np.sign(predicted_delta)))
+
     print(f"\n📊 Final Results:")
     print(f"   - Initial Train Loss: {train_losses[0]:.6f}")
     print(f"   - Final Train Loss: {train_losses[-1]:.6f}")
@@ -550,6 +606,17 @@ def main():
     print(f"   - Test Loss: {avg_test_loss:.6f}")
     print(f"   - Test RMSE: {test_rmse:.4f}")
     print(f"   - Epochs completed: {len(train_losses)}")
+
+    print(f"\n📏 Versus baseline (this is the number that matters):")
+    print(f"   - Model RMSE:            {test_rmse:.4f}")
+    print(f"   - Naive RMSE (persist):  {naive_rmse:.4f}")
+    print(f"   - Theil U:               {theil_u:.4f}  "
+          f"({'model beats persistence' if theil_u < 1 else 'NO BETTER than persistence'})")
+    print(f"   - Directional accuracy:  {directional_acc:.4f}  "
+          f"({'better' if directional_acc > 0.5 else 'no better'} than a coin flip)")
+    if theil_u >= 1.0:
+        print("   ⚠️  Theil U >= 1 means the trained model does not beat a "
+              "one-line baseline. Report this honestly rather than the raw RMSE.")
 
     # Plot training history
     plt.figure(figsize=(12, 6))
@@ -570,12 +637,18 @@ def main():
             "final/best_val_loss": best_val_loss,
             "final/test_loss": avg_test_loss,
             "final/test_rmse": test_rmse,
+            "final/naive_rmse": naive_rmse,
+            "final/theil_u": theil_u,
+            "final/directional_accuracy": directional_acc,
             "final/epochs_completed": len(train_losses),
             # "training_history": wandb.Image('training_history.png')
         })
 
         wandb.run.summary["best_val_loss"] = best_val_loss
         wandb.run.summary["test_rmse"] = test_rmse
+        wandb.run.summary["naive_rmse"] = naive_rmse
+        wandb.run.summary["theil_u"] = theil_u
+        wandb.run.summary["directional_accuracy"] = directional_acc
         wandb.run.summary["test_loss"] = avg_test_loss
 
         print(f"\n📊 W&B Summary logged")

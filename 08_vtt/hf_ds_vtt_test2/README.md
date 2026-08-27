@@ -7,6 +7,48 @@ This directory contains **two separate video training frameworks** optimized for
 
 ---
 
+## Environment & Local Testing
+
+### Setup with `uv`
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl huggingface_hub pillow requests opencv-python-headless
+```
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | LLaVA (~14 GB) or NLLB-600M (~2.5 GB) |
+
+`opencv-python-headless` is REQUIRED for video frame extraction. The seq2seq trainer is text-only and far cheaper than the LLaVA path.
+
+```bash
+cd 08_vtt/hf_ds_vtt_test2
+deepspeed --num_gpus=2 llava_video_trainer/video_training_script.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../../tests/run_all.sh
+```
+
+See [`tests/README.md`](../../tests/README.md) for what each suite covers.
+
 ## 📁 Directory Structure
 
 ```

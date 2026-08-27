@@ -184,23 +184,38 @@ def main():
             y.append(data[i + seq_length])
         return np.array(X), np.array(y)
 
-    # Normalize the data
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    avg_delta_scaled = scaler.fit_transform(analysis_df['avg_delta'].values.reshape(-1, 1))
-
     # Parameters for the sequence
     sequence_length = config.sequence_length
 
-    # Create sequences
-    X, y = create_sequences(avg_delta_scaled, sequence_length)
+    # ------------------------------------------------------------------
+    # Split FIRST, then scale.
+    #
+    # Fitting MinMaxScaler on the full series before splitting would derive its
+    # min/max partly from the test period, normalizing every training example
+    # with information from the future. That is look-ahead bias and it makes
+    # reported test error optimistically biased. Fit on train, transform the
+    # rest.
+    # ------------------------------------------------------------------
+    avg_delta = analysis_df['avg_delta'].values.reshape(-1, 1)
 
-    # Split into training and testing sets (80% train, 20% test)
-    train_size = int(len(X) * 0.8)
-    X_train, X_test = X[:train_size], X[train_size:]
-    y_train, y_test = y[:train_size], y[train_size:]
+    n_obs = len(avg_delta)
+    train_end = int(n_obs * 0.8)          # index into the RAW series, not sequences
 
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    train_scaled = scaler.fit_transform(avg_delta[:train_end])   # fit here ONLY
+    test_scaled = scaler.transform(avg_delta[train_end:])        # transform only
+
+    # Build sequences within each split so no window straddles the boundary.
+    X_train, y_train = create_sequences(train_scaled, sequence_length)
+    X_test, y_test = create_sequences(test_scaled, sequence_length)
+
+    print(f"Scaler fit on training slice only (first {train_end} observations)")
     print(f"Training set shape: {X_train.shape}")
     print(f"Testing set shape: {X_test.shape}")
+    if test_scaled.min() < 0 or test_scaled.max() > 1:
+        print(f"Note: scaled test values span [{test_scaled.min():.3f}, "
+              f"{test_scaled.max():.3f}] — outside [0, 1] is expected and correct, "
+              f"it means the test period exceeds the training range.")
 
     # Convert to PyTorch tensors
     X_train_tensor = torch.FloatTensor(X_train).to(device)
@@ -324,8 +339,10 @@ def main():
 
     # Plot predictions vs actual
     # Create a dataframe with actual and predicted values
-    train_data_idx = analysis_df.index[sequence_length:train_size+sequence_length]
-    test_data_idx = analysis_df.index[train_size+sequence_length:len(avg_delta_scaled)]
+    # Date ranges matching the per-split sequence construction above. Each split
+    # loses its first `sequence_length` observations to the initial window.
+    train_data_idx = analysis_df.index[sequence_length:train_end]
+    test_data_idx = analysis_df.index[train_end + sequence_length:n_obs]
 
     # Plot predictions
     plt.figure(figsize=(15, 8))
