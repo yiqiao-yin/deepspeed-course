@@ -6,3 +6,5 @@ docusaurus-docs/package-lock.json
 docusaurus-docs/build/
 docusaurus-docs/.docusaurus/
 *.log
+runpod/results/
+!runpod/sample_output/*.log

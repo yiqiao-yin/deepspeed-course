@@ -28,6 +28,8 @@ Stdlib only — no dependencies. `uv run` handles the interpreter.
 | `create --gpu <id>` | Creates a bare pod |
 | `run <example>` | Picks a GPU, creates a pod that **clones this repo and starts training** |
 | `pods` | Lists pods, per-hour cost, and SSH details |
+| `fetch <topic> --wait` | Downloads results the pod pushed — **no SSH needed** |
+| `smoke [examples...]` | Dry-runs several examples, one pod each, all collecting |
 | `terminate <id>...` | Terminates pods and stops billing |
 
 ## What `run` actually does
@@ -48,19 +50,97 @@ deepspeed --num_gpus=<N> <script>.py 2>&1 | tee /workspace/train.log
 So the pod is disposable: nothing local is pushed to it, and re-running gets a
 clean clone of `main`. Use `--branch` to test another branch.
 
-## Known limitations
+## Getting results back without SSH
 
-**No log streaming.** RunPod's REST API has no log endpoint — the `Pod` schema
-exposes `portMappings` and `ports` but nothing log-shaped. To watch a run:
+RunPod exposes **no log endpoint** — verified against both the REST OpenAPI spec
+(the `Pod` schema has `portMappings` and `ports`, nothing log-shaped) and GraphQL
+introspection (no log/output/console field on any type). The pod cannot be read
+from, so it has to **push**.
 
 ```bash
-uv run runpod/runpod_ctl.py pods       # prints the ssh line once an IP exists
-ssh root@<ip> -p <port>
-tail -f /workspace/train.log
+uv run runpod/runpod_ctl.py run 01_basic_neuralnet --dry-run --collect --yes
+# ... prints:  Results topic: dsc-c1b3231b898f4856af25
+
+uv run runpod/runpod_ctl.py fetch dsc-c1b3231b898f4856af25 --wait
 ```
 
-That needs an SSH key registered on your RunPod account. The web console also
-shows container logs with no key required.
+```
+  [1/6] pod up: 36303e2eb4e5
+  [2/6] repo cloned
+  [3/6] uv installed: uv 0.12.7
+  [4/6] deepspeed installed
+  [5/6] env captured
+  [6/6] DONE rc=0 — log attached
+
+  saved runpod/results/dsc-.../01_basic_neuralnet.log  (21830 bytes)
+```
+
+**How it avoids the chicken-and-egg.** The topic is generated *locally* before
+the pod exists, so we know where to look before the pod has said anything. The
+pod publishes progress lines and attaches its log; `fetch` polls and writes
+everything to `runpod/results/<topic>/`. No SSH key, no port forwarding, no
+console. Structurally the same as writing run artefacts to S3 — without needing
+credentials on the pod.
+
+Transport is [ntfy.sh](https://ntfy.sh), a no-auth pub/sub. Override with
+`DSC_NTFY_SERVER` to point at your own instance.
+
+> ### ⚠️ Topics are public — never push secrets
+>
+> Anyone who knows the topic can read it. Topics are random 20-hex-character
+> strings, so they are unguessable, but they are not *private*. The bootstrap
+> pushes only `nvidia-smi`, version banners, `ds_report` and training stdout.
+> **Do not extend it to echo tokens or dataset contents.** If you need
+> confidentiality, run your own ntfy server via `DSC_NTFY_SERVER`.
+
+### `--dry-run`
+
+Caps the training step at 300 seconds. The pod still clones, installs and
+launches the real script, so a genuine failure still surfaces — you just do not
+pay for a full run. `01_basic_neuralnet` finishes well inside the cap.
+
+**Verified end to end** on an RTX 3090: the run converged to
+`Learned Weight: 2.000000 / Learned Bias: 1.000000` against the true `y = 2x + 1`.
+See [`sample_output/`](sample_output/).
+
+## Validating several topics at once
+
+The examples that cannot run locally are exactly the ones most worth checking on
+real hardware. `smoke` starts one pod per example, each with `--dry-run` and
+`--collect`:
+
+```bash
+uv run runpod/runpod_ctl.py smoke 01_basic_neuralnet 03_basic_rnn 06_huggingface_grpo
+#   Will start 3 pod(s), one per example:
+#     01_basic_neuralnet    1x  6G  ~$0.13/hr
+#     03_basic_rnn          1x  8G  ~$0.13/hr
+#     06_huggingface_grpo   1x 24G  ~$0.22/hr
+#   Combined burn rate: ~$0.48/hour
+#   Refusing without --yes.
+```
+
+Add `--yes` to proceed. It prints a `fetch` line per example, then the terminate
+reminder.
+
+> ### Pods are not auto-terminated
+> `--dry-run` caps the *training step*, not the pod's lifetime. The container
+> keeps running — and billing — after the script exits. Always finish with:
+> ```bash
+> uv run runpod/runpod_ctl.py pods
+> uv run runpod/runpod_ctl.py terminate <id> [<id> ...]
+> ```
+
+**Suggested order.** Start with the cheap tier to confirm the mechanism, then
+spend on the expensive ones:
+
+| Tier | Examples | ~$/hr each |
+|---|---|---|
+| Cheap — verify the harness | `01`, `02`, `02_cifar10`, `03`, `04*` | 0.12–0.22 |
+| Mid — real models, real downloads | `05_trl`, `05_ocr`, `06_grpo`, `07_multi_agency` | 0.22–0.35 |
+| Expensive — only once the above pass | `07_gpt_oss` (4×80G), `08_vtt` (2×48G) | 3–8 |
+| Not viable on RunPod | `09_vss` — needs ~3 TB host RAM | — |
+
+## Other limitations
 
 **Capacity is not guaranteed.** Popular GPUs are frequently sold out; RunPod
 returns HTTP 500 *"no instances currently available"*. The tool reports that

@@ -1,0 +1,19 @@
+# Captured from a real RunPod RTX 3090 via: run --dry-run --collect, then fetch.
+# Trimmed for brevity. Demonstrates the no-SSH result path end to end.
+
+=== versions ===
+python 3.11.11
+torch 2.8.0.dev20250319+cu128
+cuda True 1
+gpu NVIDIA GeForce RTX 3090
+deepspeed 0.19.6
+=== ds_report ===
+...[ds_report trimmed]...
+   - True Weight (W): 2.0
+   - True Bias (b): 1.0
+   - Learned Weight: 2.000000
+   - Learned Bias: 1.000000
+   - True Weight: 2.000000
+   - True Bias: 1.000000
+🏆 Model Quality Assessment:
+🎉 Enhanced Training Script Finished Successfully!

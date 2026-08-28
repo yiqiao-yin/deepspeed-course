@@ -71,7 +71,7 @@ def main() -> int:
         ("uv pip install", "installs deps with uv, not pip"),
         ("deepspeed --num_gpus=1", "launches with the right GPU count"),
         ("grpo_gsm8k_train.py", "runs the right script"),
-        ("tee /workspace/train.log", "tees a log to the persistent volume"),
+        ("/workspace/run.log", "writes its log to the persistent volume"),
         ("HF_HOME=/workspace", "points the HF cache at the volume"),
     ]:
         r.check(needle in boot, f"bootstrap {label}")
@@ -108,6 +108,31 @@ def main() -> int:
                         for p in folder.rglob("*.sh"))
         r.check(has_slurm, f"{name}: has a SLURM batch script",
                 "A CoreWeave user must be able to sbatch every topic.")
+
+    # ---- 7b. Result collection (the no-SSH path) --------------------------
+    boot_c = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+                           "main", topic="tpc123", dry_run=True)
+    r.check("tpc123" in boot_c, "bootstrap embeds the results topic")
+    r.check("report()" in boot_c, "bootstrap defines a progress reporter")
+    r.check("DONE" in boot_c, "bootstrap emits a DONE marker for fetch --wait")
+    r.check("Filename:" in boot_c, "bootstrap attaches the log file")
+    r.check(f"timeout {ctl.DRY_RUN_SECONDS}" in boot_c,
+            f"--dry-run caps the run at {ctl.DRY_RUN_SECONDS}s")
+
+    boot_plain = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+                               "main")
+    r.check("timeout" not in boot_plain, "without --dry-run there is no timeout cap")
+    r.check("ntfy" not in boot_plain.lower() or "report(){ :; }" in boot_plain,
+            "without --collect nothing is pushed anywhere")
+
+    # The transport is public, so the bootstrap must never echo credentials.
+    for danger in ("$RUNPOD_API_KEY", "$HF_TOKEN", "$WANDB_API_KEY", "env |", "printenv"):
+        r.check(danger not in boot_c,
+                f"bootstrap does not leak {danger} to a public topic")
+
+    r.check(hasattr(ctl, "cmd_fetch"), "fetch command exists")
+    r.check(source_contains("runpod/runpod_ctl.py", "DSC_NTFY_SERVER"),
+            "transport server is overridable for self-hosting")
 
     # ---- 8. Every shell script must PARSE ---------------------------------
     # `export VAR=<PLACEHOLDER>` is a bash syntax error ('<' is a redirection
