@@ -109,6 +109,20 @@ def main() -> int:
         r.check(has_slurm, f"{name}: has a SLURM batch script",
                 "A CoreWeave user must be able to sbatch every topic.")
 
+    # ---- 8. Every shell script must PARSE ---------------------------------
+    # `export VAR=<PLACEHOLDER>` is a bash syntax error ('<' is a redirection
+    # operator), so a script containing it dies on that line and never reaches
+    # training. Seven SLURM scripts shipped that way.
+    import subprocess
+    for sh in sorted(REPO_ROOT.rglob("*.sh")):
+        if ".git" in sh.parts or "node_modules" in sh.parts:
+            continue
+        rel = sh.relative_to(REPO_ROOT)
+        proc = subprocess.run(["bash", "-n", str(sh)],
+                              capture_output=True, text=True)
+        r.check(proc.returncode == 0, f"{rel}: valid bash syntax",
+                proc.stderr.strip()[:200])
+
     return r.finish()
 
 

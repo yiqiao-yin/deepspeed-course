@@ -45,7 +45,8 @@ mkdir -p logs
 # Export Weights & Biases API key for experiment tracking
 # Get your API key from: https://wandb.ai/authorize
 # IMPORTANT: Set this before running the job!
-export WANDB_API_KEY=<ENTER_KEY_HERE>
+# Set this to enable WANDB_API_KEY (optional; scripts skip it when unset):
+# export WANDB_API_KEY="your_key_here"   # was: <ENTER_KEY_HERE>
 
 # Optional: Export HuggingFace token if using gated models
 # export HF_TOKEN=<ENTER_KEY_HERE>

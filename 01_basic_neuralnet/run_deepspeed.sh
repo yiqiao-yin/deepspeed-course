@@ -38,7 +38,8 @@ mkdir -p logs
 
 # Export Weights & Biases API key for experiment tracking
 # Get your API key from: https://wandb.ai/authorize
-export WANDB_API_KEY=<ENTER_KEY_HERE>
+# Set this to enable WANDB_API_KEY (optional; scripts skip it when unset):
+# export WANDB_API_KEY="your_key_here"   # was: <ENTER_KEY_HERE>
 
 # Activate Python virtual environment
 # Update this path to your actual virtual environment location
