@@ -28,7 +28,6 @@ from transformers import (
     AutoProcessor,
     LlavaForConditionalGeneration,
     TrainingArguments,
-    DataCollatorForSeq2Seq
 )
 from trl import SFTTrainer
 from huggingface_hub import HfApi, create_repo, upload_file, delete_repo
@@ -54,8 +53,11 @@ def require_gpu() -> None:
 
     Set ALLOW_CPU=1 to bypass.
     """
-    import os
-    import sys
+    # Imported locally so this helper stays self-contained and can be copied
+    # between example scripts unchanged. Some of those scripts do not import
+    # os/sys at module scope, so these are not always redundant.
+    import os   # noqa: F811
+    import sys  # noqa: F811
 
     try:
         import torch

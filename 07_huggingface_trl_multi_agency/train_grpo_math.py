@@ -8,7 +8,7 @@ from transformers import (
     StoppingCriteriaList,
 )
 from transformers import AutoModelForCausalLM
-from trl import GRPOConfig, GRPOTrainer
+from trl import GRPOTrainer
 import re
 
 

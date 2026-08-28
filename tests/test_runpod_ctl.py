@@ -169,6 +169,23 @@ def main() -> int:
     r.check(source_contains("runpod/runpod_ctl.py", 'os.environ.get("RUNPOD_API_KEY")'),
             "runpod_ctl reads its key from the environment")
 
+    # ---- 7d. Scripts invoked as ./x.sh must be executable ----------------
+    # A doc that says `./submit_job.sh` against a non-executable file fails
+    # with "Permission denied" — a real malfunction, not a style nit.
+    import os as _os
+    docs_text = "\n".join(
+        f.read_text(errors="ignore")
+        for f in list(REPO_ROOT.rglob("*.md"))
+        if "node_modules" not in f.parts and ".git" not in f.parts
+    )
+    for sh in sorted(REPO_ROOT.rglob("*.sh")):
+        if set(sh.parts) & {".git", "node_modules"}:
+            continue
+        if f"./{sh.name}" in docs_text:
+            r.check(_os.access(sh, _os.X_OK),
+                    f"{sh.relative_to(REPO_ROOT)}: executable (docs invoke ./{sh.name})",
+                    "chmod +x it, or the documented command fails.")
+
     # ---- 8. Every shell script must PARSE ---------------------------------
     # `export VAR=<PLACEHOLDER>` is a bash syntax error ('<' is a redirection
     # operator), so a script containing it dies on that line and never reaches
