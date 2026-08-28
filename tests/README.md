@@ -53,7 +53,8 @@ Static validation of all 14 DeepSpeed configs:
 - stage-3 configs save a consolidated (loadable) checkpoint
 - NVMe `nvme_path` does not point at a network filesystem
 
-This suite found a bug that manual review had missed: `09_vss/ds_config.json`
+This suite found a bug that manual review had missed:
+`09_vss/01_longcat_flash_omni/ds_config.json`
 combined a hard-enabled `bf16` with `fp16: "auto"`.
 
 ### Design note

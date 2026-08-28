@@ -54,10 +54,10 @@ config validity, data handling, reward correctness — with no GPU and no model
 download required:
 
 ```bash
-../tests/run_all.sh
+../../tests/run_all.sh
 ```
 
-See [`tests/README.md`](../tests/README.md) for what each suite covers.
+See [`tests/README.md`](../../tests/README.md) for what each suite covers.
 
 ## 📋 Overview
 

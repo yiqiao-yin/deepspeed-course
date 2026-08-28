@@ -10,7 +10,7 @@
 #
 # No GPU? The algorithm this folder teaches runs on CPU:
 #     uv run 09_vss/02_thinker_talker/tmrope.py
-#     uv run tests/test_tmrope.py         # 59 checks, no GPU, no download
+#     uv run tests/test_tmrope.py         # 58 checks, no GPU, no download
 
 #SBATCH --gres=gpu:2
 # 2 GPUs. Qwen2.5-Omni-3B + LoRA fits ONE 24GB card; two is so the

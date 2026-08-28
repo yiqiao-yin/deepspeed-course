@@ -544,7 +544,8 @@ flowchart TB
 ```
 
 ```json
-// 09_vss/ds_config.json — a 560B-parameter multimodal model. Stage 3 with full
+// 09_vss/01_longcat_flash_omni/ds_config.json — a 560B-parameter multimodal
+// model. Stage 3 with full
 // CPU offload is not an optimization here, it is the only way the run exists.
 {
   "zero_optimization": {

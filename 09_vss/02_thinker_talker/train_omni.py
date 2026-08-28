@@ -130,7 +130,7 @@ def require_gpu() -> None:
     print("\n  The ALGORITHM this folder teaches DOES run on CPU, though —")
     print("  TMRoPE is integer arithmetic, and it is the part worth learning:")
     print("      uv run 09_vss/02_thinker_talker/tmrope.py")
-    print("      uv run tests/test_tmrope.py         # 59 checks, no GPU")
+    print("      uv run tests/test_tmrope.py         # 58 checks, no GPU")
     print("\n  Also CPU-runnable in this topic:")
     print("      uv run 09_vss/03_duplex_streaming/duplex.py")
     print("      uv run 09_vss/04_omni_eval/omni_eval.py")
