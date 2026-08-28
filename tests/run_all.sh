@@ -23,6 +23,7 @@ TESTS=(
     tests/test_stock_leakage.py
     tests/test_grpo_rewards.py
     tests/test_video_frames.py
+    tests/test_runpod_ctl.py
 )
 
 for test in "${TESTS[@]}"; do

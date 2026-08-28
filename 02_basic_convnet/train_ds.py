@@ -32,6 +32,63 @@ except ImportError:
     wandb = None
 
 
+def require_gpu() -> None:
+    """
+    Stop with a clear message when no CUDA device is available.
+
+    Without this, DeepSpeed gets as far as building its fused Adam kernel and
+    dies with `OSError: CUDA_HOME environment variable is not set` raised from
+    deep inside torch's C++ extension loader -- which tells a newcomer nothing
+    about what went wrong or what to do next.
+
+    Set ALLOW_CPU=1 to bypass.
+    """
+    import os
+    import sys
+
+    try:
+        import torch
+    except ImportError:
+        print("\n[preflight] PyTorch is not installed. Install it with:")
+        print("            uv pip install torch --index-url "
+              "https://download.pytorch.org/whl/cu121\n")
+        sys.exit(1)
+
+    if torch.cuda.is_available():
+        return
+
+    if os.environ.get("ALLOW_CPU") == "1":
+        print("\n[preflight] No GPU detected; ALLOW_CPU=1 set, continuing.")
+        print("            ds_config.json also needs \"torch_adam\": true and "
+              "fp16 disabled,")
+        print("            or DeepSpeed will still fail building its CUDA ops.\n")
+        return
+
+    bar = "=" * 72
+    print("\n" + bar)
+    print("  NO GPU DETECTED - stopping before DeepSpeed fails obscurely")
+    print(bar)
+    print("\n  torch.cuda.is_available() returned False.")
+    print("\n  DeepSpeed compiles fused CUDA kernels at startup. Without a CUDA")
+    print("  toolkit it aborts with a confusing CUDA_HOME error from inside")
+    print("  torch's extension loader, so this check stops first.")
+    print("\n  This example is small enough to run on CPU. Two config changes:")
+    print('      "optimizer": {"type": "Adam", "params": {"torch_adam": true}}')
+    print('      "fp16": {"enabled": false}')
+    print("  then:  ALLOW_CPU=1 deepspeed --num_gpus=1 <script>.py")
+    print("\n  Check your setup:")
+    print("      nvidia-smi")
+    print("      ds_report")
+    print("\n  No GPU at all? These need none:")
+    print("      ./tests/run_all.sh    # 130 logic checks, no GPU, no downloads")
+    print("      https://yiqiao-yin.github.io/deepspeed-course/")
+    print("\n  Rent one (needs RUNPOD_API_KEY):")
+    print("      uv run runpod/runpod_ctl.py gpus --min-vram 24")
+    print("      uv run runpod/runpod_ctl.py run 01_basic_neuralnet")
+    print("\n" + bar + "\n")
+    sys.exit(1)
+
+
 class CNNModelEnhanced(nn.Module):
     """
     Enhanced CNN for MNIST-like classification with better initialization.
@@ -139,6 +196,7 @@ def main() -> None:
     """
     Enhanced CNN training with multiple convergence strategies.
     """
+    require_gpu()
     print("=" * 80)
     print("🚀 Starting ENHANCED DeepSpeed CNN Training")
     print("=" * 80)

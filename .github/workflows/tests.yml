@@ -43,6 +43,9 @@ jobs:
       - name: Video frame extraction
         run: uv run tests/test_video_frames.py
 
+      - name: RunPod tooling (offline logic)
+        run: uv run tests/test_runpod_ctl.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
