@@ -1,0 +1,48 @@
+{
+  "_comment": "ZeRO-3 for Qwen2.5-VL. The 'auto' values are a HuggingFace Trainer convention, not a DeepSpeed feature: Trainer substitutes its own TrainingArguments before DeepSpeed sees this file. Launch without Trainer and 'auto' is a parse error.",
+  "bf16": {
+    "enabled": "auto"
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "warmup_min_lr": "auto",
+      "warmup_max_lr": "auto",
+      "warmup_num_steps": "auto",
+      "total_num_steps": "auto"
+    }
+  },
+  "zero_optimization": {
+    "stage": 3,
+    "_stage_comment": "Stage 3 shards the PARAMETERS too, not just optimizer states and gradients. That costs 1.5x the communication of stage 2 (3-psi vs 2-psi) and is still the right call here, because a video batch needs every spare byte for activations rather than for a resident copy of the weights.",
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "sub_group_size": 1000000000.0,
+    "reduce_bucket_size": "auto",
+    "stage3_prefetch_bucket_size": "auto",
+    "stage3_param_persistence_threshold": "auto",
+    "stage3_max_live_parameters": 1000000000.0,
+    "stage3_max_reuse_distance": 1000000000.0,
+    "stage3_gather_16bit_weights_on_model_save": true,
+    "_offload_comment": "Uncomment to trade speed for VRAM if 3B still will not fit. CPU offload costs roughly 2-3x step time over PCIe; try lowering --max-frames first, since visual tokens dominate here, not weights.",
+    "_offload_optimizer": {
+      "device": "cpu",
+      "pin_memory": true
+    }
+  },
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "steps_per_print": 1,
+  "wall_clock_breakdown": false
+}

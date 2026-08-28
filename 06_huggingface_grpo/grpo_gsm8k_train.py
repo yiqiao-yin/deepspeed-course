@@ -80,7 +80,7 @@ def require_gpu() -> None:
     print("      nvidia-smi")
     print("      ds_report")
     print("\n  No GPU at all? These need none:")
-    print("      ./tests/run_all.sh    # 130 logic checks, no GPU, no downloads")
+    print("      ./tests/run_all.sh    # the full logic suite, no GPU, no downloads")
     print("      https://yiqiao-yin.github.io/deepspeed-course/")
     print("\n  Rent one (needs RUNPOD_API_KEY):")
     print("      uv run runpod/runpod_ctl.py gpus --min-vram 24")

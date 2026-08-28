@@ -34,6 +34,10 @@ environment automatically — nothing to install first.
 | `test_stock_leakage.py` | Look-ahead bias from fitting the scaler before the train/test split |
 | `test_grpo_rewards.py` | A PPO value head under GRPO; surface-form and misaligned rewards |
 | `test_video_frames.py` | Frame "extraction" that returns one image repeated; and `preprocess_function` failing to unwrap the processor's batch dimension |
+| `test_runpod_ctl.py` | Example table drift, a non-`devel` image, a bootstrap that leaks credentials, and shell scripts that do not parse |
+| `test_token_compression.py` | Compression that runs, reduces tokens, and is silently **wrong** — merging the wrong pair, unweighted averaging, missing the log-size attention correction |
+| `test_star_memory.py` | A streaming buffer that leaks (grows with stream length) **or** one that is bounded because it discards everything |
+| `test_video_eval.py` | An eval harness that leaks answers via correlated RNG seeds, and a parser that scores "option A is wrong, the answer is C" as A |
 
 ### `test_ds_configs.py`
 

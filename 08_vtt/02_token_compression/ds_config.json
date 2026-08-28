@@ -1,0 +1,34 @@
+{
+  "_comment": "ZeRO-2 for the compression measurement sweep. Explicit values, not 'auto' — 'auto' is a HuggingFace Trainer convention and this script calls deepspeed.initialize() directly, so nothing would substitute them and DeepSpeed would fail to parse.",
+  "bf16": {
+    "enabled": true
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": 0.0001,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08,
+      "weight_decay": 0.0
+    }
+  },
+  "zero_optimization": {
+    "stage": 2,
+    "_stage_comment": "Stage 2, not 3, on purpose. This script measures how peak VRAM responds to SEQUENCE LENGTH. Stage 3 also gathers and releases parameters during the forward pass, which adds its own memory dynamics on top of the effect being measured and makes the compression signal harder to read. Stage 2 shards optimizer states and gradients — the realistic setup — while leaving activations as the variable under test.",
+    "allgather_partitions": true,
+    "allgather_bucket_size": 200000000.0,
+    "overlap_comm": true,
+    "reduce_scatter": true,
+    "reduce_bucket_size": 200000000.0,
+    "contiguous_gradients": true
+  },
+  "gradient_accumulation_steps": 1,
+  "gradient_clipping": 1.0,
+  "train_batch_size": 1,
+  "train_micro_batch_size_per_gpu": 1,
+  "steps_per_print": 100,
+  "wall_clock_breakdown": false
+}

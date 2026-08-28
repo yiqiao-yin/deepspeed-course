@@ -196,7 +196,33 @@ deepspeed-course/
 ├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
 │
 ├── 08_vtt/                            # Video-Text-to-Text Training
-│   └── hf_ds_vtt_test2/
+│   ├── README.md                      # The advanced track: why each subsection exists
+│   │
+│   ├── 01_qwen25vl_baseline/          # Modern baseline — a model that can represent TIME
+│   │   ├── train_qwen25vl.py          # Qwen2.5-VL + LoRA, dynamic FPS, absolute-time M-RoPE
+│   │   ├── ds_config.json             # ZeRO-3 (activations need the headroom)
+│   │   ├── run_deepspeed.sh           # SLURM batch script (CoreWeave/HPC)
+│   │   └── README.md
+│   │
+│   ├── 02_token_compression/          # "ZeRO for activations" — ToMe, FastV, DyCoke
+│   │   ├── token_compression.py       # The algorithms. Pure torch, CPU-runnable
+│   │   ├── train_compressed.py        # Measures REAL peak VRAM, on vs off
+│   │   ├── ds_config.json             # ZeRO-2 (isolates the sequence-length effect)
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   ├── 03_streaming_memory/           # Unbounded video in O(1) memory (STAR)
+│   │   ├── star_memory.py             # Four bounded buffers + weighted k-means
+│   │   ├── stream_infer.py            # 20,000 frames, context pinned at 306 tokens
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   ├── 04_video_eval/                 # Did compression break understanding?
+│   │   ├── video_mme_eval.py          # Video-MME-style harness; reports the TEMPORAL GAP
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   └── hf_ds_vtt_test2/               # Foundational example (LLaVA, 2024)
 │       ├── llava_video_trainer/       # Vision-language video understanding
 │       │   ├── video_training_script.py    # LLaVA 7B trainer (auto DeepSpeed config)
 │       │   ├── run_training.sh             # Multi-GPU launcher

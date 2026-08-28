@@ -46,6 +46,15 @@ jobs:
       - name: RunPod tooling (offline logic)
         run: uv run tests/test_runpod_ctl.py
 
+      - name: Visual token compression (ToMe / FastV / DyCoke)
+        run: uv run tests/test_token_compression.py
+
+      - name: STAR streaming memory (boundedness and recall)
+        run: uv run tests/test_star_memory.py
+
+      - name: Video evaluation harness (no answer leakage)
+        run: uv run tests/test_video_eval.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

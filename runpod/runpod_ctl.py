@@ -101,6 +101,30 @@ EXAMPLES = {
     "08_vtt": dict(min_vram=48, gpus=2, disk=120,
                    script="hf_ds_vtt_test2/llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),
+    # --- 08_vtt advanced track -------------------------------------------
+    # Nested paths are deliberate. These are SUBSECTIONS of topic 08, each
+    # runnable on its own pod, so you can rent a cheap card for the
+    # measurement sweep without paying for the 2x48GB the LLaVA baseline
+    # needs. `folder = REPO_ROOT / name` handles the slash, and `bootstrap`
+    # cd's into it the same way.
+    "08_vtt/01_qwen25vl_baseline": dict(min_vram=24, gpus=2, disk=100,
+                                        script="train_qwen25vl.py",
+                                        note="Qwen2.5-VL-3B + LoRA fits 16 GB; "
+                                             "2 GPUs to exercise ZeRO-3."),
+    "08_vtt/02_token_compression": dict(min_vram=24, gpus=1, disk=60,
+                                        script="train_compressed.py",
+                                        note="ONE GPU on purpose — measures peak "
+                                             "VRAM vs sequence length."),
+    "08_vtt/03_streaming_memory": dict(min_vram=24, gpus=1, disk=60,
+                                       script="stream_infer.py",
+                                       launcher="python",
+                                       note="Streaming inference is sequential; "
+                                            "the deepspeed launcher adds nothing."),
+    "08_vtt/04_video_eval": dict(min_vram=24, gpus=1, disk=60,
+                                 script="video_mme_eval.py",
+                                 launcher="python",
+                                 note="Evaluation is generate() calls, not "
+                                      "training. No launcher needed."),
     "09_vss": dict(min_vram=180, gpus=2, disk=2000,
                    script="train_ds_2xB200.py",
                    note="NOT VIABLE on typical RunPod: needs ~3 TB HOST RAM."),

@@ -8,3 +8,7 @@ docusaurus-docs/.docusaurus/
 *.log
 runpod/results/
 !runpod/sample_output/*.log
+
+# Advanced video track: generated measurement artefacts
+08_vtt/**/compression_results*.json
+08_vtt/**/eval_*.json

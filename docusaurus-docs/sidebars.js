@@ -55,6 +55,10 @@ const sidebars = {
           items: [
             'tutorials/multimodal/video-text-training',
             'tutorials/multimodal/video-speech-training',
+            'tutorials/multimodal/qwen-video-baseline',
+            'tutorials/multimodal/token-compression',
+            'tutorials/multimodal/streaming-video',
+            'tutorials/multimodal/video-evaluation',
           ],
         },
       ],

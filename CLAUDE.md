@@ -68,6 +68,17 @@ it will not fit, and a partial run proves nothing. Write or extend a **logic tes
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
+> **Exception worth knowing: `08_vtt/02_token_compression/` and
+> `08_vtt/03_streaming_memory/` are fully CPU-runnable**, because their substance
+> is *algorithms* rather than weights — ToMe/FastV/DyCoke and the STAR memory
+> bank are plain PyTorch on plain tensors. Same for `08_vtt/04_video_eval/`'s
+> harness. Run these directly rather than mocking them, and prefer asserting
+> **mathematical properties** over shapes: compression code fails by running
+> fine and being quietly wrong, so `test_token_compression.py` checks that the
+> log-size attention identity holds to 1e-6 and that the *uncorrected* version
+> is measurably wrong. A test that only checks tensor shapes would pass on
+> completely broken compression.
+
 ```bash
 ./tests/run_all.sh              # all suites
 uv run tests/test_ds_configs.py # one suite
