@@ -178,23 +178,27 @@ $$
 
 Where $|\cdot|$ denotes set cardinality. This encourages diverse token generation.
 
-#### 2. Similarity Reward (train_grpo_math.py)
+#### 2. Verifiable Reward (train_grpo_math.py, main.py)
 
-Measures string similarity to reference answer:
-
-$$
-r_{\text{sim}}(y, y_{\text{ref}}) = 100 \cdot \text{SequenceMatcher}(y, y_{\text{ref}})
-$$
-
-The SequenceMatcher computes longest common subsequence (LCS) ratio:
+Binary reward on the extracted final answer:
 
 $$
-\text{SequenceMatcher}(y, y_{\text{ref}}) = \frac{2 \cdot |LCS(y, y_{\text{ref}})|}{|y| + |y_{\text{ref}}|}
+r(y, y_{\text{ref}}) = \mathbb{1}\bigl[\,\mathrm{extract}(y) = \mathrm{extract}(y_{\text{ref}})\,\bigr]
 $$
 
-Where:
-- $|LCS(y, y_{\text{ref}})|$ = length of longest common subsequence
-- $|y|, |y_{\text{ref}}|$ = lengths of predicted and reference strings
+where $\mathrm{extract}(\cdot)$ takes the value after `####` (the GSM8K
+convention), falling back to the last number in the string.
+
+This is the reward GRPO is designed for. It has **no parameters**, so it cannot
+drift or be gamed by paraphrase, and it measures correctness rather than
+surface form.
+
+> **This replaced a string-similarity reward**, $r_{\text{sim}} = 100 \cdot
+> \text{SequenceMatcher}(y, y_{\text{ref}})$, which scored how much a
+> prediction *looked like* the reference. Under it, `"72"` and `"-72"` score
+> ~95 while differing in sign, and a correct solution phrased differently
+> scores poorly. Optimizing surface similarity is a textbook reward-hacking
+> setup. It was also misaligned across the G rollouts GRPO samples per prompt.
 
 ---
 
@@ -502,32 +506,48 @@ def reward_unique_chars(completions, **kwargs):
 "The answer is 72" → {T, h, e, , a, n, s, w, r, i, 7, 2} → reward = 13
 ```
 
-#### Similarity Reward (train_grpo_math.py:25-35)
+#### Verifiable Reward (`reward_answer_correct`)
 
 ```python
-def make_similarity_reward_fn(references):
-    def reward_fn(completions, **kwargs):
-        rewards = []
-        for pred, ref in zip(completions, references):
-            similarity = SequenceMatcher(None, pred.strip(), ref.strip()).ratio()
-            rewards.append(similarity * 100)
-        return rewards
-    return reward_fn
+def reward_answer_correct(completions, **kwargs):
+    """1.0 if the extracted final answer matches ground truth, else 0.0."""
+    references = kwargs.get("completion") or kwargs.get("answer")
+    rewards = []
+    for prediction, reference in zip(completions, references):
+        predicted = extract_final_answer(str(prediction))
+        expected = extract_final_answer(str(reference))
+        rewards.append(1.0 if (predicted is not None and expected is not None
+                               and abs(predicted - expected) < 1e-6) else 0.0)
+    return rewards
 ```
 
 **Analysis**:
-- Task-specific (math correctness)
-- Range: 0-100 (percentage)
-- Measures longest common subsequence
-- Guides toward correct answers
+- Measures **correctness**, not surface form
+- Binary: 1.0 or 0.0
+- Zero parameters, so it cannot drift or be reward-hacked by paraphrase
+- Reads references from `**kwargs`, which GRPOTrainer expands to match the
+  generated batch
 
 **Example**:
 ```
-Reference: "72"
-Prediction: "72" → LCS = "72" → ratio = 1.0 → reward = 100
-Prediction: "The answer is 72" → LCS = "72" → ratio = 0.21 → reward = 21
-Prediction: "48" → LCS = "" → ratio = 0.0 → reward = 0
+Reference: "#### 72"
+Prediction: "... so the total is 72.\n#### 72"          → 1.0
+Prediction: "The answer is 72"                          → 1.0   (different wording, still right)
+Prediction: "#### 48"                                   → 0.0
+Prediction: "#### -72"                                  → 0.0   (sign error)
 ```
+
+> **Replaced a string-similarity reward.** The previous
+> `make_similarity_reward_fn` scored `SequenceMatcher` ratio against a
+> reference, which had two defects. It rewarded **surface form** rather than
+> correctness — `"72"` and `"-72"` are ~95% similar as strings and one is
+> wrong, while a correct solution phrased differently scored poorly. And it was
+> **misaligned**: it closed over the dataset's completion list and zipped it
+> positionally against generated completions, but GRPO samples G rollouts per
+> prompt, so generation *i* did not correspond to dataset row *i* and every
+> rollout was scored against the wrong reference.
+>
+> Guarded by `uv run tests/test_grpo_rewards.py`.
 
 ### Instruction Variants
 
@@ -948,7 +968,7 @@ For math reasoning:
 | Metric | Description | Calculation |
 |--------|-------------|-------------|
 | **Exact Match** | Correct final answer | answer == ground_truth |
-| **Similarity** | String closeness | SequenceMatcher ratio |
+| **Directional / format** | Answer well-formed | `extract_final_answer(y) is not None` |
 | **Perplexity** | Model confidence | exp(-log_prob) |
 | **Pass@K** | Success in K tries | any(tries[:k]) |
 

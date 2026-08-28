@@ -1031,7 +1031,7 @@ trainer = GRPOTrainer(
     model="meta-llama/Llama-2-7b-hf",  # Or any HuggingFace model
     reward_funcs=reward_combined,
     train_dataset=dataset,
-    deepspeed="ds_config_zero1.json"
+    deepspeed="ds_config.json"
 )
 ```
 
