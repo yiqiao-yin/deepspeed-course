@@ -66,7 +66,7 @@ export RUNPOD_API_KEY=...        # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24        # live catalogue + prices
 uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
-uv run runpod/runpod_ctl.py run 06_huggingface_grpo --yes
+uv run runpod/runpod_ctl.py run 06_huggingface_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                      # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>
 ```
@@ -85,6 +85,86 @@ lists the cheapest GPUs that satisfy them:
            0.22    24G  NVIDIA GeForce RTX 3090
            0.34    24G  NVIDIA GeForce RTX 4090
 ```
+
+### The one-liner: launch, collect, shut down
+
+```bash
+uv run runpod/runpod_ctl.py run 06_huggingface_grpo \
+    --dry-run --collect --wait --terminate --yes
+```
+
+That single command starts a pod, streams its progress back, saves the log
+locally, and **terminates the pod** — including if the command crashes, times
+out, or you press Ctrl-C, because the termination sits in a `finally` block.
+
+```
+  [1/6] pod up: 36303e2eb4e5      [4/6] deepspeed installed
+  [2/6] repo cloned               [5/6] env captured
+  [3/6] uv installed: 0.12.7      [6/6] DONE rc=0 — log attached
+
+  saved runpod/results/dsc-.../01_basic_neuralnet.log  (21830 bytes)
+  Terminating uiufbvb9knxhg3 ... terminated
+  pods still running: 0 (none)
+```
+
+### Getting results without SSH
+
+RunPod exposes **no log endpoint** — verified against both the REST OpenAPI
+spec (the `Pod` schema has `portMappings` and `ports`, nothing log-shaped) and
+GraphQL introspection (no log/output/console field on any type). The pod cannot
+be read from, so it **pushes**.
+
+`--collect` generates an unguessable topic **locally, before the pod exists** —
+which is what avoids the chicken-and-egg of "the pod knows the URL but we
+don't". The pod publishes progress and attaches its log; `fetch` polls and
+writes everything to `runpod/results/<topic>/`. Structurally the same as writing
+run artefacts to S3, without needing credentials on the pod.
+
+```bash
+# if you did not use --wait, collect later:
+uv run runpod/runpod_ctl.py fetch <topic> --wait --terminate --pod <podId>
+```
+
+:::danger The results topic is public
+Topics are random 20-character strings, so unguessable — but not *private*.
+The bootstrap pushes only `nvidia-smi`, version banners, `ds_report` and
+training stdout, and the test suite asserts it never contains `$RUNPOD_API_KEY`,
+`$HF_TOKEN`, `$WANDB_API_KEY`, `env |` or `printenv`. **Never add anything that
+echoes a token.** Self-host with `DSC_NTFY_SERVER` if you need confidentiality.
+See [SECURITY.md](https://github.com/yiqiao-yin/deepspeed-course/blob/main/SECURITY.md).
+:::
+
+### Three layers of shutdown
+
+An abandoned pod bills until terminated, so there is defence in depth:
+
+| Layer | Covers |
+|---|---|
+| `--wait --terminate` | The normal path, plus crashes and Ctrl-C (`finally`) |
+| Retry with backoff, 5 attempts | Transient network failure during termination — verified working through three consecutive DNS failures |
+| In-pod watchdog, `--max-hours` (default 6) | Your laptop closing mid-run. Kills the container from inside, **needs no API key on the pod** |
+
+Plus `terminate --all` as the blunt instrument.
+
+:::note Why the pod never gets your API key
+Letting the pod delete itself would be convenient, but it means writing a
+credential that can *spend money* onto rented hardware you do not control.
+Termination is driven from your machine instead, with the keyless watchdog as
+backstop.
+:::
+
+### Validating several topics at once
+
+```bash
+uv run runpod/runpod_ctl.py smoke 01_basic_neuralnet 03_basic_rnn 06_huggingface_grpo
+#   Combined burn rate: ~$0.48/hour
+#   Refusing without --yes.
+```
+
+One pod per example, each dry-run and collecting. Prove the harness on
+$0.13/hr GPUs before spending on 4×80 GB.
+
+---
 
 `run` creates a pod whose **start command clones this repository and begins
 training** — there is no upload step and no SSH key setup:
@@ -105,11 +185,7 @@ uv run runpod/runpod_ctl.py pods        # should say "Nothing is billing."
 ```
 :::
 
-:::note Three limitations, stated plainly
-**No log streaming.** RunPod's REST API exposes no log endpoint — the `Pod`
-schema has `portMappings` and `ports` but nothing log-shaped. Use the web
-console, or `ssh root@<ip> -p <port>` then `tail -f /workspace/train.log`.
-
+:::note Two limitations, stated plainly
 **Capacity is not guaranteed.** Popular GPUs sell out and RunPod returns HTTP
 500 *"no instances currently available"*. The tool reports that as a plain
 message with alternatives; nothing is created and nothing is billed.
