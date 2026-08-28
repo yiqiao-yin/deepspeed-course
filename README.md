@@ -45,6 +45,7 @@ diagrams. This README covers setup and cluster operations.
     - [Virtual Environment Setup](#virtual-environment-setup-with-uv)
   - [Runpod](#runpod-)
 - [Example Training Commands](#example-training-commands)
+- [Contributing](#contributing-)
 - [Resources](#resources)
 
 ---
@@ -851,6 +852,37 @@ sbatch run_deepspeed.sh  # SLURM
 
 ---
 
+## Contributing 🤝
+
+**Contributions from anyone are welcome** — you do not need to know the
+maintainer or ask permission first. Fork, add your example, open a PR.
+
+New models and training scripts are the most valuable contribution. The one
+requirement worth knowing before you start is the **three-platform contract**:
+your example must work sensibly for a reader with **no GPU** (fail gracefully
+via `require_gpu()`), a reader on **CoreWeave** (`sbatch` + a cheap dry run),
+and a reader with a **RunPod API key** (registered in `runpod_ctl.py`, with the
+auto-shutdown flags documented).
+
+Scaffold a new example that already satisfies the contract:
+
+```bash
+uv run scripts/new_example.py 10_my_topic --title "My Topic" --vram 24
+./tests/run_all.sh
+```
+
+`uv` for packages, `deepspeed` for training — this is a DeepSpeed course.
+
+**Using Claude Code to contribute is encouraged.** `CONTRIBUTING.md` is written
+to double as a spec an agent can follow, and the repo ships a `CLAUDE.md` that
+Claude Code loads automatically.
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide, or the
+[Contributing page](https://yiqiao-yin.github.io/deepspeed-course/docs/contributing)
+on the course site.
+
+---
+
 ## Resources
 
 - [DeepSpeed Documentation](https://www.deepspeed.ai/)
@@ -862,13 +894,10 @@ sbatch run_deepspeed.sh  # SLURM
 
 ---
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
-
 ## License
 
-This project is released under the MIT License.
+Released under the [MIT License](LICENSE). By contributing you agree your
+contribution is licensed under the same terms.
 
 ---
 
