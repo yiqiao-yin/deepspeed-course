@@ -52,7 +52,7 @@ export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 # export TRANSFORMERS_OFFLINE=1
 
 # Optional experiment tracking. Leave unset to skip it; the scripts handle that.
-# export WANDB_API_KEY=<ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 nvidia-smi
 

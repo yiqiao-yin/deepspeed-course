@@ -36,13 +36,13 @@
 mkdir -p logs
 
 # Export HuggingFace token (commented out - not needed for synthetic data)
-# export HF_TOKEN=<ENTER_KEY_HERE>
+# export HF_TOKEN="your_value_here"
 
 # Export Weights & Biases API key for experiment tracking
 # REQUIRED: This script uses comprehensive W&B logging
 # Get your API key from: https://wandb.ai/authorize
 # Set this to enable WANDB_API_KEY (optional; scripts skip it when unset):
-# export WANDB_API_KEY="your_key_here"   # was: <ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 # Activate Python virtual environment
 # Update this path to your actual virtual environment location

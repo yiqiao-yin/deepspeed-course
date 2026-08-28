@@ -39,7 +39,7 @@ mkdir -p logs
 # Export Weights & Biases API key for experiment tracking
 # Get your API key from: https://wandb.ai/authorize
 # Uncomment and add your key to enable W&B tracking
-# export WANDB_API_KEY=<ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 # If you don't want to use W&B, add --no_wandb flag to the deepspeed command below
 

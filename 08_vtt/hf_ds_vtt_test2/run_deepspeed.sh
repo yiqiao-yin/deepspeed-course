@@ -48,11 +48,11 @@ source ~/myenv/bin/activate
 export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 
 # Requires HF credentials; both trainers push results to the Hub.
-# export HF_TOKEN=<ENTER_KEY_HERE>
-# export HF_USER_ID=<your-username>
+# export HF_TOKEN="your_value_here"
+# export HF_USER_ID="your_value_here"
 
 # Optional experiment tracking. Leave unset to skip it; the scripts handle that.
-# export WANDB_API_KEY=<ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 nvidia-smi
 

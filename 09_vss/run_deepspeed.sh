@@ -52,7 +52,7 @@ export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 # volume with 2 TB+ free, or the download fails late.
 
 # Optional experiment tracking. Leave unset to skip it; the scripts handle that.
-# export WANDB_API_KEY=<ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 # Verify storage before starting; the script refuses if short.
 ./check_storage.sh || exit 1

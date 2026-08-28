@@ -216,7 +216,7 @@ For HPC cluster environments like CoreWeave, use the provided SLURM batch script
    ```
 
    Update the following:
-   - `WANDB_API_KEY=<ENTER_KEY_HERE>` → Replace with your W&B API key from https://wandb.ai/authorize
+   - `# export WANDB_API_KEY="your_value_here"` → uncomment and set your W&B API key from https://wandb.ai/authorize
    - `source ~/myenv/bin/activate` → Update path to your virtual environment
    - `#SBATCH --partition=h200-low` → Update partition name based on your cluster
 

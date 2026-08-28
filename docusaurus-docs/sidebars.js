@@ -40,6 +40,7 @@ const sidebars = {
           label: 'HuggingFace Integration',
           items: [
             'tutorials/huggingface/overview',
+            'tutorials/huggingface/llm-finetuning',
             'tutorials/huggingface/trl-function-calling',
             'tutorials/huggingface/ocr-vision-language',
             'tutorials/huggingface/grpo-training',

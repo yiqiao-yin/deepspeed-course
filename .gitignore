@@ -2,3 +2,7 @@ __pycache__/
 *.py[cod]
 .venv/
 docusaurus-docs/package-lock.json
+.ruff_cache/
+docusaurus-docs/build/
+docusaurus-docs/.docusaurus/
+*.log

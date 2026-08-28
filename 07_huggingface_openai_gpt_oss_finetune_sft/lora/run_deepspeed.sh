@@ -46,13 +46,13 @@ mkdir -p logs
 # Get your API key from: https://wandb.ai/authorize
 # IMPORTANT: This is optional - script will run without it
 # Set this to enable WANDB_API_KEY (optional; scripts skip it when unset):
-# export WANDB_API_KEY="your_key_here"   # was: <ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 # Optional: Export HuggingFace token for pushing models to hub
 # Get your token from: https://huggingface.co/settings/tokens
 # IMPORTANT: This is optional - script will run without it and save locally
 # Set this to enable HF_TOKEN (optional; scripts skip it when unset):
-# export HF_TOKEN="your_key_here"   # was: <ENTER_KEY_HERE>
+# export HF_TOKEN="your_value_here"
 
 # Optional: Set HuggingFace username for model uploads
 export HF_USER=your_hf_username

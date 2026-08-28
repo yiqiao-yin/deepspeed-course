@@ -37,12 +37,12 @@ mkdir -p logs
 
 # Export HuggingFace token (optional - only needed for gated models)
 # Qwen/Qwen3-0.6B is publicly available, so not required
-# export HF_TOKEN=<ENTER_KEY_HERE>
+# export HF_TOKEN="your_value_here"
 
 # Export Weights & Biases API key for experiment tracking (OPTIONAL)
 # Get your API key from: https://wandb.ai/authorize
 # Uncomment the line below and add your key to enable W&B tracking
-# export WANDB_API_KEY=<ENTER_KEY_HERE>
+# export WANDB_API_KEY="your_value_here"
 
 # Activate Python virtual environment
 # Option 1: Using uv (recommended for faster dependency management)

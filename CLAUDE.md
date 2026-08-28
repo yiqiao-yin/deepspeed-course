@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A teaching course, not an application. Each top-level numbered directory (`01_basic_neuralnet` … `09_vss`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text (LLaVA/NLLB) → video-speech (LongCat-Flash-Omni 560B).
 
-There is no package, no shared library, no test suite, and no root `.gitignore`. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.**
+There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.**
+
+There *is* a regression suite in `tests/` (CPU-only, runs in CI) and a GPU tier in `tests/gpu/`; see [What can and cannot be run here](#what-can-and-cannot-be-run-here). Tooling lives in `runpod/` for provisioning GPUs on demand.
 
 ## The per-example contract
 
@@ -79,6 +81,16 @@ source** without importing torch/deepspeed/trl. See `tests/README.md`.
 When you change an example, update its README's **Environment & Local Testing**
 section if the dependencies, GPU count, or download size changed.
 
+After editing an example, run the drift audit and read its findings:
+
+```bash
+uv run scripts/audit_readmes.py
+```
+
+It is **advisory, not a gate** — it over-reports because teaching READMEs contain
+illustrative code and remediation advice that legitimately differ from the
+shipped source. Triage by hand; see `scripts/README.md`.
+
 ## Two target platforms
 
 The README's central distinction, which shapes every launcher script:
@@ -90,7 +102,19 @@ The README's central distinction, which shapes every launcher script:
 
 ## Conventions to preserve
 
-- **Secrets are placeholders.** Scripts contain literal `export WANDB_API_KEY=<ENTER_KEY_HERE>` and `export HF_TOKEN=<ENTER_KEY_HERE>` — they are instructional. Leave them as placeholders; never substitute a real value.
+- **Secrets are commented placeholders — and this is load-bearing.** Credential
+  lines appear as:
+
+  ```bash
+  # export WANDB_API_KEY="your_key_here"
+  ```
+
+  They must stay **commented and quoted**. An uncommented
+  `export WANDB_API_KEY=<ENTER_KEY_HERE>` is a **bash syntax error** — `<` is a
+  redirection operator — so the script aborts on that line and never reaches the
+  training command. Seven SLURM scripts shipped that way and could never run.
+  `tests/test_runpod_ctl.py` now runs `bash -n` over every shell script to stop
+  this recurring. Never substitute a real key.
 - **W&B is optional and soft.** Training scripts wrap `import wandb` in `try/except ImportError` and only enable tracking when `WANDB_API_KEY` is set. Keep new scripts runnable with no W&B installed.
 - **Heavy docstrings and comments.** Line-by-line explanatory comments (including on `#SBATCH` directives) are the pedagogical point, not clutter. Match the surrounding density.
 - **Type hints** on function signatures throughout the Python scripts.
@@ -108,7 +132,10 @@ npm run build      # must pass before pushing — CI runs this with NODE_OPTIONS
 npm run serve      # preview the production build
 ```
 
-The build is the only CI gate in the repo. Broken internal links and bad MDX fail it.
+There are **two** CI workflows:
+
+- `deploy-docs.yml` — builds and deploys the site. Runs only on pushes touching `docusaurus-docs/**`. `onBrokenLinks`, `onBrokenAnchors` and `onBrokenMarkdownLinks` are all `throw`, so link rot fails the build.
+- `tests.yml` — runs every suite in `tests/` plus a `compileall` over all training scripts, on every push and PR.
 
 - Every doc page needs `---\nsidebar_position: N\n---` frontmatter **and** an entry in `sidebars.js` under `tutorialSidebar` — a page missing from `sidebars.js` is orphaned.
 - KaTeX math (`remark-math` + `rehype-katex`) and Mermaid (`@docusaurus/theme-mermaid`) are enabled; tutorial pages use ```` ```mermaid ```` blocks liberally.
