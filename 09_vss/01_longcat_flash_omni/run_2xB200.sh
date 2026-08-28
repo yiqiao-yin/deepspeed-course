@@ -60,18 +60,23 @@ fi
 # Check data folder
 echo ""
 echo "Checking data folder..."
-if [ ! -d "./data/train" ]; then
-    echo "❌ ERROR: data/train folder not found!"
-    echo "   Please create data/train/ with your samples"
+# The sample corpus lives one level up, at 09_vss/data/, shared by every
+# subtopic in this folder rather than duplicated into each one.
+DATA_DIR="${VSS_DATA_DIR:-../data}"
+
+if [ ! -d "${DATA_DIR}/train" ]; then
+    echo "❌ ERROR: ${DATA_DIR}/train folder not found!"
+    echo "   Expected the shared corpus at 09_vss/data/train/"
     echo "   Structure: data/train/01/{in.mp4, in.wav, out.wav}"
+    echo "   Override the location with VSS_DATA_DIR."
     exit 1
 fi
 
-SAMPLE_COUNT=$(ls -1 ./data/train | wc -l)
+SAMPLE_COUNT=$(ls -1 "${DATA_DIR}/train" | wc -l)
 echo "✓ Found $SAMPLE_COUNT training samples"
 
 if [ "$SAMPLE_COUNT" -eq 0 ]; then
-    echo "❌ ERROR: No samples found in data/train/"
+    echo "❌ ERROR: No samples found in ${DATA_DIR}/train/"
     exit 1
 fi
 

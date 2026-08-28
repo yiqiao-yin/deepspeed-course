@@ -27,6 +27,9 @@ TESTS=(
     tests/test_token_compression.py
     tests/test_star_memory.py
     tests/test_video_eval.py
+    tests/test_tmrope.py
+    tests/test_duplex.py
+    tests/test_omni_eval.py
 )
 
 for test in "${TESTS[@]}"; do

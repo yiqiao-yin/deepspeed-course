@@ -237,17 +237,39 @@ deepspeed-course/
 │       │
 │       └── README.md                   # Comparison: LLaVA vs Seq2Seq
 │
-├── 09_vss/                            # Video-Speech-to-Speech (VSS) Training
-│   ├── train_ds.py                    # LongCat-Flash-Omni 560B training (8+ GPUs)
-│   ├── train_ds_2xB200.py             # Conservative config for 2x B200 GPUs
-│   ├── ds_config.json                 # DeepSpeed ZeRO-3 standard config
-│   ├── ds_config_2xB200.json          # DeepSpeed ZeRO-3 for 2x B200 (aggressive CPU offload)
-│   ├── run_2xB200.sh                  # Automated launch script for 2x B200
-│   ├── check_storage.sh               # Storage verification utility
-│   ├── README.md                      # Complete guide: LongCat-Flash-Omni + LoRA
-│   ├── README_2xB200.md               # 2x B200 specific guide with memory analysis
-│   ├── QUICKSTART_2xB200.md           # Quick start for 2x B200 setup
-│   └── data/                          # Training data folder
+├── 09_vss/                            # Video-Speech-to-Speech — video AND audio in, speech out
+│   ├── README.md                      # The track, and the current model landscape
+│   │
+│   ├── 01_longcat_flash_omni/         # The frontier: 560B, ~3 TB host RAM
+│   │   ├── train_ds.py                # LongCat-Flash-Omni 560B training (8+ GPUs)
+│   │   ├── train_ds_2xB200.py         # Conservative config for 2x B200 GPUs
+│   │   ├── ds_config.json             # DeepSpeed ZeRO-3 standard config
+│   │   ├── ds_config_2xB200.json      # ZeRO-3 for 2x B200 (aggressive CPU offload)
+│   │   ├── run_2xB200.sh              # Automated launch script for 2x B200
+│   │   ├── check_storage.sh           # Storage verification utility
+│   │   ├── README.md                  # Complete guide: LongCat-Flash-Omni + LoRA
+│   │   ├── README_2xB200.md           # 2x B200 guide with memory analysis
+│   │   └── QUICKSTART_2xB200.md       # Quick start for 2x B200 setup
+│   │
+│   ├── 02_thinker_talker/             # Two streams onto ONE clock, then speech out
+│   │   ├── tmrope.py                  # The 40 ms shared clock. CPU-runnable, provable
+│   │   ├── train_omni.py              # Qwen2.5-Omni + LoRA, encoders frozen
+│   │   ├── ds_config.json             # ZeRO-3 (four models resident at once)
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   ├── 03_duplex_streaming/           # Listening AND watching while speaking
+│   │   ├── duplex.py                  # 480 ms slices, barge-in, ghost text, RTF
+│   │   ├── run_duplex.py              # Is it real-time? worst-case RTF, not mean
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   ├── 04_omni_eval/                  # Does it actually USE both streams?
+│   │   ├── omni_eval.py               # Ablation grid; reports the FUSION GAIN
+│   │   ├── run_deepspeed.sh
+│   │   └── README.md
+│   │
+│   └── data/                          # Shared corpus (44 MB), not duplicated per subtopic
 │       └── train/                     # 8 sample videos with audio I/O
 │           ├── 01/{in.mp4, in.wav, out.wav}
 │           └── ...

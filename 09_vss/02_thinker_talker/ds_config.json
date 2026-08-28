@@ -1,0 +1,49 @@
+{
+  "_comment": "ZeRO-3 for a Thinker-Talker omni model. The 'auto' values are a HuggingFace Trainer convention, not a DeepSpeed feature: Trainer substitutes its own TrainingArguments before DeepSpeed sees this file. Launch with raw deepspeed.initialize() and 'auto' is a parse error.",
+  "bf16": {
+    "enabled": "auto"
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "warmup_min_lr": "auto",
+      "warmup_max_lr": "auto",
+      "warmup_num_steps": "auto",
+      "total_num_steps": "auto"
+    }
+  },
+  "zero_optimization": {
+    "stage": 3,
+    "_stage_comment": "Stage 3 shards parameters as well as optimizer states and gradients, at 1.5x the communication of stage 2 (3-psi vs 2-psi). Worth it here because an omni model is FOUR models resident at once -- language backbone, vision encoder, audio encoder, speech decoder -- and the activations from two simultaneous token streams need every spare byte.",
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "sub_group_size": 1000000000.0,
+    "reduce_bucket_size": "auto",
+    "stage3_prefetch_bucket_size": "auto",
+    "stage3_param_persistence_threshold": "auto",
+    "stage3_max_live_parameters": 1000000000.0,
+    "stage3_max_reuse_distance": 1000000000.0,
+    "stage3_gather_16bit_weights_on_model_save": true,
+    "_gather_comment": "Required. Without it the checkpoint is written as shards that from_pretrained cannot load, which you discover after the run finishes.",
+    "_offload_comment": "Uncomment to trade speed for VRAM if 3B still will not fit. CPU offload costs roughly 2-3x step time over PCIe. Try shortening the clip first -- audio contributes 25 tokens per second on top of the video, so clip length buys more than offload does.",
+    "_offload_optimizer": {
+      "device": "cpu",
+      "pin_memory": true
+    }
+  },
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "steps_per_print": 1,
+  "wall_clock_breakdown": false
+}

@@ -126,8 +126,29 @@ EXAMPLES = {
                                  note="Evaluation is generate() calls, not "
                                       "training. No launcher needed."),
     "09_vss": dict(min_vram=180, gpus=2, disk=2000,
-                   script="train_ds_2xB200.py",
+                   script="01_longcat_flash_omni/train_ds_2xB200.py",
                    note="NOT VIABLE on typical RunPod: needs ~3 TB HOST RAM."),
+    # --- 09_vss subtopics -------------------------------------------------
+    # Video-speech-to-speech: video AND audio in, speech out. The frontier
+    # model above is not rentable; these three are, which is the point of
+    # splitting them out.
+    "09_vss/01_longcat_flash_omni": dict(min_vram=180, gpus=2, disk=2000,
+                                         script="train_ds_2xB200.py",
+                                         note="560B. Same host-RAM wall as 09_vss."),
+    "09_vss/02_thinker_talker": dict(min_vram=24, gpus=2, disk=120,
+                                     script="train_omni.py",
+                                     note="Qwen2.5-Omni-3B + LoRA fits 24GB; "
+                                          "two streams make the sequence long."),
+    "09_vss/03_duplex_streaming": dict(min_vram=24, gpus=1, disk=80,
+                                       script="run_duplex.py",
+                                       launcher="python",
+                                       note="Duplex inference is sequential; "
+                                            "the deepspeed launcher adds nothing."),
+    "09_vss/04_omni_eval": dict(min_vram=24, gpus=1, disk=80,
+                                script="omni_eval.py",
+                                launcher="python",
+                                note="generate() calls, not training. "
+                                     "No launcher needed."),
 }
 
 
@@ -240,9 +261,14 @@ def cmd_recommend(args):
     print(f"\n  Suggested: {best['id']}  "
           f"(~${best['price'] * spec['gpus']:.2f}/hr for {spec['gpus']} GPU)")
     print(f"\n  uv run runpod/runpod_ctl.py run {args.example} --yes")
-    if args.example == "09_vss":
-        print("\n  WARNING: 09_vss needs ~3 TB of HOST RAM, which RunPod pods do not")
-        print("  normally provide. GPU VRAM alone is not sufficient for this example.")
+    # Only the LongCat subtopic hits the host-RAM wall. The other 09_vss
+    # subtopics are ordinary 24 GB jobs and must NOT inherit this warning,
+    # or readers will assume the whole topic is unrentable and skip it.
+    if args.example in ("09_vss", "09_vss/01_longcat_flash_omni"):
+        print("\n  WARNING: this example needs ~3 TB of HOST RAM, which RunPod pods")
+        print("  do not normally provide. GPU VRAM alone is not sufficient.")
+        print("  The other 09_vss subtopics run fine on a single 24 GB card:")
+        print("      uv run runpod/runpod_ctl.py recommend 09_vss/02_thinker_talker")
     return 0
 
 

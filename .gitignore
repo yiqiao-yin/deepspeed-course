@@ -12,3 +12,8 @@ runpod/results/
 # Advanced video track: generated measurement artefacts
 08_vtt/**/compression_results*.json
 08_vtt/**/eval_*.json
+
+# Omni track: generated measurement artefacts
+09_vss/**/omni_eval_results.json
+09_vss/**/duplex_results.json
+09_vss/**/eval_*.json

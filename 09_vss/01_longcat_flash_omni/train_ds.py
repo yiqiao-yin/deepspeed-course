@@ -513,7 +513,12 @@ def main() -> None:
     model_name = "meituan-longcat/LongCat-Flash-Omni"
     output_dir = "longcat-flash-omni-vss-lora"
     hf_user = os.getenv("HF_USER", "your-username")
-    data_dir = "./data"
+    # The sample corpus lives one level up, at 09_vss/data/, because it is
+    # SHARED by every subtopic in this folder -- 44 MB of real video+audio that
+    # would otherwise be duplicated four times in git history. Override with
+    # VSS_DATA_DIR if you keep your own corpus elsewhere.
+    data_dir = os.getenv("VSS_DATA_DIR",
+                         str(Path(__file__).resolve().parent.parent / "data"))
 
     # Configuration options from environment variables
     push_to_hub = os.getenv("PUSH_TO_HUB", "true").lower() == "true"

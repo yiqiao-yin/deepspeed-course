@@ -55,6 +55,15 @@ jobs:
       - name: Video evaluation harness (no answer leakage)
         run: uv run tests/test_video_eval.py
 
+      - name: TMRoPE (video and audio on one clock)
+        run: uv run tests/test_tmrope.py
+
+      - name: Full-duplex turn-taking
+        run: uv run tests/test_duplex.py
+
+      - name: Omni evaluation (modality ablation)
+        run: uv run tests/test_omni_eval.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
