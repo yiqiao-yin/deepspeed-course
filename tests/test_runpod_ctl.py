@@ -134,6 +134,41 @@ def main() -> int:
     r.check(source_contains("runpod/runpod_ctl.py", "DSC_NTFY_SERVER"),
             "transport server is overridable for self-hosting")
 
+    # ---- 7c. No committed secrets anywhere in the repo --------------------
+    # The repository is public. A leaked key is the one mistake that cannot be
+    # undone by a follow-up commit.
+    import re as _re
+    patterns = {
+        "RunPod key": _re.compile(r"\brpa_[A-Za-z0-9]{20,}"),
+        "OpenAI key": _re.compile(r"\bsk-[A-Za-z0-9]{20,}"),
+        "HF token": _re.compile(r"\bhf_[A-Za-z0-9]{30,}"),
+        "AWS key id": _re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+        "GitHub token": _re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}"),
+        "private key": _re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    }
+    skip_dirs = {".git", "node_modules", "__pycache__", "build", ".docusaurus", ".venv"}
+    scanned = leaks = 0
+    for f in REPO_ROOT.rglob("*"):
+        if not f.is_file() or set(f.parts) & skip_dirs:
+            continue
+        if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".wav", ".ico"}:
+            continue
+        try:
+            body = f.read_text(errors="ignore")
+        except Exception:
+            continue
+        scanned += 1
+        for label, pat in patterns.items():
+            if pat.search(body):
+                leaks += 1
+                r.check(False, f"no {label} in {f.relative_to(REPO_ROOT)}",
+                        "A committed credential must be rotated immediately.")
+    r.check(leaks == 0, f"no credentials found in {scanned} scanned files")
+
+    # Credentials must come from the environment, never be hard-coded.
+    r.check(source_contains("runpod/runpod_ctl.py", 'os.environ.get("RUNPOD_API_KEY")'),
+            "runpod_ctl reads its key from the environment")
+
     # ---- 8. Every shell script must PARSE ---------------------------------
     # `export VAR=<PLACEHOLDER>` is a bash syntax error ('<' is a redirection
     # operator), so a script containing it dies on that line and never reaches

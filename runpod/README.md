@@ -7,7 +7,7 @@ export RUNPOD_API_KEY=...          # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24      # what's available, live prices
 uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
-uv run runpod/runpod_ctl.py run 06_huggingface_grpo --yes
+uv run runpod/runpod_ctl.py run 06_huggingface_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                    # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>       # stop paying
 ```
@@ -30,7 +30,31 @@ Stdlib only — no dependencies. `uv run` handles the interpreter.
 | `pods` | Lists pods, per-hour cost, and SSH details |
 | `fetch <topic> --wait` | Downloads results the pod pushed — **no SSH needed** |
 | `smoke [examples...]` | Dry-runs several examples, one pod each, all collecting |
-| `terminate <id>...` | Terminates pods and stops billing |
+| `terminate <id>... \| --all` | Terminates pods and stops billing |
+
+### Auto-termination
+
+`--wait --terminate` runs the whole cycle in one command and shuts the pod down
+in a `finally` block, so a crash, a network failure or Ctrl-C still terminates it:
+
+```bash
+uv run runpod/runpod_ctl.py run 01_basic_neuralnet \
+    --dry-run --collect --wait --terminate --yes
+```
+
+Termination retries five times with backoff — verified working through three
+consecutive DNS failures — and shouts loudly with the manual command if it still
+cannot delete the pod.
+
+Two more safety nets:
+
+- **In-pod watchdog.** `--max-hours` (default 6) kills the container from the
+  inside regardless of what your machine is doing. Needs no API key on the pod.
+- **`terminate --all`.** The blunt instrument for cleaning up after yourself.
+
+The pod is **never given `RUNPOD_API_KEY`** — letting it delete itself would mean
+putting a spending credential on rented hardware. Termination is driven from your
+machine instead. See [SECURITY.md](../SECURITY.md).
 
 ## What `run` actually does
 
@@ -86,6 +110,7 @@ Transport is [ntfy.sh](https://ntfy.sh), a no-auth pub/sub. Override with
 `DSC_NTFY_SERVER` to point at your own instance.
 
 > ### ⚠️ Topics are public — never push secrets
+> See [SECURITY.md](../SECURITY.md) for the full posture.
 >
 > Anyone who knows the topic can read it. Topics are random 20-hex-character
 > strings, so they are unguessable, but they are not *private*. The bootstrap

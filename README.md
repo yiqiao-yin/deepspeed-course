@@ -65,6 +65,17 @@ This repository provides a collection of basic frameworks and examples demonstra
 
 ---
 
+## Security 🔐
+
+This repository is public; your credentials are not. Every key
+(`RUNPOD_API_KEY`, `HF_TOKEN`, `WANDB_API_KEY`) is read from the environment and
+never committed — a test scans every file on every push. The RunPod tooling
+never places your API key on rented hardware.
+
+See **[SECURITY.md](SECURITY.md)**.
+
+---
+
 ## Environment & Testing 🧪
 
 ### Package management: `uv`

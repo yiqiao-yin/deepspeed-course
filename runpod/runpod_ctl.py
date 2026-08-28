@@ -57,6 +57,8 @@ NTFY = os.environ.get("DSC_NTFY_SERVER", "https://ntfy.sh")
 # so DeepSpeed cannot JIT-compile its fused CUDA ops and every example fails
 # with `CUDA_HOME environment variable is not set`.
 DRY_RUN_SECONDS = 300   # cap on the training step during --dry-run
+MAX_POLL_ERRORS = 12     # consecutive poll failures before giving up
+DEFAULT_MAX_HOURS = 6.0  # in-pod watchdog: hard ceiling on a pod's lifetime
 DEFAULT_IMAGE = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 
 # Per-example requirements. min_vram is per GPU, in GB.
@@ -221,7 +223,8 @@ def cmd_recommend(args):
 
 
 def bootstrap(example: str, spec: dict, branch: str,
-              topic: str = "", dry_run: bool = False) -> str:
+              topic: str = "", dry_run: bool = False,
+              max_hours: float = DEFAULT_MAX_HOURS) -> str:
     """Shell run inside the pod: clone, install with uv, run, push results out."""
     launch = (f"python {spec['script']}" if spec.get("launcher") == "python"
               else f"deepspeed --num_gpus={spec['gpus']} {spec['script']}")
@@ -239,9 +242,19 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'{NTFY}/{topic} >/dev/null 2>&1 || true'
     ) if topic else 'true'
 
+    # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
+    # pod gets shut down, but it dies with your laptop lid. This backstop kills
+    # the container's main process after max_hours no matter what, so a hung run
+    # cannot bill indefinitely. It does NOT need the API key on the pod.
+    watchdog = (
+        f'( sleep {int(max_hours * 3600)}; echo "[watchdog] {max_hours}h cap reached";'
+        f' kill -TERM 1 2>/dev/null || true ) &'
+    ) if max_hours else "true"
+
     steps = [
         "set -o pipefail",
         report,
+        watchdog,
         'report "[1/6] pod up: $(hostname)"',
         "cd /workspace",
         f"(git clone --depth 1 -b {branch} {REPO_URL} 2>&1 || true) | tail -2",
@@ -272,6 +285,11 @@ def bootstrap(example: str, spec: dict, branch: str,
 
 
 def cmd_create(args):
+    return 0 if _create_pod(args) is not None else 1
+
+
+def _create_pod(args):
+    """Create a pod; return the API's pod dict, or None if refused/failed."""
     key = api_key(args)
     rows = gpu_catalogue(key)
     match = next((r for r in rows if r["id"] == args.gpu), None)
@@ -285,7 +303,7 @@ def cmd_create(args):
     print(f"  Cost:  ~${hourly:.2f}/hour  (${hourly * 24:.2f}/day if left running)")
     if not args.yes:
         print("\n  Refusing to create without --yes. Billing starts immediately.")
-        return 1
+        return None
 
     payload = {
         "name": args.name,
@@ -305,10 +323,9 @@ def cmd_create(args):
     pod = _request(f"{REST}/pods", key, "POST", payload)
     pid = pod.get("id", "?")
     print(f"\n  Created pod {pid}  (status {pod.get('desiredStatus')})")
-    print(f"\n  Watch:      uv run runpod/runpod_ctl.py pods")
     print(f"  TERMINATE:  uv run runpod/runpod_ctl.py terminate {pid}")
-    print("\n  Billing continues until TERMINATED (stopping is not enough).")
-    return 0
+    print("  Billing continues until TERMINATED (stopping is not enough).")
+    return pod
 
 
 def cmd_run(args):
@@ -336,39 +353,93 @@ def cmd_run(args):
         api_key=getattr(args, "api_key", None), gpu=gpu, count=spec["gpus"],
         disk=spec["disk"], volume=max(spec["disk"], 20), image=args.image,
         name=f"dsc-{args.example[:24]}", cloud=args.cloud, yes=args.yes,
-        start_cmd=bootstrap(args.example, spec, args.branch, topic, args.dry_run),
+        start_cmd=bootstrap(args.example, spec, args.branch, topic,
+                            args.dry_run, args.max_hours),
     )
-    rc = cmd_create(ns)
-    if rc == 0 and topic:
-        print(f"\n  Results topic: {topic}")
-        print(f"  Collect them with:")
-        print(f"      uv run runpod/runpod_ctl.py fetch {topic} --wait")
-        print(f"\n  The pod pushes progress and its log to {NTFY}/{topic}.")
-        print("  RunPod exposes no log endpoint (checked REST and GraphQL), so")
-        print("  the pod pushes rather than us pulling — no SSH key needed.")
-    elif rc == 0:
-        print("\n  No --collect, so results stay on the pod. Add --collect next time,")
-        print("  or read logs in the web console / over SSH.")
-    return rc
+    created = _create_pod(ns)
+    if created is None:
+        return 1
+    pod_id = created.get("id", "")
+
+    if not topic:
+        print("\n  No --collect, so results stay on the pod. Add --collect next time.")
+        return 0
+
+    print(f"\n  Results topic: {topic}")
+
+    if not args.wait:
+        print(f"  Collect and shut down with:")
+        print(f"      uv run runpod/runpod_ctl.py fetch {topic} --wait "
+              f"--terminate --pod {pod_id}")
+        print(f"\n  Or terminate now:  runpod_ctl.py terminate {pod_id}")
+        print("\n  NOTE: the pod bills until terminated. --dry-run caps the training")
+        print(f"  step, not the pod's life; the in-pod watchdog stops it after "
+              f"{args.max_hours}h.")
+        return 0
+
+    # --- blocking path: wait, collect, and ALWAYS clean up ---------------
+    print("  Waiting for the pod to report DONE (Ctrl-C is safe — the pod is")
+    print("  still terminated on the way out)...\n")
+    key = api_key(args)
+    done = False
+    try:
+        done = collect(topic, True, args.wait_seconds, args.interval)
+    except KeyboardInterrupt:
+        print("\n  Interrupted.")
+    finally:
+        if args.terminate:
+            # `finally` is the whole point: a crash, a timeout or Ctrl-C must
+            # not leave a pod billing. Retry hard — this path costs real money
+            # if it fails silently.
+            print(f"\n  Terminating {pod_id} ...")
+            if terminate_with_retry(pod_id, key):
+                print(f"  terminated {pod_id}")
+            else:
+                print(f"  !! COULD NOT TERMINATE {pod_id} AFTER {TERMINATE_RETRIES} TRIES")
+                print(f"  !! IT IS STILL BILLING. Run this yourself:")
+                print(f"     uv run runpod/runpod_ctl.py terminate {pod_id}")
+                print(f"     or: https://console.runpod.io/pods")
+            try:
+                remaining = list_pods(key)
+                print(f"  pods still running: {len(remaining)}"
+                      + (f" -> {[p['id'] for p in remaining]}" if remaining else " (none)"))
+            except SystemExit:
+                print("  (could not verify remaining pods — check the console)")
+        else:
+            print(f"\n  --terminate not set; pod {pod_id} is STILL BILLING.")
+            print(f"     uv run runpod/runpod_ctl.py terminate {pod_id}")
+    return 0 if done else 1
 
 
-def cmd_fetch(args):
-    """Poll the results topic and save everything under runpod/results/<topic>/."""
-    out_dir = pathlib.Path(__file__).resolve().parent / "results" / args.topic
+def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
+    """Poll a topic, save artefacts locally, return True once DONE is seen."""
+    out_dir = pathlib.Path(__file__).resolve().parent / "results" / topic
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    deadline = time.time() + (args.wait_seconds if args.wait else 0)
+    deadline = time.time() + (wait_seconds if wait else 0)
     seen, attachments, done = set(), {}, False
+    consecutive_errors = 0
 
     while True:
-        url = f"{NTFY}/{urllib.parse.quote(args.topic)}/json?poll=1"
+        url = f"{NTFY}/{urllib.parse.quote(topic)}/json?poll=1"
         req = urllib.request.Request(url, headers={"User-Agent": "dsc-runpod-ctl/1.0"})
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 lines = resp.read().decode().splitlines()
         except Exception as exc:
-            print(f"  could not reach {NTFY}: {exc}")
-            return 1
+            # Transient DNS/network blips are common and must NOT be read as
+            # "the run is over" — that would abandon a pod mid-job.
+            consecutive_errors += 1
+            if consecutive_errors == 1 or consecutive_errors % 5 == 0:
+                print(f"  (network hiccup #{consecutive_errors}: {exc}; retrying)")
+            if consecutive_errors >= MAX_POLL_ERRORS:
+                print(f"  giving up after {MAX_POLL_ERRORS} consecutive failures")
+                break
+            if not wait or time.time() > deadline:
+                break
+            time.sleep(interval)
+            continue
+        consecutive_errors = 0
 
         for line in lines:
             try:
@@ -378,18 +449,17 @@ def cmd_fetch(args):
             if msg.get("event") != "message" or msg["id"] in seen:
                 continue
             seen.add(msg["id"])
-            text = msg.get("message", "")
-            if text:
-                print(f"  {text}")
-                if "DONE" in text:
+            if msg.get("message"):
+                print(f"  {msg['message']}")
+                if "DONE" in msg["message"]:
                     done = True
             att = msg.get("attachment")
             if att and att.get("url"):
                 attachments[att.get("name", "artifact")] = att["url"]
 
-        if done or not args.wait or time.time() > deadline:
+        if done or not wait or time.time() > deadline:
             break
-        time.sleep(args.interval)
+        time.sleep(interval)
 
     for name, url in attachments.items():
         target = out_dir / name
@@ -401,14 +471,22 @@ def cmd_fetch(args):
         except Exception as exc:
             print(f"  could not download {name}: {exc}")
 
-    (out_dir / "messages.txt").write_text(
-        "\n".join(sorted(seen)) + "\n", encoding="utf-8")
-
     if not seen:
-        print("  Nothing published yet. The pod takes a few minutes to boot,")
-        print("  clone and install. Re-run with --wait to block until DONE.")
+        print("  Nothing published yet — pods take a few minutes to boot and install.")
     elif not done:
-        print("\n  (no DONE marker yet — the run may still be going)")
+        print("\n  (no DONE marker — the run may still be going)")
+    return done
+
+
+def cmd_fetch(args):
+    """Poll the results topic and save everything under runpod/results/<topic>/."""
+    collect(args.topic, args.wait, args.wait_seconds, args.interval)
+    if args.terminate:
+        if not args.pod:
+            print("\n  --terminate needs --pod <id>. Find it with: pods")
+            return 1
+        cmd_terminate(argparse.Namespace(
+            api_key=getattr(args, "api_key", None), pod_ids=[args.pod], all=False))
     return 0
 
 
@@ -507,9 +585,52 @@ def cmd_pods(args):
     return 0
 
 
+TERMINATE_RETRIES = 5
+
+
+def terminate_with_retry(pod_id: str, key: str) -> bool:
+    """Delete a pod, retrying through transient network failures.
+
+    Returns True on success. A silent failure here bills indefinitely, so this
+    retries and the caller shouts loudly if it still fails.
+    """
+    for attempt in range(1, TERMINATE_RETRIES + 1):
+        try:
+            data = json.dumps(None).encode() if False else None
+            req = urllib.request.Request(
+                f"{REST}/pods/{pod_id}", data=data, method="DELETE",
+                headers={"Authorization": f"Bearer {key}",
+                         "User-Agent": "deepspeed-course-runpod-ctl/1.0"})
+            urllib.request.urlopen(req, timeout=30).read()
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code in (404, 410):      # already gone
+                return True
+            print(f"    attempt {attempt}/{TERMINATE_RETRIES}: HTTP {exc.code}")
+        except Exception as exc:
+            print(f"    attempt {attempt}/{TERMINATE_RETRIES}: {exc}")
+        if attempt < TERMINATE_RETRIES:
+            time.sleep(min(2 ** attempt, 20))
+    return False
+
+
+def list_pods(key):
+    pods = _request(f"{REST}/pods", key)
+    return pods.get("data", []) if isinstance(pods, dict) else (pods or [])
+
+
 def cmd_terminate(args):
     key = api_key(args)
-    for pid in args.pod_ids:
+    pod_ids = args.pod_ids
+    if args.all:
+        pod_ids = [p["id"] for p in list_pods(key)]
+        if not pod_ids:
+            print("  No pods. Nothing to terminate.")
+            return 0
+        print(f"  Terminating ALL {len(pod_ids)} pod(s): {', '.join(pod_ids)}")
+    if not pod_ids:
+        sys.exit("Give pod ids, or --all.")
+    for pid in pod_ids:
         _request(f"{REST}/pods/{pid}", key, "DELETE")
         print(f"  terminated {pid}")
     print("\n  Confirm with: uv run runpod/runpod_ctl.py pods")
@@ -555,6 +676,14 @@ def main() -> int:
     u.add_argument("--yes", action="store_true", help="required; billing starts at once")
     u.add_argument("--collect", action="store_true",
                    help="have the pod push progress and its log back (no SSH needed)")
+    u.add_argument("--wait", action="store_true",
+                   help="block until the pod reports DONE, collecting as it goes")
+    u.add_argument("--terminate", action="store_true",
+                   help="with --wait: terminate the pod afterwards, even on error")
+    u.add_argument("--wait-seconds", type=int, default=1800)
+    u.add_argument("--interval", type=int, default=20)
+    u.add_argument("--max-hours", type=float, default=DEFAULT_MAX_HOURS,
+                   help="in-pod watchdog: hard ceiling on pod lifetime")
     u.add_argument("--dry-run", action="store_true",
                    help=f"cap the training step at {DRY_RUN_SECONDS}s — proves the "
                         f"pipeline works without paying for a full run")
@@ -565,6 +694,8 @@ def main() -> int:
     f.add_argument("--wait", action="store_true", help="block until the pod reports DONE")
     f.add_argument("--wait-seconds", type=int, default=1800)
     f.add_argument("--interval", type=int, default=20)
+    f.add_argument("--terminate", action="store_true", help="terminate --pod when done")
+    f.add_argument("--pod", help="pod id to terminate")
     f.set_defaults(func=cmd_fetch)
 
     sm = sub.add_parser("smoke", help="dry-run several examples, one pod each")
@@ -579,7 +710,8 @@ def main() -> int:
     l.set_defaults(func=cmd_pods)
 
     t = sub.add_parser("terminate", help="terminate pods (stops billing)")
-    t.add_argument("pod_ids", nargs="+")
+    t.add_argument("pod_ids", nargs="*")
+    t.add_argument("--all", action="store_true", help="terminate every pod on the account")
     t.set_defaults(func=cmd_terminate)
 
     args = p.parse_args()
