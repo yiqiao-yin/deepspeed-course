@@ -173,6 +173,75 @@ if torch.cuda.is_available():
 
 `torch.cuda.is_bf16_supported()` tells you whether to use `bf16` or fall back to `fp16` with loss scaling — see [mixed precision](/docs/reference/deepspeed-config#5-mixed-precision). Compute capability `sm_80` (Ampere) or higher means BF16.
 
+## 4a. No GPU? What Still Works
+
+Every training script preflights for a CUDA device and **stops with an
+explanation** rather than failing obscurely. Without that check, DeepSpeed gets
+as far as compiling its fused Adam kernel and dies with:
+
+```
+OSError: CUDA_HOME environment variable is not set.
+```
+
+raised from inside torch's C++ extension loader — which tells a newcomer nothing.
+Instead you now get:
+
+```
+========================================================================
+  NO GPU DETECTED - stopping before DeepSpeed fails obscurely
+========================================================================
+  This example is small enough to run on CPU. Two config changes:
+      "optimizer": {"type": "Adam", "params": {"torch_adam": true}}
+      "fp16": {"enabled": false}
+  then:  ALLOW_CPU=1 deepspeed --num_gpus=1 <script>.py
+```
+
+### Running examples 01–04 on CPU
+
+Examples `01`–`04` are small enough to train without a GPU. Two config changes
+are required, because both defaults need CUDA:
+
+```json
+{
+  "optimizer": { "type": "Adam", "params": { "lr": 1e-3, "torch_adam": true } },
+  "fp16": { "enabled": false }
+}
+```
+
+`torch_adam: true` uses PyTorch's Adam instead of DeepSpeed's fused CUDA kernel;
+`fp16` needs CUDA and must be off. Then:
+
+```bash
+ALLOW_CPU=1 deepspeed --num_gpus=1 train_ds.py
+```
+
+It is slow, but it genuinely trains and converges.
+
+:::warning Examples 05–09 cannot run on CPU
+They download models measured in GB and need real VRAM; no config flag changes
+that. Their preflight says so instead of offering a CPU path.
+:::
+
+### What needs no GPU at all
+
+```bash
+./tests/run_all.sh     # 203 logic checks — configs, data handling, rewards
+```
+
+The test suite validates the *logic* of every example without a GPU or a model
+download, and runs in CI on every push. See
+[`tests/README.md`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/README.md).
+
+### Or rent a GPU
+
+```bash
+export RUNPOD_API_KEY=...
+uv run runpod/runpod_ctl.py recommend 01_basic_neuralnet
+uv run runpod/runpod_ctl.py run 01_basic_neuralnet --yes
+```
+
+See [RunPod Setup](/docs/guides/runpod-setup#2a-provisioning-from-the-command-line).
+
 ## 5. Clone the Course
 
 ```bash

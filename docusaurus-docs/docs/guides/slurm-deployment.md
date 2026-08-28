@@ -49,6 +49,51 @@ scancel 12345                    # cancel
 sacct -j 12345                   # what happened after it finished
 ```
 
+## 2a. Every Example Is Submittable
+
+All fourteen examples ship a SLURM batch script, so a CoreWeave user can run the
+entire course:
+
+| Example | Script | GPUs |
+|---|---|---|
+| `01_basic_neuralnet` | `run_deepspeed.sh` | 1 |
+| `02_basic_convnet` | `run_deepspeed.sh` | 1 |
+| `02_basic_convnet_cifar10_examples` | `run_deepspeed.sh` | 2 |
+| `03_basic_rnn` | `run_deepspeed.sh` | 2 |
+| `04_bayesian_neuralnet` | `run_deepspeed.sh` | 2 |
+| `04_intermediate_rnn_stock_data` | `run_deepspeed.sh` | 2 |
+| `05_huggingface` | `run_deepspeed.sh` | 2 |
+| `05_huggingface_ocr` | `submit_job.sh` | 2 |
+| `05_huggingface_trl` | `run_deepspeed.sh` | 2 |
+| `06_huggingface_grpo` | `run_deepspeed.sh` | 2 |
+| `07_..._gpt_oss_finetune_sft` | `lora/run_deepspeed.sh` | 4 |
+| `07_huggingface_trl_multi_agency` | `run_slurm.sh` | 1 |
+| `08_vtt` | `hf_ds_vtt_test2/run_deepspeed.sh` | 2 |
+| `09_vss` | `run_deepspeed.sh` | 2 |
+
+A regression test asserts this coverage, so an example cannot be added without
+a way to submit it:
+
+```bash
+uv run tests/test_runpod_ctl.py     # includes the SLURM-coverage checks
+```
+
+:::note Two that differ from the pattern
+`07_huggingface_trl_multi_agency` uses `run_slurm.sh` and launches with plain
+`python`, because it drives TRL's `GRPOTrainer` directly rather than using the
+DeepSpeed launcher.
+
+`08_vtt` has one script covering both trainers — set `TRAINER=llava` or
+`TRAINER=seq2seq` (default) before submitting.
+:::
+
+:::danger `09_vss` is gated on host RAM
+Its script requests `--mem=3000G`. That is not padding: 1.1 TB of BF16 weights
+live in host memory under ZeRO-3 offload. Submitting it to a partition without
+that much RAM will fail or thrash. See
+[Video-Speech Training](/docs/tutorials/multimodal/video-speech-training#2-the-memory-problem).
+:::
+
 ## 3. Batch Script Anatomy
 
 ```bash

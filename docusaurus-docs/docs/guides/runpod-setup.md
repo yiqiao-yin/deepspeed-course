@@ -56,6 +56,70 @@ runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04
 
 **Size the disk for weights.** Container disk defaults are small. Model weights are large: ~14 GB for a 7B in BF16, ~40 GB for gpt-oss-20b, [1.1 TB for LongCat](/docs/tutorials/multimodal/video-speech-training#2-the-memory-problem). Check [Hardware Requirements](/docs/guides/hardware-requirements#storage) before choosing.
 
+## 2a. Provisioning From the Command Line
+
+The repository ships a RunPod client so you can find a GPU, start a pod, run an
+example on it, and shut it down without touching the web console.
+
+```bash
+export RUNPOD_API_KEY=...        # https://console.runpod.io/user/settings
+
+uv run runpod/runpod_ctl.py gpus --min-vram 24        # live catalogue + prices
+uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
+uv run runpod/runpod_ctl.py run 06_huggingface_grpo --yes
+uv run runpod/runpod_ctl.py pods                      # what am I paying for?
+uv run runpod/runpod_ctl.py terminate <podId>
+```
+
+Stdlib only — `uv run` handles everything, nothing to install.
+
+`recommend` maps an example to its VRAM, GPU-count and disk requirements and
+lists the cheapest GPUs that satisfy them:
+
+```
+06_huggingface_grpo
+  Needs: >= 24 GB VRAM x 1 GPU, 80 GB disk
+
+  Cheapest options (1 GPU(s), on-demand):
+     $/hr total   VRAM  ID
+           0.22    24G  NVIDIA GeForce RTX 3090
+           0.34    24G  NVIDIA GeForce RTX 4090
+```
+
+`run` creates a pod whose **start command clones this repository and begins
+training** — there is no upload step and no SSH key setup:
+
+```bash
+cd /workspace && git clone --depth 1 <repo> && cd deepspeed-course
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv pip install --system deepspeed
+cd <example> && deepspeed --num_gpus=<N> <script>.py | tee /workspace/train.log
+```
+
+:::danger Billing starts on creation and stops only on TERMINATE
+Stopping a pod is not enough. `create` and `run` both refuse without `--yes` and
+print the hourly rate first. When you are finished:
+
+```bash
+uv run runpod/runpod_ctl.py pods        # should say "Nothing is billing."
+```
+:::
+
+:::note Three limitations, stated plainly
+**No log streaming.** RunPod's REST API exposes no log endpoint — the `Pod`
+schema has `portMappings` and `ports` but nothing log-shaped. Use the web
+console, or `ssh root@<ip> -p <port>` then `tail -f /workspace/train.log`.
+
+**Capacity is not guaranteed.** Popular GPUs sell out and RunPod returns HTTP
+500 *"no instances currently available"*. The tool reports that as a plain
+message with alternatives; nothing is created and nothing is billed.
+
+**`09_vss` cannot run on RunPod.** It needs roughly **3 TB of host RAM**, which
+pods do not provide. VRAM is not the binding constraint there.
+:::
+
+Full reference: [`runpod/README.md`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/runpod/README.md).
+
 ## 3. Setup
 
 ```bash

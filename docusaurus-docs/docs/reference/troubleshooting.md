@@ -87,6 +87,26 @@ DeepSpeedConfigError: optimizer must be specified
 
 Either add an `optimizer` block, or pass an optimizer object to `deepspeed.initialize(optimizer=...)`. Under `Trainer`, HF supplies one if the config omits the block.
 
+### No GPU detected
+
+```
+========================================================================
+  NO GPU DETECTED - stopping before DeepSpeed fails obscurely
+========================================================================
+```
+
+This is the preflight doing its job, not a bug. Every training script checks for
+a CUDA device before DeepSpeed tries to compile its fused Adam kernel — without
+it you would get `OSError: CUDA_HOME environment variable is not set` from deep
+inside torch's extension loader instead.
+
+- **On SLURM:** you are almost certainly on a **login node**, which has no GPUs.
+  Submit with `sbatch`, or get an interactive session with `srun --gres=gpu:1 --pty bash`.
+- **On a pod or workstation:** check `nvidia-smi` and `ds_report`.
+- **Deliberately running on CPU:** examples 01–04 can, with
+  `"torch_adam": true` and `fp16` disabled, then `ALLOW_CPU=1`. See
+  [Installation §4a](/docs/getting-started/installation#4a-no-gpu-what-still-works).
+
 ### CUDA/PyTorch/DeepSpeed mismatch
 
 ```
