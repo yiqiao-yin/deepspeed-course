@@ -410,9 +410,11 @@ verifiable, and almost every one is enforced by CI or by a test:
 | **Logic test** | `tests/test_*.py` | review |
 | **Test registration** | `tests/run_all.sh` **and** `.github/workflows/tests.yml` | review — *both*, not one |
 | **Book page** | `docusaurus-docs/docs/tutorials/…` | `npm run build` |
-| **Sidebar entry** | `docusaurus-docs/sidebars.js` | nothing — a missing entry silently **orphans** the page |
+| **Sidebar entry** | `docusaurus-docs/sidebars.js` | `test_docs_style.py` — a missing entry silently **orphans** the page, so it is now checked |
+| **Mermaid palette** | any `\`\`\`mermaid` block | `test_docs_style.py` |
 
-That last row is the only one with no automated guard, so check it by hand.
+Every row is now guarded. `test_docs_style.py` closed the last gap — the
+sidebar entry, which nothing in the Docusaurus build warns about.
 
 `uv run scripts/new_example.py <folder>` writes the four in-folder files and
 prints the `runpod_ctl.py` line for you. The rest is on you.
@@ -727,18 +729,115 @@ Requirements:
 - **`onBrokenLinks: 'throw'`** — link rot fails the build.
 - **KaTeX** math and **Mermaid** diagrams are enabled and encouraged.
 
-Mermaid diagrams use the house palette — ELK layout, dark-blue containers,
-white text, grey arrows:
+The docs workflow triggers **only** on pushes to `main` touching
+`docusaurus-docs/**`.
+
+### Mermaid: the house theme
+
+**Diagrams are optional.** Plenty of good pages have none. But if you add one,
+it must match the theme the rest of the book uses, because a single off-palette
+diagram is instantly obvious on a dark page.
+
+The theme is: **ELK layout · dark-blue boxes, containers and subgraphs · white
+type · grey arrows.**
+
+#### What you do NOT need to declare
+
+The layout engine and the base colours are set **globally**, once, in
+`docusaurus-docs/docusaurus.config.js` under `themeConfig.mermaid`:
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `layout` | `elk` | ELK routing — `@mermaid-js/layout-elk` is installed as an optional peer dep |
+| `elk.nodePlacementStrategy` | `LINEAR_SEGMENTS` | straighter, less tangled edges |
+| `flowchart.curve` | `basis` | soft edge curves |
+| `theme` | `base` for **both** light and dark | the site is dark-only, so one theme |
+| `mainBkg` / `primaryColor` | `#16324f` | default node fill |
+| `clusterBkg` / `clusterBorder` | `#08182a` / `#2d5a86` | subgraph containers, deepest blue so nodes sit *on top* of them |
+| `lineColor` / `arrowheadColor` | `#98a6b5` | grey arrows, deliberately subordinate to the blue |
+| every `*TextColor` | `#ffffff` | white type throughout |
+
+> ⛔ **Do not put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It
+> fights the global config and drifts the moment the config changes. All 36
+> mermaid pages currently declare neither — keep it that way.
+
+#### What you DO declare: the five node classes
+
+Add these `classDef` lines at the bottom of your diagram and assign nodes with
+`class`. Copy the block verbatim — the names are load-bearing across 36 pages:
 
 ```
 classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
 classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
-classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 ```
 
-The docs workflow triggers **only** on pushes to `main` touching
-`docusaurus-docs/**`.
+Listed darkest to lightest. (The names are historical — `steel` is in fact the
+lightest, not `bright`. Pick by the row you want, not by the name.)
+
+| Class | Use it for |
+|---|---|
+| `deep` | **subgraphs and containers**, and terminal/outcome nodes |
+| `dark` | a second container shade when two nest |
+| `base` | the **default node** — inputs, ordinary steps |
+| `bright` | the node you want the eye to land on |
+| `steel` | intermediate stages, or a second emphasis |
+
+Only five shades exist on purpose. A diagram needing a sixth is usually a
+diagram that should be two diagrams.
+
+#### A complete example
+
+````markdown
+```mermaid
+flowchart TB
+    IN["Input"]
+
+    subgraph GROUP["A container"]
+        direction TB
+        A["Ordinary step"]
+        B["The important one"]
+        A --> B
+    end
+
+    OUT["Result"]
+
+    IN --> GROUP
+    B --> OUT
+
+    classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+
+    class IN base
+    class A steel
+    class B bright
+    class OUT,GROUP deep
+```
+````
+
+Declare all five even if you use three — it keeps the blocks copy-pasteable
+between pages and makes a diff that adds a node trivial.
+
+#### Two practical notes
+
+- **Quote every label.** `A["Text with (parens), commas"]` — unquoted labels
+  break the parser on punctuation, and the build failure points at the page,
+  not the line.
+- **Avoid `<br/>`-heavy labels in `LR` graphs.** ELK gives them a lot of
+  horizontal room; long stacked labels push the diagram past the page width.
+
+#### Checking it
+
+```bash
+uv run tests/test_docs_style.py             # palette + no inline theme overrides
+cd docusaurus-docs && npm run build         # mermaid parse errors fail the build
+npm start                                   # look at it
+```
 
 ---
 

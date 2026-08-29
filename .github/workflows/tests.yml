@@ -52,6 +52,9 @@ jobs:
       - name: RunPod tooling (offline logic)
         run: uv run tests/test_runpod_ctl.py
 
+      - name: Docs style (mermaid house theme, sidebar registration)
+        run: uv run tests/test_docs_style.py
+
       - name: Visual token compression (ToMe / FastV / DyCoke)
         run: uv run tests/test_token_compression.py
 
