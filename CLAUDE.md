@@ -6,11 +6,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A teaching course, not an application. Each top-level numbered directory (`01_basic_neuralnet` … `09_vss`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text → video-speech-to-speech.
 
-There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~19 files on purpose.)
+There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~22 files on purpose.)
 
 There *is* a regression suite in `tests/` (CPU-only, runs in CI) and a GPU tier in `tests/gpu/`; see [What can and cannot be run here](#what-can-and-cannot-be-run-here). Tooling lives in `runpod/` for provisioning GPUs on demand, and `scripts/` for scaffolding and drift auditing.
 
 Contributions from outside are welcome and governed by `CONTRIBUTING.md`, which is written to double as a spec an agent can follow. Read it before adding an example — it encodes the three-platform contract below. Repo is MIT (`LICENSE`).
+
+### The alignment thread spans five topic folders
+
+`05`–`06` are not independent examples; they are one escalating argument about
+**what you can delete from the RLHF pipeline**, and the deletions are different:
+
+| Folder | Deletes | Reference model? |
+|---|---|---|
+| `05_huggingface_reward_model` | — (this IS the pipeline) | — |
+| `05_huggingface_dpo` | the **reward model** (`--method` covers 6 objectives) | LoRA removes it |
+| `06_huggingface_grpo` | the **critic** | yes |
+| `06_huggingface_online_dpo` | — (re-adds sampling; needs a judge) | yes |
+
+> "DPO removes the reward model" and "GRPO removes the critic" are two different
+> claims about two different components. Conflating them is the most common
+> confusion in this area, and the docs say so in three places on purpose.
+
+The book pages run `rlhf-reward-modeling` → `preference-optimization` → `grpo-*`
+→ `online-preference-methods` → `beyond-grpo`, ordered by **when the literature
+arrived relative to GRPO (Feb 5, 2024)**. That ordering is deliberate and the
+pages carry dated tables because the families genuinely straddle it — KTO
+precedes GRPO by three days, ORPO and SimPO follow.
 
 ### Topics 08 and 09 are multi-subtopic
 
@@ -112,14 +134,17 @@ it will not fit, and a partial run proves nothing. Write or extend a **logic tes
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
-### The big exception: six subtopics ARE fully CPU-runnable
+### The big exception: eight modules ARE fully CPU-runnable
 
-Their substance is *algorithms and policy* rather than weights, so they need no
-GPU and no download. **Run these directly rather than mocking them:**
+Their substance is *algorithms, objectives and policy* rather than weights, so
+they need no GPU and no download. **Run these directly rather than mocking
+them:**
 
 | Module | What it is |
 |---|---|
-| `08_vtt/02_token_compression/token_compression.py` | ToMe / FastV / DyCoke, plain tensors |
+| `05_huggingface_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
+| `05_huggingface_reward_model/reward_modeling.py` | Bradley-Terry objective |
+| `08_vtt/02_token_compression/token_compression.py` | ToMe / FastV / DyCoke |
 | `08_vtt/03_streaming_memory/star_memory.py` | STAR bounded memory bank |
 | `08_vtt/04_video_eval/video_mme_eval.py` | eval harness |
 | `09_vss/02_thinker_talker/tmrope.py` | the 40 ms shared clock — pure integer arithmetic |
@@ -141,9 +166,17 @@ passed on all of them. Established patterns to copy:
   satisfiable by a broken implementation.
 - `test_omni_eval.py` — builds a modality-ignoring model on purpose and asserts
   the harness catches it, *and* that a healthy model is not falsely flagged.
+- `test_preference_losses.py` — reference-free losses are **bit-identical** when
+  the reference model moves; reference-based ones must move. Also asserts IPO
+  has a finite optimum while DPO improves without bound, which is the entire
+  point of IPO.
+- `test_reward_model.py` — shift-invariance asserted **with a tolerance**, plus
+  a check that a huge shift *does* perturb the loss. The objective is exactly
+  shift-invariant in real arithmetic and only approximately so in float32
+  (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # 11 suites, 523 checks, no GPU
+./tests/run_all.sh              # 14 suites, 653 checks, no GPU
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -176,8 +209,33 @@ The README's central distinction, which shapes every launcher script:
 
 ### The three-platform contract
 
-`CONTRIBUTING.md` states this in full; the short version, because every new or
-edited example must satisfy it:
+**Check it, do not reason about it:**
+
+```bash
+uv run scripts/check_contract.py 10_my_topic   # one example, ~28 checks
+uv run scripts/check_contract.py               # the whole repo
+uv run scripts/check_contract.py -v <folder>   # show passing checks too
+```
+
+Advisory, not a CI gate — older examples predate parts of the contract and
+legitimately differ, and failing the build on those would water the checks down
+until they catch nothing. The non-negotiable subset (`EXAMPLES` registration,
+`bash -n`, `#SBATCH` presence) is in `tests/test_runpod_ctl.py` and does fail CI.
+
+It earns its keep: pointing it at the repo found `05_huggingface_ocr` requesting
+`--ntasks-per-node=2` while running `deepspeed --num_gpus=2` (four processes for
+two GPUs — a hang), and 13 READMEs that never told a RunPod reader how to shut
+the pod down.
+
+> When it flags something, check whether the CHECKER is wrong before changing
+> working code. Three of its original checks were over-strict and were fixed in
+> the checker: `import torch` at module scope is harmless on a CPU box,
+> `import deepspeed` likewise (the CUDA_HOME error comes from `initialize()`,
+> which `require_gpu()` precedes), and `pip install uv` is legitimate because
+> you cannot bootstrap uv with uv.
+
+`CONTRIBUTING.md` states the contract in full; the short version, because every
+new or edited example must satisfy it:
 
 | Reader | Requirement |
 |---|---|
@@ -211,6 +269,14 @@ shared file itself.
 Register the printed line, then `./tests/run_all.sh` is green before any of your
 own code exists. Skip the registration and exactly one check fails — that is the
 suite enforcing its own checklist, not a broken scaffold.
+
+`scripts/` holds three tools, and they answer different questions:
+
+| Tool | Question | Gate? |
+|---|---|---|
+| `new_example.py` | "give me a skeleton that already satisfies the contract" | — |
+| `check_contract.py` | "does this example work for all three readers?" | advisory |
+| `audit_readmes.py` | "has this README drifted from the code?" | advisory, over-reports |
 
 ## Conventions to preserve
 
@@ -261,16 +327,26 @@ There are **two** CI workflows:
 - `deploy-docs.yml` — builds and deploys the site. Runs only on pushes touching `docusaurus-docs/**`. `onBrokenLinks`, `onBrokenAnchors` and `onBrokenMarkdownLinks` are all `throw`, so link rot fails the build.
 - `tests.yml` — runs every suite in `tests/` plus a `compileall` over all training scripts, on every push and PR.
 
-- Every doc page needs `---\nsidebar_position: N\n---` frontmatter **and** an entry in `sidebars.js` under `tutorialSidebar` — a page missing from `sidebars.js` is orphaned.
+- Every doc page needs `---\nsidebar_position: N\n---` frontmatter **and** an entry in `sidebars.js` under `tutorialSidebar` — a page missing from `sidebars.js` is orphaned and nothing in the Docusaurus build warns you. `tests/test_docs_style.py` now checks this.
 - KaTeX math (`remark-math` + `rehype-katex`) and Mermaid (`@docusaurus/theme-mermaid`) are enabled; tutorial pages use ```` ```mermaid ```` blocks liberally.
 - When you change an example's code or hardware requirements, update both its folder `README.md` and the corresponding page under `docusaurus-docs/docs/tutorials/`.
-- The site is **dark-mode only** (`colorMode: {defaultMode:'dark', disableSwitch:true}`). Mermaid uses ELK layout with a dark-blue palette set globally in `docusaurus.config.js`; new diagrams should declare the house `classDef`s:
+- The site is **dark-mode only** (`colorMode: {defaultMode:'dark', disableSwitch:true}`). Mermaid uses ELK layout with a dark-blue palette, both set **globally** in `docusaurus.config.js`. Diagrams are optional, but one that is added must declare all **five** house `classDef`s:
 
   ```
   classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
   classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
-  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
   classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
   ```
+
+  `deep` for subgraphs/containers, `base` for ordinary nodes, `bright` for the
+  node the eye should land on. (Names are historical — `steel` is actually the
+  lightest, not `bright`.)
+
+  **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
+  the global config and drifts silently. `tests/test_docs_style.py` enforces the
+  palette, the absence of inline overrides, label quoting, and that the config
+  still sets what CONTRIBUTING.md publishes — all 36 diagram pages conform.
 
 - **Verifying a deployed page needs a content check, not a status code.** A 200 only proves *a* page is there, not the new one — and a literal `grep` for text inside a KaTeX block will fail because it renders into split HTML spans. Match on plain prose instead.
