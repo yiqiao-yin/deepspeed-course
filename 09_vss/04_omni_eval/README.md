@@ -145,7 +145,10 @@ meaningless.
 ```bash
 export RUNPOD_API_KEY=...
 uv run runpod/runpod_ctl.py run 09_vss/04_omni_eval \
-    --collect --wait --terminate --yes
+    --dry-run --collect --wait --terminate --yes
+# --dry-run caps the training step so a smoke test stays cheap;
+# --terminate deletes the pod in a finally block, so a crash or
+# Ctrl-C still stops the billing.
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```
 

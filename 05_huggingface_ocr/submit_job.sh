@@ -3,7 +3,12 @@
 #SBATCH --output=logs/vlm-finetune-%j.out
 #SBATCH --error=logs/vlm-finetune-%j.err
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=1
+# ONE task, even though this job uses 2 GPUs. The `deepspeed` launcher below
+# spawns one worker per GPU itself. Setting this to 2 made SLURM start two
+# tasks, each of which spawned two workers -- four processes competing for two
+# GPUs, which hangs. This said 2 until it was caught by
+# `uv run scripts/check_contract.py`.
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

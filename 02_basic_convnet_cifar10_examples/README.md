@@ -929,3 +929,43 @@ This project is licensed under the MIT License.
 ---
 
 **Note**: This enhanced training example demonstrates production-ready practices for CIFAR-10 CNN training with DeepSpeed. It includes advanced features like learning rate scheduling, early stopping, data augmentation, and comprehensive monitoring - essential tools for real-world deep learning projects on challenging datasets.
+
+---
+
+## Renting a GPU on RunPod (with auto-shutdown)
+
+There is no SLURM on RunPod, so the pod lifecycle is driven by API instead —
+including shutting it down.
+
+```bash
+export RUNPOD_API_KEY=...     # https://console.runpod.io/user/settings
+
+uv run runpod/runpod_ctl.py recommend 02_basic_convnet_cifar10_examples
+uv run runpod/runpod_ctl.py run 02_basic_convnet_cifar10_examples \
+    --dry-run --collect --wait --terminate --yes
+
+uv run runpod/runpod_ctl.py pods      # must say: "Nothing is billing."
+```
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Caps the training step at 300s. The pod still clones, installs and launches the **real** script, so a genuine failure still surfaces — you just do not pay for a full run. |
+| `--collect` | The pod pushes its log to a private-ish ntfy topic. **No SSH needed** — RunPod exposes no log endpoint, so the pod pushes. |
+| `--wait` | Blocks locally until the pod reports DONE. |
+| `--terminate` | Deletes the pod in a `finally` block, so a crash, a network failure or Ctrl-C **still** stops the billing. Retries five times with backoff. |
+| `--yes` | Skips the confirmation. `run` and `create` both refuse without it and print the hourly rate first. |
+
+> ### 💸 An abandoned pod bills until terminated
+> *Stopping* is not enough. Always finish with `runpod_ctl.py pods` and confirm
+> it says **"Nothing is billing."**
+>
+> Two safety nets you get for free: an **in-pod watchdog** (`--max-hours`,
+> default 6) that kills the container from the inside and needs no API
+> key, and `terminate --all` as the blunt instrument.
+
+This example is sized in `runpod/runpod_ctl.py` as **8 GB VRAM, 1 GPU(s),
+30 GB disk**.
+
+The pod is **never given `RUNPOD_API_KEY`** — putting a spending credential on
+rented hardware would be the wrong trade, so termination is driven from your
+machine. See [SECURITY.md](../SECURITY.md).

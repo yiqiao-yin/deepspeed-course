@@ -159,6 +159,35 @@ You are not expected to *own* all three platforms. You are expected to make
 your example **not break** on any of them, and the tooling below does most of
 the work.
 
+### Check it, do not guess
+
+The contract is **executable**. Run this before you open a PR:
+
+```bash
+uv run scripts/check_contract.py 10_my_topic     # one example
+uv run scripts/check_contract.py                 # the whole repo
+uv run scripts/check_contract.py -v 10_my_topic  # show passing checks too
+```
+
+It audits all three readers plus the asset inventory — ~28 checks per example —
+and tells you exactly which reader you broke and why. It needs no GPU, no
+network and no downloads.
+
+It is **advisory, not a CI gate**. Older examples predate parts of the contract
+and legitimately differ, and failing the build on those would either force churn
+in working code or water the checks down until they catch nothing. Reviewers run
+it; `--strict` exits 1 for the folders you want held to the line.
+
+The subset that *is* non-negotiable — `EXAMPLES` registration, `bash -n` over
+every shell script, `#SBATCH` presence — is enforced by `tests/test_runpod_ctl.py`
+and does fail CI.
+
+> **It works.** Pointing it at the repo found a shipped bug: `05_huggingface_ocr`
+> requested `--ntasks-per-node=2` *and* ran `deepspeed --num_gpus=2`, so SLURM
+> started two tasks that each spawned two workers — four processes for two GPUs,
+> which hangs. It also found 13 READMEs that never told a RunPod reader how to
+> shut the pod down.
+
 ---
 
 ### 3.1 Reader A — no GPU: fail gracefully
@@ -767,8 +796,13 @@ Copy this into your PR. The PR template already contains it.
 ### The one command
 
 ```bash
-./tests/run_all.sh && (cd docusaurus-docs && npm run build)
+uv run scripts/check_contract.py <your_folder> \
+  && ./tests/run_all.sh \
+  && (cd docusaurus-docs && npm run build)
 ```
+
+The first checks the three-platform contract, the second the logic suites, the
+third the book. If all three are clean, your PR is in shape.
 
 ---
 
@@ -801,9 +835,10 @@ Then paste something like:
 > real logic test that asserts a mathematical property rather than a shape, and
 > register it in `tests/run_all.sh` and the CI workflow.
 >
-> Finish by running `./tests/run_all.sh` and
-> `cd docusaurus-docs && npm run build`, and report honestly what passed,
-> what failed, and what you could not verify without a GPU.
+> Finish by running `uv run scripts/check_contract.py <folder>`,
+> `./tests/run_all.sh` and `cd docusaurus-docs && npm run build`, and report
+> honestly what passed, what failed, and what you could not verify without a
+> GPU.
 
 ### What to insist on
 
