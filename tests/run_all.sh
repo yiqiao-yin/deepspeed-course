@@ -23,6 +23,7 @@ TESTS=(
     tests/test_stock_leakage.py
     tests/test_grpo_rewards.py
     tests/test_preference_losses.py
+    tests/test_reward_model.py
     tests/test_video_frames.py
     tests/test_runpod_ctl.py
     tests/test_token_compression.py

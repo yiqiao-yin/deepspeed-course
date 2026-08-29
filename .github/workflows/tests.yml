@@ -43,6 +43,9 @@ jobs:
       - name: Preference optimization losses (DPO family)
         run: uv run tests/test_preference_losses.py
 
+      - name: Reward modelling (Bradley-Terry)
+        run: uv run tests/test_reward_model.py
+
       - name: Video frame extraction
         run: uv run tests/test_video_frames.py
 

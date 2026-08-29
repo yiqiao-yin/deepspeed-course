@@ -87,9 +87,22 @@ EXAMPLES = {
     "05_huggingface_ocr": dict(min_vram=24, gpus=1, disk=60,
                                script="train_ds.py",
                                note="Qwen2-VL-2B; cap max_pixels to bound memory."),
+    "05_huggingface_dpo": dict(min_vram=24, gpus=1, disk=60,
+                               script="train_dpo.py",
+                               note="Offline PO: no generation, so far cheaper "
+                                    "than GRPO. The reference model is the "
+                                    "swing factor; LoRA removes it."),
+    "05_huggingface_reward_model": dict(min_vram=24, gpus=1, disk=60,
+                                        script="train_reward_model.py",
+                                        note="Pairs mean 2x forward passes per "
+                                             "batch; halve micro_batch vs SFT."),
     "06_huggingface_grpo": dict(min_vram=24, gpus=1, disk=80,
                                 script="grpo_gsm8k_train.py",
                                 note="RL; memory driven by G rollouts."),
+    "06_huggingface_online_dpo": dict(min_vram=24, gpus=2, disk=80,
+                                      script="train_online_dpo.py",
+                                      note="Generates during training AND holds "
+                                           "a judge: budget like GRPO."),
     "07_huggingface_openai_gpt_oss_finetune_sft": dict(min_vram=80, gpus=4, disk=200,
                                                        script="lora/train_ds.py",
                                                        note="gpt-oss-20b MoE; ~40 GB of weights."),

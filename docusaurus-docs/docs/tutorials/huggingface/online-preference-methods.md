@@ -12,6 +12,8 @@ There is a gap between those two, and it is where a lot of practical alignment
 lives: you want fresh on-policy samples, but you have **no verifier** — only a
 judge that can say which of two responses is better.
 
+**Example folder:** [`06_huggingface_online_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/06_huggingface_online_dpo) — `--method online_dpo|nash_md|xpo`, ZeRO-3 because it generates during training.
+
 **TRL trainers:** `OnlineDPOTrainer`, `NashMDTrainer`, `XPOTrainer`
 
 ## 1. The Distribution-Shift Problem

@@ -13,9 +13,15 @@ This is what most alignment work actually uses. It is roughly an order of
 magnitude cheaper than [GRPO](./grpo-training.md) and, on most public
 benchmarks, competitive.
 
-**TRL trainers:** `DPOTrainer`, `CPOTrainer`, `KTOTrainer`, `ORPOTrainer`, `BCOTrainer`
+**Example folder:** [`05_huggingface_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/05_huggingface_dpo) — one `train_dpo.py` with `--method dpo|ipo|cpo|kto|orpo|simpo`, plus `preference_losses.py` (all six losses on plain tensors, no GPU, no download).
 
-**Runnable code:** [`06_huggingface_grpo/preference_losses.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/06_huggingface_grpo/preference_losses.py) — all six losses on plain tensors, no GPU, no download.
+**TRL trainers:** `DPOTrainer`, `KTOTrainer`, `ORPOTrainer`; `CPOTrainer` and `BCOTrainer` now live under `trl.experimental`.
+
+:::warning SimPO is not a `DPOTrainer` loss type
+It is `CPOConfig(loss_type="simpo", cpo_alpha=0.0)` plus `simpo_gamma`. Leaving `cpo_alpha` at its default of `1.0` silently trains **CPO-SimPO**, which is a different method.
+
+(`DPOConfig` does expose `loss_type="sigmoid_norm"`, which applies SimPO's length normalisation to the DPO loss — related, but not the same objective.)
+:::
 
 ## 1. The Timeline
 
@@ -283,7 +289,7 @@ objectives to save memory.
 Verify the objectives on CPU before renting anything:
 
 ```bash
-uv run 06_huggingface_grpo/preference_losses.py
+uv run 05_huggingface_dpo/preference_losses.py
 uv run tests/test_preference_losses.py     # 58 checks, no GPU
 ```
 

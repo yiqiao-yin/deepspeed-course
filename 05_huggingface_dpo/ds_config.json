@@ -1,0 +1,40 @@
+{
+  "_comment": "ZeRO-2 for offline preference optimization. The 'auto' values are a HuggingFace Trainer convention, not a DeepSpeed feature: Trainer substitutes its own TrainingArguments before DeepSpeed sees this file. Launch with raw deepspeed.initialize() and 'auto' is a parse error.",
+  "bf16": {
+    "enabled": "auto"
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "warmup_min_lr": "auto",
+      "warmup_max_lr": "auto",
+      "warmup_num_steps": "auto",
+      "total_num_steps": "auto"
+    }
+  },
+  "zero_optimization": {
+    "stage": 2,
+    "_stage_comment": "Stage 2 shards optimizer states and gradients (16-psi -> 2-psi + 14-psi/N) at the SAME 2-psi communication volume as plain data parallelism. It is free. Stage 3 costs 1.5x the communication and is not needed here: with LoRA the trainable parameter count is tiny, so the optimizer states this shards are already small. The memory that actually matters in DPO is the REFERENCE MODEL, and ZeRO does not shard a frozen model's weights below fp16. Use LoRA (reference = base with the adapter off) or a reference-free method instead.",
+    "allgather_partitions": true,
+    "allgather_bucket_size": 200000000.0,
+    "overlap_comm": true,
+    "reduce_scatter": true,
+    "reduce_bucket_size": 200000000.0,
+    "contiguous_gradients": true
+  },
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "steps_per_print": 10,
+  "wall_clock_breakdown": false
+}

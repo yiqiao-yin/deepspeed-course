@@ -87,7 +87,6 @@ See [`tests/README.md`](../tests/README.md) for what each suite covers.
 ```
 06_huggingface_grpo/
 ├── grpo_gsm8k_train.py         # Main training script (GRPO + DeepSpeed + LoRA)
-├── preference_losses.py         # DPO/IPO/CPO/KTO/ORPO/SimPO — CPU-runnable, no GPU
 ├── ds_config.json               # DeepSpeed ZeRO-2 configuration
 ├── run_deepspeed.sh             # SLURM batch script for CoreWeave/HPC clusters
 ├── archive/                     # Old experimental scripts
@@ -114,9 +113,13 @@ that, the **offline preference-optimization family** is simpler and roughly an
 order of magnitude cheaper. `preference_losses.py` implements all six as their
 actual formulas, on plain tensors:
 
+They now have their own topic folder, with the full four-file contract:
+
 ```bash
+cd ../05_huggingface_dpo
 uv run preference_losses.py                    # no GPU, no download
 uv run ../tests/test_preference_losses.py      # 58 checks
+uv run train_dpo.py --list-methods
 ```
 
 The framing worth carrying: each method is defined by **what it deletes** from

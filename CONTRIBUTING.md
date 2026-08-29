@@ -74,6 +74,55 @@ Anything that teaches distributed training, at any level:
 | **Docs** | clearer explanation, a diagram, a corrected claim |
 | **Tooling** | improvements to `runpod/`, `scripts/`, or `tests/` |
 
+### ⛔ A topic is a FOLDER, not a page
+
+This is the most common way a contribution arrives incomplete, and it has
+happened to maintainers as well as newcomers. **A documentation page is not a
+topic.** If your contribution introduces a method a reader would want to *run*,
+it needs the whole set of assets:
+
+```
+NN_your_topic/
+├── train_*.py          entry point — uv + deepspeed, require_gpu() first
+├── ds_config*.json     DeepSpeed config, with the ZeRO choice explained
+├── run_deepspeed.sh    SLURM batch script (CoreWeave)
+└── README.md           standalone walkthrough
+
+runpod/runpod_ctl.py    one EXAMPLES entry           (RunPod)
+tests/test_*.py         a logic test, registered in TWO places
+docusaurus-docs/…       a page + a sidebars.js entry (the book)
+```
+
+Use this to decide which you are writing:
+
+| Your change | Folder required? |
+|---|---|
+| Explains code that **already exists** more clearly | **No** — docs only |
+| Adds a diagram, fixes a wrong claim, improves prose | **No** — docs only |
+| Introduces a method/model a reader would want to **run** | **Yes — full folder** |
+| Introduces a *family* of related methods | **Yes** — one folder, one entry point with a `--method` flag |
+| Is a variant of an existing method (a patched loss, a tweak) | **No** — add a module + test to the existing folder |
+
+**Worked example, from this repository.** The DPO family arrived as four
+documentation pages plus a loose module dropped into `06_huggingface_grpo/`.
+That was wrong on both counts, and it was fixed by building what the contract
+actually requires:
+
+- `05_huggingface_dpo/` — the offline family, one `train_dpo.py` with
+  `--method dpo|ipo|cpo|kto|orpo|simpo`, because they share a trainer and
+  differ by a scalar function. Six folders would have been six copies of the
+  same file.
+- `05_huggingface_reward_model/` — a genuinely different objective
+  (Bradley–Terry, a scalar head, `RewardTrainer`), so a separate folder.
+- `06_huggingface_online_dpo/` — different memory profile entirely (it
+  *generates* during training), so a separate folder with ZeRO-3 instead of
+  ZeRO-2.
+- Dr. GRPO / DAPO / GSPO stayed **inside** `06_huggingface_grpo/` as a module,
+  because they are patches to an objective that already has a folder.
+
+The rule of thumb the split follows: **one folder per distinct memory profile
+and trainer**, not one folder per paper.
+
 **No topic is off-limits** as long as it is genuinely about scaling or
 distributed training. New optimizers, pipeline parallelism, MoE routing, FSDP
 comparisons, quantization-aware training, RLHF variants, other modalities — all
@@ -315,6 +364,29 @@ Every example folder has the same shape:
 | `README.md` | Standalone walkthrough: hardware, setup, run command, expected output. |
 
 Larger examples may add `HARDWARE_REQUIREMENTS.md` or similar.
+
+### The complete asset inventory
+
+Those four files live in your folder. **A topic is not finished until the files
+outside it exist too** — they are what make it discoverable, rentable and
+verifiable, and almost every one is enforced by CI or by a test:
+
+| Asset | Where | Enforced by |
+|---|---|---|
+| Entry point | `NN_topic/train_*.py` | `compileall` in CI |
+| DeepSpeed config | `NN_topic/ds_config*.json` | `test_ds_configs.py` |
+| SLURM launcher | `NN_topic/run_deepspeed.sh` | `test_runpod_ctl.py` — `#SBATCH`, `bash -n`, executable bit |
+| Folder README | `NN_topic/README.md` | review |
+| **RunPod entry** | `runpod/runpod_ctl.py` → `EXAMPLES` | `test_runpod_ctl.py` **fails** without it |
+| **Logic test** | `tests/test_*.py` | review |
+| **Test registration** | `tests/run_all.sh` **and** `.github/workflows/tests.yml` | review — *both*, not one |
+| **Book page** | `docusaurus-docs/docs/tutorials/…` | `npm run build` |
+| **Sidebar entry** | `docusaurus-docs/sidebars.js` | nothing — a missing entry silently **orphans** the page |
+
+That last row is the only one with no automated guard, so check it by hand.
+
+`uv run scripts/new_example.py <folder>` writes the four in-folder files and
+prints the `runpod_ctl.py` line for you. The rest is on you.
 
 ### The batch invariant
 
@@ -645,9 +717,13 @@ The docs workflow triggers **only** on pushes to `main` touching
 
 Copy this into your PR. The PR template already contains it.
 
-### Structure
+### Structure — a topic is a FOLDER, not a page
 - [ ] Four files present: `train_*.py`, `ds_config*.json`, `run_deepspeed.sh`, `README.md`
 - [ ] `run_deepspeed.sh` is executable (`chmod +x`)
+- [ ] Registered in `EXAMPLES` in `runpod/runpod_ctl.py`
+- [ ] A book page exists **and** is listed in `sidebars.js`
+- [ ] A logic test exists, registered in **both** `tests/run_all.sh` and the CI workflow
+- [ ] Managed by **`uv`**, trained with **`deepspeed`** (or a stated exception)
 - [ ] No shared logic extracted into a common module
 
 ### Reader A — no GPU

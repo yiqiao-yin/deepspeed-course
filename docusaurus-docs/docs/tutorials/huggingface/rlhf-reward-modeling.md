@@ -8,6 +8,8 @@ Everything in the next four pages is defined by **what it deletes from this
 pipeline**. So it is worth building the pipeline first, even though almost
 nobody runs it in full any more.
 
+**Example folder:** [`05_huggingface_reward_model/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/05_huggingface_reward_model) — `RewardTrainer` + DeepSpeed, plus `reward_modeling.py` (the Bradley-Terry objective on plain tensors, no GPU).
+
 **TRL trainers:** `RewardTrainer`, `PPOTrainer`
 
 ## 1. Why Alignment Needs More Than SFT
