@@ -117,7 +117,7 @@ def require_gpu() -> None:
     print("  you should run it first, because it can rule the idea out:")
     print("      uv run train_token_lm.py --floor-only")
     print("      uv run 04_intermediate_rnn_stock_data/tokenize_series.py")
-    print("      uv run tests/test_tokenize_series.py")
+    print("      uv run tests/test_ts_forecasting.py")
     print("\n  Check your setup:")
     print("      nvidia-smi")
     print("      ds_report")

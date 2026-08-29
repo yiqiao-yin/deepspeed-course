@@ -54,7 +54,7 @@ WHAT YOU PAY, AND IT IS NOT SUBTLE
    the same rule as the scaler in §5, for the same reason. Test values outside
    the fitted range clip to the end bins, and `clip_rate` measures how often.
 
-Plain PyTorch, no GPU, no download. Covered by `tests/test_tokenize_series.py`.
+Plain PyTorch, no GPU, no download. Covered by `tests/test_ts_forecasting.py`.
 
 References:
 - van den Oord et al. "WaveNet." 2016. https://arxiv.org/abs/1609.03499

@@ -214,6 +214,43 @@ def test_page_structure(r: Results) -> None:
             "; ".join(f"{k[0].name}/{k[1]}: {v}" for k, v in list(dups.items())[:3]))
 
 
+def test_referenced_tests_exist(r: Results) -> None:
+    """
+    Every `tests/test_*.py` named in code or docs must actually exist.
+
+    Merging or renaming a suite leaves docstrings pointing at a file that is
+    gone, and a reader following the instruction gets "no such file" — the
+    kind of rot nothing else catches. Four of these appeared the moment two
+    modules were merged into one suite.
+    """
+    import re
+
+    have = {p.name for p in (REPO_ROOT / "tests").glob("test_*.py")}
+    # Placeholders inside contributor-facing templates are illustrative, not
+    # references to real files.
+    PLACEHOLDERS = {"test_my_topic.py", "test_your_topic.py"}
+
+    bad = []
+    for p in REPO_ROOT.rglob("*"):
+        if not p.is_file() or p.suffix not in {".py", ".md", ".sh", ".yml"}:
+            continue
+        if {"node_modules", "build", ".venv", ".git"} & set(p.parts):
+            continue
+        for m in re.findall(r"tests/(test_\w+\.py)",
+                            p.read_text(errors="ignore")):
+            if m not in have and m not in PLACEHOLDERS:
+                bad.append(f"{p.relative_to(REPO_ROOT)} -> tests/{m}")
+
+    r.check(not bad,
+            "every referenced tests/test_*.py exists",
+            "; ".join(sorted(set(bad))[:5]))
+
+    # And the guard must not be vacuous — the suites it protects must be real.
+    r.check(len(have) >= 10,
+            f"the test directory is populated ({len(have)} suites)",
+            "if this were near zero the check above would pass trivially")
+
+
 def main() -> int:
     r = Results("Docs site style — mermaid house theme and page structure")
     test_global_theme(r)
@@ -221,6 +258,7 @@ def main() -> int:
     test_no_inline_theme_overrides(r)
     test_diagram_hygiene(r)
     test_page_structure(r)
+    test_referenced_tests_exist(r)
     return r.finish()
 
 

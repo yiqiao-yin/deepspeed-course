@@ -130,7 +130,7 @@ def require_gpu() -> None:
     print("      ALLOW_CPU=1 uv run train_modern_ts.py --sweep")
     print("\n  The primitives need no GPU and no download at all:")
     print("      uv run 04_intermediate_rnn_stock_data/modern_ts_layers.py")
-    print("      uv run tests/test_modern_ts.py")
+    print("      uv run tests/test_ts_forecasting.py")
     print("\n  Check your setup:")
     print("      nvidia-smi")
     print("      ds_report")
@@ -350,6 +350,7 @@ def run_one(model_name, horizon, values, args):
     crit = nn.MSELoss()
     x_tr, y_tr = x_tr.to(device), y_tr.to(device)
 
+    step = 0
     for _ in range(args.epochs):
         perm = torch.randperm(len(x_tr))
         for i in range(0, len(x_tr), args.batch_size):
@@ -358,6 +359,11 @@ def run_one(model_name, horizon, values, args):
             opt.zero_grad(); loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
+            step += 1
+            if 0 < args.max_steps <= step:
+                break
+        if 0 < args.max_steps <= step:
+            break
 
     model.eval()
     with torch.no_grad():
@@ -383,7 +389,9 @@ def main() -> None:
     parser.add_argument("--seq-len", type=int, default=60)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--max-steps", type=int, default=-1,
-                        help="Unused here; accepted so the dry-run path works.")
+                        help="Cap optimizer steps per (model, horizon). Makes "
+                             "`sbatch run_deepspeed.sh --max-steps 20` a real "
+                             "dry run rather than a full job.")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)

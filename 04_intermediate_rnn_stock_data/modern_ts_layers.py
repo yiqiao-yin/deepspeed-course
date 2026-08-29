@@ -28,7 +28,7 @@ WHAT IS IMPLEMENTED
     causal_conv1d                     a convolution that cannot look forward
     multi_scale_decompose             TimeMixer-style multi-resolution split
 
-Plain PyTorch, no GPU, no download. Covered by `tests/test_modern_ts.py`.
+Plain PyTorch, no GPU, no download. Covered by `tests/test_ts_forecasting.py`.
 
 THE FRAMING WORTH KEEPING
 -------------------------
@@ -284,7 +284,7 @@ def causal_conv1d(x: torch.Tensor, weight: torch.Tensor,
     silent.
 
     The fix is to pad the LEFT only, by `dilation * (k - 1)`, and drop the
-    overhang on the right. `tests/test_modern_ts.py` verifies causality
+    overhang on the right. `tests/test_ts_forecasting.py` verifies causality
     directly: perturb input t+1 and assert output t does not move.
 
     Args:
