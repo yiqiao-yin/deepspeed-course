@@ -14,19 +14,29 @@ This is a pedagogical example for distributed training. Nothing here is a tradin
 
 An important detail that the framing "stock price prediction" obscures: the model does **not** predict price. It predicts a **mean-reversion signal**.
 
-For each moving-average period $p \in \{14, 26, 50, 100, 200\}$ trading days, define the deviation of price from its own moving average:
+Write $P(t)$ for the closing price on trading day $t$, and let
 
 $$
-\delta_p(t) = P(t) - \mathrm{MA}_p(t), \qquad \mathrm{MA}_p(t) = \frac{1}{p}\sum_{i=0}^{p-1}P(t-i)
+\mathcal{P} = \{14,\; 26,\; 50,\; 100,\; 200\}
 $$
 
-and average across horizons:
+be the set of moving-average periods. For each $p \in \mathcal{P}$, define the deviation of price from its own moving average:
 
 $$
-\bar\delta(t) = \frac{1}{|\mathcal{P}|}\sum_{p\in\mathcal{P}}\delta_p(t)
+\delta_p(t) \;=\; P(t) - \mathrm{MA}_p(t),
+\qquad
+\mathrm{MA}_p(t) \;=\; \frac{1}{p}\sum_{i=0}^{p-1} P(t-i)
 $$
 
-The model observes $\bar\delta(t-59), \dots, \bar\delta(t)$ — 60 trading days — and predicts $\bar\delta(t+1)$.
+Both are **causal**: $\mathrm{MA}_p(t)$ uses days $t-p+1$ through $t$ and nothing later. Averaging across horizons gives the target,
+
+$$
+y(t) \;\equiv\; \bar\delta(t) \;=\; \frac{1}{|\mathcal{P}|}\sum_{p\in\mathcal{P}} \delta_p(t)
+$$
+
+The alias $y(t)$ is introduced here because the rest of this page uses it for the generic forecasting notation; $y$ and $\bar\delta$ are the same quantity throughout.
+
+The model observes $y(t-59), \dots, y(t)$ — 60 trading days — and predicts $\hat y(t+1)$.
 
 **This choice is defensible and worth understanding.** Raw price is close to a random walk with a strong unit root: the best predictor of tomorrow's price is today's price, and a model trained on levels learns exactly that while appearing accurate. By contrast $\bar\delta$ is a *detrended* quantity, roughly stationary and genuinely mean-reverting — prices do tend to return toward their moving averages. Modelling a stationary transformation instead of a non-stationary level is the right instinct.
 
@@ -231,16 +241,20 @@ Inverting to original units before computing the metric is correct — RMSE in s
 But **an RMSE with nothing to compare it to carries no information.** For any time-series forecast the mandatory reference is the naive persistence predictor:
 
 $$
-\hat y_{\text{naive}}(t+1) = y(t)
+\hat y_{\text{naive}}(t+1) \;=\; y(t)
 $$
+
+(recall from §1 that $y \equiv \bar\delta$ — this is the mean-reversion signal, not the price)
 
 Given §1's observation that $\bar\delta$ is smooth by construction, persistence will be *hard to beat*. Always report the ratio — the Theil U statistic:
 
 $$
-U = \frac{\mathrm{RMSE}_{\text{model}}}{\mathrm{RMSE}_{\text{naive}}}
+U_2 \;=\; \frac{\mathrm{RMSE}_{\text{model}}}{\mathrm{RMSE}_{\text{naive}}}
 $$
 
-$U < 1$ means the model adds value; $U \ge 1$ means a one-line baseline does as well as your distributed RNN. **A large fraction of published financial deep-learning results fail this test when it is applied.**
+The subscript matters: Theil defined two statistics, and "Theil's U" unqualified is ambiguous. $U_1$ is his *inequality coefficient*, a normalised error bounded in $[0,1]$; $U_2$ is the ratio above. This page always means $U_2$.
+
+$U_2 < 1$ means the model adds value; $U_2 \ge 1$ means a one-line baseline does as well as your distributed RNN. **A large fraction of published financial deep-learning results fail this test when it is applied.**
 
 ```python
 naive_pred = test_actual_inv[:-1]          # predict tomorrow = today
@@ -248,15 +262,23 @@ naive_true = test_actual_inv[1:]
 rmse_naive = np.sqrt(mean_squared_error(naive_true, naive_pred))
 print(f"Model RMSE: {test_rmse:.4f}")
 print(f"Naive RMSE: {rmse_naive:.4f}")
-print(f"Theil U:    {test_rmse / rmse_naive:.4f}   (<1 means the model helps)")
+print(f"Theil U2:   {test_rmse / rmse_naive:.4f}   (<1 means the model helps)")
 ```
 
 :::tip For a trading signal, RMSE is the wrong metric anyway
 Profit depends on **direction**, not magnitude. A model with excellent RMSE that systematically gets the sign wrong at turning points loses money. Report directional accuracy alongside RMSE:
 
-$$\text{DA} = \frac{1}{n}\sum_{t}\mathbb{1}\left[\operatorname{sign}\left(\hat y_{t+1} - y_t\right) = \operatorname{sign}\left(y_{t+1} - y_t\right)\right]$$
+$$
+\mathrm{DA} \;=\; \frac{1}{n}\sum_{t}\mathbb{1}\Big[\operatorname{sign}\big(\hat y(t+1) - y(t)\big) \;=\; \operatorname{sign}\big(y(t+1) - y(t)\big)\Big]
+$$
 
-and compare against 50%. Note that a persistence-like model has *undefined* direction, which is another way of seeing that low RMSE and useful signal are different things.
+and compare against 50%.
+
+Two caveats, both easy to miss:
+
+**Persistence scores zero, not "undefined."** The persistence forecast gives $\hat y(t+1) - y(t) = 0$ exactly, and $\operatorname{sign}(0) = 0$, which never equals $\pm 1$. So the baseline that is *hardest to beat on RMSE* scores $\mathrm{DA} = 0$ — a direct demonstration that low RMSE and useful signal are different things.
+
+**This is the direction of $\bar\delta$, not of price.** Since $\bar\delta = P - \overline{\mathrm{MA}}$, a rising $\bar\delta$ means price rose *relative to its own moving average* — which is compatible with the price falling, if the average falls faster. Converting a $\bar\delta$ forecast into a price or return forecast requires modelling the moving average's own motion, and this example does not do that.
 :::
 
 ## 6. DeepSpeed Configuration
@@ -356,7 +378,138 @@ flowchart TB
     class TRAPS deep
 ```
 
-## 8. Improving the Model
+## 8. Attention After the RNN
+
+The model in §4 ends with:
+
+```python
+out, _ = self.rnn(x)
+out = self.fc(out[:, -1, :])      # 59 hidden states discarded
+```
+
+Sixty days go in, the last hidden state is kept, the other fifty-nine are thrown away. Everything the sequence learned has to survive by being squeezed through one fixed-width vector.
+
+**That is exactly the bottleneck attention was invented to remove.** Bahdanau et al. (2014) raised the identical complaint about translation — one context vector is not enough — and the fix transfers directly. Instead of taking the last state, take a *learned weighted average* of all of them:
+
+$$
+c \;=\; \sum_{t=1}^{T}\alpha_t\, h_t,
+\qquad
+\alpha \;=\; \operatorname{softmax}(e),
+\qquad
+\sum_{t}\alpha_t = 1
+$$
+
+where the scores $e_t$ come from either
+
+$$
+e_t \;=\; v^\top \tanh\!\big(W_q q + W_k h_t\big)
+\quad\text{(additive, Bahdanau)}
+\qquad\text{or}\qquad
+e_t \;=\; \frac{q^\top h_t}{\sqrt{d}}
+\quad\text{(scaled dot-product, Luong)}
+$$
+
+with $q = h_T$ as the query: *given where I ended up, which earlier states should I revisit?*
+
+:::tip Attention **contains** the current model
+Put all the mass on $t = T$ and $c = h_T$ exactly — you recover `out[:, -1, :]`. So this is a strict generalisation, and it cannot be worse in representational terms. What you pay is parameters, and on ~2,400 training samples that turns out to be the binding constraint. `tests/test_attention_layers.py` asserts the equivalence numerically.
+:::
+
+### The $1/\sqrt{d}$ is not cosmetic
+
+For $q, h$ with unit-variance components, $q^\top h$ has variance $d$. The softmax of scores that large is effectively one-hot, its gradient is ~0, and attention stops learning before it starts. Measured over 400 random draws with 16 keys (uniform would be 0.0625):
+
+| $d$ | max weight, unscaled | max weight, scaled |
+|---|---|---|
+| 8 | 0.5605 | 0.2402 |
+| 32 | 0.7872 | 0.2472 |
+| 128 | 0.8965 | 0.2539 |
+| 512 | 0.9412 | 0.2450 |
+
+Reproduce with `uv run 04_intermediate_rnn_stock_data/attention_layers.py`.
+
+### Causal masking: needed less often than you would think
+
+:::warning Not needed here — and applying it anyway loses information
+The model reads a window of 60 **past** days and emits one number for day 61. Every element is already historical, so window-position 10 may legitimately attend to window-position 50. Masking would discard real information for no reason.
+
+It becomes **required** the moment you add per-timestep losses, autoregressive multi-step decoding, or an encoder–decoder. Then it is the in-model analogue of the scaler leak in §5: the future contaminating the past, producing excellent metrics and a worthless model.
+:::
+
+### Three architectures, and a fourth that is not an RNN
+
+[`train_rnn_attention.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_intermediate_rnn_stock_data/train_rnn_attention.py) implements six models behind one `--model` flag, sharing the data pipeline, the split-then-scale discipline and the metrics — so only the architecture varies.
+
+| `--model` | What it is |
+|---|---|
+| `rnn` | the §4 baseline: ReLU RNN, `out[:, -1, :]` |
+| `lstm` | gated recurrence, still last-state pooling |
+| `lstm_attn` | **LSTM + additive attention** over all 60 states |
+| `lstm_mha` | LSTM + multi-head self-attention, residual, mean-pooled |
+| `darnn` | **DA-RNN** (Qin et al., 2017): attention over features, *then* over time |
+| `dlinear` | **no recurrence at all** — decomposition + one linear layer |
+
+**DA-RNN** is the one purpose-built for this problem. Its stage 1 attends across *input series* at each timestep, stage 2 across time. Stage 1 is a no-op here because `input_size=1` — softmax over one feature is identically 1 — and it becomes useful the moment you add the volume, realized volatility and individual $\delta_p$ that §1 already computes and discards.
+
+**Temporal Fusion Transformer** (Lim et al., 2021) is the production-grade version of this idea: LSTM encoder for local structure, interpretable multi-head attention for long-range, gating to prune. It is not implemented here because at 2,400 samples it would be badly over-parameterised, and the measurement below explains why that matters.
+
+### Measured: attention does not help on this task
+
+Seed 42, 40 epochs, CPU, no DeepSpeed. Persistence RMSE is **3.9843**.
+
+| Model | Params | RMSE | **Theil $U_2$** | Directional acc. |
+|---|---|---|---|---|
+| `dlinear` | **122** | 4.1248 | 1.0352 | 0.4936 |
+| `rnn` | 7,801 | 4.3364 | 1.0884 | 0.4776 |
+| `lstm` | 31,051 | 4.1195 | **1.0339** | 0.5128 |
+| `lstm_attn` | 37,515 | 5.2640 | 1.3212 | 0.4840 |
+| `darnn` | 40,843 | 6.7146 | 1.6853 | 0.5192 |
+| `lstm_mha` | 41,351 | 9.0232 | 2.2647 | 0.5385 |
+
+Two things to read off this, and neither is flattering:
+
+**Every model loses to persistence.** $U_2 > 1$ across the board. The one-line baseline `predict tomorrow = today` beats all six, which is what §1 predicted: the target is a moving-average deviation and therefore smooth by construction, so persistence is very close to optimal.
+
+**More capacity is monotonically worse.** Order the table by parameter count and $U_2$ rises almost perfectly with it — 122 params at 1.035, 41k params at 2.265. On ~2,400 training sequences the attention models have ample capacity to memorise and none of the data needed to generalise. A 122-parameter linear model is competitive with an LSTM and beats every attention variant.
+
+:::danger This is the result, and reporting it is the point
+Attention is a real improvement to the *architecture* — it removes a genuine bottleneck, and on translation or long-horizon multivariate forecasting it earns its place. It does not help **here**, and the reasons are specific: a smooth target, a tiny dataset, and a baseline that is already near-optimal.
+
+Had this page reported "we added attention and RMSE improved" without the persistence column, every number in it would have been true and the conclusion would have been wrong. That is the same failure mode §5 is about, one level up.
+:::
+
+### What attention *does* buy on this task
+
+Interpretability. The weights $\alpha_t$ say which of the sixty days the model used, and unlike most settings you can look at them:
+
+```bash
+uv run 04_intermediate_rnn_stock_data/train_rnn_attention.py --model lstm_attn
+# ... prints the mean attention mass over the 60-day window, oldest to newest
+```
+
+If the mass concentrates on the last few days, the model has rediscovered persistence — which, given the table above, is the correct thing for it to do.
+
+### If you want attention to actually help here
+
+In rough order of expected value:
+
+1. **Add features.** `input_size=1` is the binding constraint. Volume, realized volatility and the individual $\delta_p$ are already computed and discarded, and DA-RNN's stage-1 attention only becomes meaningful once there is more than one series to choose between.
+2. **Add tickers.** ~2,400 sequences from one stock cannot support 40k parameters. Cross-sectional training across hundreds of names regularises far more effectively than any architectural choice.
+3. **Lengthen the horizon.** Attention pays off when long-range dependencies exist. Predicting $t+1$ from a smooth series has almost none; predicting $t+20$ has more.
+4. **Then** revisit the architecture.
+
+### CPU-runnable
+
+The mechanisms need no GPU and no download:
+
+```bash
+uv run 04_intermediate_rnn_stock_data/attention_layers.py   # the demos above
+uv run tests/test_attention_layers.py                       # 49 checks
+```
+
+The tests assert properties rather than shapes — weights form a distribution, masking precedes the softmax (zeroing after leaves the denominator contaminated), one-hot attention reproduces `out[:, -1, :]` exactly, and the decomposition reconstructs its input.
+
+## 9. Improving the Model
 
 Ordered by expected value, not by novelty.
 
@@ -371,7 +524,7 @@ Ordered by expected value, not by novelty.
 | Multiple tickers | ~2,400 usable samples from one stock is very little data. Cross-sectional training regularizes strongly |
 | Huber loss instead of MSE | Financial data is heavy-tailed; MSE's quadratic outlier sensitivity lets a few crash days dominate. See [loss choice](/docs/tutorials/basic/neural-network#32-robust-regression-alternatives) |
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **`yfinance` fails on a compute node.** Compute nodes are usually air-gapped. Download on a login node, cache to disk (`analysis_df.to_parquet(...)`), and load from disk in the job.
 
@@ -411,3 +564,11 @@ Ordered by expected value, not by novelty.
 10. Saxe, A. M., McClelland, J. L., & Ganguli, S. (2014). Exact solutions to the nonlinear dynamics of learning in deep linear networks. *ICLR 2014*. [arXiv:1312.6120](https://arxiv.org/abs/1312.6120) — why orthogonal initialization works.
 11. Pascanu, R., Mikolov, T., & Bengio, Y. (2013). On the difficulty of training Recurrent Neural Networks. *ICML 2013*. [arXiv:1211.5063](https://arxiv.org/abs/1211.5063)
 12. Salinas, D., Flunkert, V., Gasthaus, J., & Januschowski, T. (2020). DeepAR: Probabilistic forecasting with autoregressive recurrent networks. *International Journal of Forecasting*, 36(3), 1181–1191. — probabilistic RNN forecasting done properly.
+
+**Attention for time series (§8)**
+
+- Bahdanau, D., Cho, K., & Bengio, Y. (2014). Neural Machine Translation by Jointly Learning to Align and Translate. [arXiv:1409.0473](https://arxiv.org/abs/1409.0473)
+- Luong, M.-T., Pham, H., & Manning, C. (2015). Effective Approaches to Attention-based Neural Machine Translation. [arXiv:1508.04025](https://arxiv.org/abs/1508.04025)
+- Qin, Y., et al. (2017). A Dual-Stage Attention-Based Recurrent Neural Network for Time Series Prediction. *IJCAI 2017*. [arXiv:1704.02971](https://arxiv.org/abs/1704.02971)
+- Lim, B., Arık, S. Ö., Loeff, N., & Pfister, T. (2021). Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting. *International Journal of Forecasting*. [arXiv:1912.09363](https://arxiv.org/abs/1912.09363)
+- Zeng, A., Chen, M., Zhang, L., & Xu, Q. (2023). Are Transformers Effective for Time Series Forecasting? *AAAI 2023*. [arXiv:2205.13504](https://arxiv.org/abs/2205.13504)

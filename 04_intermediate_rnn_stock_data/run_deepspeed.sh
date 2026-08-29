@@ -75,7 +75,19 @@ echo "Task: Stock price delta prediction"
 echo "Ticker: AAPL (configurable in script)"
 echo "Expected result: Test RMSE depends on market volatility"
 echo "Note: Requires internet access for yfinance data download"
-deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
+# MODEL selects the architecture. Unset (or "baseline") runs the original
+# last-state RNN; anything else runs train_rnn_attention.py, which shares the
+# data pipeline and metrics so the comparison is like-for-like.
+#   MODEL=lstm_attn sbatch run_deepspeed.sh        # attention over 60 states
+#   MODEL=dlinear   sbatch run_deepspeed.sh        # the 122-parameter baseline
+#   sbatch run_deepspeed.sh --max-steps 20         # cheap dry run
+MODEL="${MODEL:-baseline}"
+
+if [ "${MODEL}" = "baseline" ]; then
+    deepspeed --num_gpus=2 train_rnn_stock_data_ds.py "$@"
+else
+    deepspeed --num_gpus=2 train_rnn_attention.py --model "${MODEL}" "$@"
+fi
 
 echo "=================================================="
 echo "End Time: $(date)"

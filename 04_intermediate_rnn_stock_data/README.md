@@ -676,6 +676,66 @@ stock-rnn-deepspeed/
 
 ---
 
+## Attention over the RNN's hidden states
+
+`train_rnn_stock_data_ds.py` ends with `out[:, -1, :]` — sixty days in, one
+hidden state kept, fifty-nine discarded. `train_rnn_attention.py` replaces that
+pooling with attention and puts six architectures behind one flag, sharing the
+data pipeline and metrics so only the architecture varies:
+
+```bash
+uv run train_rnn_attention.py --list-models          # no GPU needed
+uv run train_rnn_attention.py --model lstm_attn
+MODEL=darnn sbatch run_deepspeed.sh
+```
+
+| `--model` | What it is |
+|---|---|
+| `rnn` | the existing baseline: ReLU RNN, `out[:, -1, :]` |
+| `lstm` | gated recurrence, still last-state pooling |
+| `lstm_attn` | LSTM + additive (Bahdanau) attention over all 60 states |
+| `lstm_mha` | LSTM + multi-head self-attention, residual, mean-pooled |
+| `darnn` | DA-RNN (Qin 2017): attention over features, then over time |
+| `dlinear` | no recurrence — decomposition + one linear layer (Zeng 2022) |
+
+### The measured result
+
+Seed 42, 40 epochs, CPU. Persistence RMSE **3.9843**.
+
+| Model | Params | RMSE | Theil U₂ | Directional |
+|---|---|---|---|---|
+| `dlinear` | **122** | 4.1248 | 1.0352 | 0.4936 |
+| `rnn` | 7,801 | 4.3364 | 1.0884 | 0.4776 |
+| `lstm` | 31,051 | 4.1195 | **1.0339** | 0.5128 |
+| `lstm_attn` | 37,515 | 5.2640 | 1.3212 | 0.4840 |
+| `darnn` | 40,843 | 6.7146 | 1.6853 | 0.5192 |
+| `lstm_mha` | 41,351 | 9.0232 | 2.2647 | 0.5385 |
+
+**Every model loses to persistence** (U₂ > 1), and **more capacity is
+monotonically worse** — 122 parameters at 1.035, 41k at 2.265. The target is a
+moving-average deviation and therefore smooth by construction, so persistence is
+near-optimal, and ~2,400 sequences cannot support 40k parameters.
+
+That is the result, and reporting it is the point. Attention removes a real
+architectural bottleneck; it does not help *here*, for specific and stateable
+reasons. Reporting "we added attention and RMSE improved" without the
+persistence column would have been true in every number and wrong in its
+conclusion.
+
+What attention does buy is **interpretability** — the weights say which of the
+sixty days the model used, and `--model lstm_attn` prints them.
+
+### CPU-runnable, no download
+
+```bash
+uv run attention_layers.py               # additive/dot attention, masking, DLinear
+uv run ../tests/test_attention_layers.py # 49 checks
+```
+
+Full treatment: [Attention After the RNN](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/intermediate/stock-prediction) §8.
+
+---
+
 ## Renting a GPU on RunPod (with auto-shutdown)
 
 There is no SLURM on RunPod, so the pod lifecycle is driven by API instead —

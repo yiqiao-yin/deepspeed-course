@@ -37,6 +37,9 @@ jobs:
       - name: Stock data — look-ahead bias
         run: uv run tests/test_stock_leakage.py
 
+      - name: Attention over RNN hidden states
+        run: uv run tests/test_attention_layers.py
+
       - name: GRPO rewards and model class
         run: uv run tests/test_grpo_rewards.py
 
