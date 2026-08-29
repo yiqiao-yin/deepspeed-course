@@ -40,6 +40,9 @@ jobs:
       - name: Attention over RNN hidden states
         run: uv run tests/test_attention_layers.py
 
+      - name: Modern TS primitives and value tokenization
+        run: uv run tests/test_ts_forecasting.py
+
       - name: GRPO rewards and model class
         run: uv run tests/test_grpo_rewards.py
 

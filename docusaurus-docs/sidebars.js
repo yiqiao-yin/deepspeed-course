@@ -33,6 +33,7 @@ const sidebars = {
           items: [
             'tutorials/intermediate/bayesian-nn',
             'tutorials/intermediate/stock-prediction',
+            'tutorials/intermediate/mean-reversion-forecasting',
           ],
         },
         {

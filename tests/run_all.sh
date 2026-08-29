@@ -22,6 +22,7 @@ TESTS=(
     tests/test_ds_configs.py
     tests/test_stock_leakage.py
     tests/test_attention_layers.py
+    tests/test_ts_forecasting.py
     tests/test_grpo_rewards.py
     tests/test_preference_losses.py
     tests/test_reward_model.py
