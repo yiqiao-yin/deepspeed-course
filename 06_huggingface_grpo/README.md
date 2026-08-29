@@ -87,6 +87,7 @@ See [`tests/README.md`](../tests/README.md) for what each suite covers.
 ```
 06_huggingface_grpo/
 ├── grpo_gsm8k_train.py         # Main training script (GRPO + DeepSpeed + LoRA)
+├── preference_losses.py         # DPO/IPO/CPO/KTO/ORPO/SimPO — CPU-runnable, no GPU
 ├── ds_config.json               # DeepSpeed ZeRO-2 configuration
 ├── run_deepspeed.sh             # SLURM batch script for CoreWeave/HPC clusters
 ├── archive/                     # Old experimental scripts
@@ -100,6 +101,44 @@ See [`tests/README.md`](../tests/README.md) for what each suite covers.
 │   └── upload_to_hf.py         # HuggingFace upload utility
 └── README.md                    # This file
 ```
+
+---
+
+## The alternatives to GRPO
+
+GRPO is *online* RL: it samples rollouts and scores them with a verifier. That is
+right when you have a cheap ground-truth checker — GSM8K answers, unit tests.
+
+Most alignment work has no verifier, only `(prompt, chosen, rejected)` pairs. For
+that, the **offline preference-optimization family** is simpler and roughly an
+order of magnitude cheaper. `preference_losses.py` implements all six as their
+actual formulas, on plain tensors:
+
+```bash
+uv run preference_losses.py                    # no GPU, no download
+uv run ../tests/test_preference_losses.py      # 58 checks
+```
+
+The framing worth carrying: each method is defined by **what it deletes** from
+the full RLHF pipeline, and the deletions are different.
+
+| Method | Deletes | Reference model? |
+|---|---|---|
+| DPO | the reward model, and the rollouts | yes |
+| IPO | — (bounds DPO's objective) | yes |
+| CPO | the reference model | **no** |
+| KTO | the need for *paired* data | yes |
+| ORPO | the reference model *and* the SFT stage | **no** |
+| SimPO | the reference model, and length bias | **no** |
+| **GRPO** | **the critic** | yes |
+
+> "DPO removes the reward model" and "GRPO removes the critic" are two different
+> claims about two different components. Conflating them is the most common
+> confusion in this area.
+
+Full treatment in the course book:
+[Preference Optimization](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/huggingface/preference-optimization)
+and [Beyond GRPO](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/huggingface/beyond-grpo).
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 7
 ---
 
 # GRPO Training
@@ -628,6 +628,15 @@ Final GSM8K accuracy ~62%, from a ~35% baseline
 6. It excels wherever reward is **verifiable** — math, code, structured extraction — because $R$ then has no parameters and cannot drift.
 
 ## Next Steps
+
+**Where GRPO sits in the alignment thread:**
+
+- [RLHF and Reward Modeling](/docs/tutorials/huggingface/rlhf-reward-modeling) — the four-model pipeline GRPO is cutting down. §2 below derives PPO; this page has the surrounding stages.
+- [Preference Optimization](/docs/tutorials/huggingface/preference-optimization) — DPO, IPO, CPO, KTO, ORPO, SimPO. §3 below sketches DPO; that page treats the whole family. Note the distinction: **DPO removes the reward model, GRPO removes the critic.**
+- [Online Preference Methods](/docs/tutorials/huggingface/online-preference-methods) — GRPO's sampling loop with a *judge* instead of a verifier.
+- [Beyond GRPO](/docs/tutorials/huggingface/beyond-grpo) — Dr. GRPO, DAPO and GSPO. §7 below opens the Dr. GRPO critique; that page has the full set of four biases and what to change.
+
+**Then:**
 
 - [GRPO: Worked Numerical Example](/docs/tutorials/huggingface/grpo-worked-example) — full simulation of the degenerate-group and estimator-bias effects
 - [DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — the $16\Psi$ accounting used in §5

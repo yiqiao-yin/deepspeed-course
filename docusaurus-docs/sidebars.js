@@ -43,8 +43,15 @@ const sidebars = {
             'tutorials/huggingface/llm-finetuning',
             'tutorials/huggingface/trl-function-calling',
             'tutorials/huggingface/ocr-vision-language',
+            // The alignment thread, in the order the literature arrived:
+            // RLHF (2017-22) -> DPO family (2023-24) -> GRPO (Feb 2024)
+            // -> online methods (2024) -> post-GRPO fixes (2025).
+            'tutorials/huggingface/rlhf-reward-modeling',
+            'tutorials/huggingface/preference-optimization',
             'tutorials/huggingface/grpo-training',
             'tutorials/huggingface/grpo-worked-example',
+            'tutorials/huggingface/online-preference-methods',
+            'tutorials/huggingface/beyond-grpo',
             'tutorials/huggingface/gpt-oss-finetuning',
             'tutorials/huggingface/multi-agent',
           ],

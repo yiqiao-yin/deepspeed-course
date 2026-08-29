@@ -220,7 +220,11 @@ Every HuggingFace example in this course uses BF16 where the hardware allows. BF
 |---|---|---|---|
 | [TRL Function Calling](/docs/tutorials/huggingface/trl-function-calling) | Qwen3-0.6B | SFT for tool use | 2 |
 | [OCR Vision-Language](/docs/tutorials/huggingface/ocr-vision-language) | Qwen2-VL-2B | Multimodal LoRA | 2 |
+| [RLHF and Reward Modeling](/docs/tutorials/huggingface/rlhf-reward-modeling) | — | The four-model pipeline (concepts) | — |
+| [Preference Optimization](/docs/tutorials/huggingface/preference-optimization) | — | DPO / IPO / CPO / KTO / ORPO / SimPO | 1 |
 | [GRPO Training](/docs/tutorials/huggingface/grpo-training) | Qwen-1.5B | RL with verifiable rewards | 2 + offload |
+| [Online Preference Methods](/docs/tutorials/huggingface/online-preference-methods) | — | Online DPO / Nash-MD / XPO | 2 |
+| [Beyond GRPO](/docs/tutorials/huggingface/beyond-grpo) | — | Dr. GRPO / DAPO / GSPO | 2 |
 | [GPT-OSS Fine-tuning](/docs/tutorials/huggingface/gpt-oss-finetuning) | gpt-oss-20b | MoE LoRA | 2 |
 | [Multi-Agent](/docs/tutorials/huggingface/multi-agent) | Qwen-1.5B | Multi-agent GRPO (exploratory) | — |
 

@@ -40,6 +40,9 @@ jobs:
       - name: GRPO rewards and model class
         run: uv run tests/test_grpo_rewards.py
 
+      - name: Preference optimization losses (DPO family)
+        run: uv run tests/test_preference_losses.py
+
       - name: Video frame extraction
         run: uv run tests/test_video_frames.py
 
