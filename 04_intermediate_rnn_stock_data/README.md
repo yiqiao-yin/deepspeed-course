@@ -725,6 +725,54 @@ conclusion.
 What attention does buy is **interpretability** — the weights say which of the
 sixty days the model used, and `--model lstm_attn` prints them.
 
+### Beyond RNNs: the horizon is what mattered
+
+`train_modern_ts.py --sweep` runs N-BEATS, TCN, PatchTST, TimeMixer and DLinear
+at H = 1/5/10/20. Theil U₂ vs persistence — **below 1.0 beats it**:
+
+| model | H=1 | H=5 | H=10 | H=20 |
+|---|---|---|---|---|
+| persistence | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **dlinear** | 1.0475 | 1.0001 | 0.9672 | **0.9392** |
+| tcn | 1.2005 | **0.9911** | 0.9640 | 0.9710 |
+| timemixer | 1.1168 | 1.0513 | 0.9728 | 0.9474 |
+| nbeats | 1.4274 | 1.1577 | 1.1089 | 1.0280 |
+| patchtst | 2.4491 | 1.4055 | 1.2841 | 1.1423 |
+
+At H=1 nothing beats persistence — the same result the attention sweep found.
+**By H=5 the TCN is ahead; by H=10 three models are.** The earlier failure was
+about the *setup*, not the architectures: a smooth target one step ahead is a
+regime where persistence is near-optimal, and twenty steps ahead it is not.
+
+The simplest model wins at the longest horizon, and PatchTST is worst
+everywhere — data-hungry architectures do not suit ~2,400 sequences.
+
+> **One split, one seed, one ticker.** These margins are 3–6%. Walk-forward
+> validation is the honest protocol and this table has not had it.
+
+### Predicting the signal as a LANGUAGE
+
+`train_token_lm.py` bins δ̄ into a vocabulary and runs a decoder-only
+transformer over the tokens — what WaveNet did to audio and Chronos does to
+time series.
+
+```bash
+uv run train_token_lm.py --floor-only     # run this FIRST
+```
+
+The diagnostic that matters: bin edges fitted on raw train values give a **3.57%
+clip rate** and an error floor of **2.2003** that does *not* improve with more
+bins (4-bit 2.53 → 12-bit 2.16, then flat) — the residual is clipping, not
+resolution, because the test range exceeds the train range.
+
+Per-window scaling first (Chronos's "scaling and quantization") takes clipping
+to **0.01%** and the floor to **0.1028** — 21× better, headroom over persistence
+from 1.7× to 37.3×.
+
+Trained: U₂ = 1.0712, still losing at H=1 but by less than any attention
+variant — and mean entropy 5.15 of 8 bits, the model correctly reporting it does
+not know. A regression head cannot say that.
+
 ### CPU-runnable, no download
 
 ```bash

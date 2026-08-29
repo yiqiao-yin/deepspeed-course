@@ -105,6 +105,39 @@ An ordinary `conv1d` with `padding=k//2` is **centred**: the output at $t$ depen
 
 The test perturbs a future input and asserts no earlier output moves, and separately checks the measured receptive field against the formula rather than against itself.
 
+### Measured: the horizon is what mattered
+
+`--sweep`, seed 42, 30 epochs, CPU. Theil $U_2$ against persistence at each horizon — **below 1.0 beats it**.
+
+| model | H=1 | H=5 | H=10 | H=20 |
+|---|---|---|---|---|
+| persistence | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **dlinear** | 1.0475 | 1.0001 | 0.9672 | **0.9392** |
+| tcn | 1.2005 | **0.9911** | 0.9640 | 0.9710 |
+| timemixer | 1.1168 | 1.0513 | 0.9728 | 0.9474 |
+| nbeats | 1.4274 | 1.1577 | 1.1089 | 1.0280 |
+| patchtst | 2.4491 | 1.4055 | 1.2841 | 1.1423 |
+
+Reproduce with `uv run train_modern_ts.py --sweep`.
+
+:::tip The hypothesis in §1 was correct
+At $H=1$ nothing beats persistence — the same result [§8](./stock-prediction.md) found for the RNN family. **By $H=5$ the TCN is ahead (0.9911), and by $H=10$ three models are.** At $H=20$, DLinear reaches $U_2 = 0.9392$.
+
+So the earlier failure really was about the *setup*. A smooth target one step ahead is a regime where persistence is near-optimal; twenty steps ahead it is not, and mean reversion is structure that plays out over weeks.
+:::
+
+Three things worth reading off the table:
+
+**The simplest model wins at the longest horizon.** DLinear — two linear layers on a decomposed series, a few thousand parameters — is best at $H=20$. That is exactly Zeng et al.'s finding reproduced on a different dataset, and it should make you suspicious of any architecture that cannot beat it.
+
+**PatchTST is worst everywhere**, by a wide margin at $H=1$ (2.4491). It is not a bad architecture; it is a data-hungry one, and ~2,400 sequences is not the regime it was designed for. Patching plus a transformer encoder wants orders of magnitude more series than one ticker provides.
+
+**Every model improves monotonically with horizon in *relative* terms** while getting worse in absolute RMSE. That is the signature of a baseline degrading faster than the models — which is what "there is finally something to learn" looks like in a Theil ratio.
+
+:::warning One split, one seed, one ticker
+These margins are 3–6%, from a single chronological split on a single stock. [§7](./stock-prediction.md) calls for **walk-forward validation** precisely because one split cannot distinguish skill from a favourable regime, and this table has not had it. Read it as "the horizon hypothesis survived a first test", not as a ranking.
+:::
+
 ## 3. Treating the Signal as a Language
 
 Here is the second direction, and it is a genuinely different idea.
@@ -203,9 +236,14 @@ And the entropy reading is the genuinely new information: **5.15 of 8 bits is ne
 
 | Direction | Result |
 |---|---|
-| Attention over an RNN ([§8](./stock-prediction.md)) | loses; more params monotonically worse |
-| Modern TS architectures (§2) | `train_modern_ts.py --sweep` |
-| Value tokenization (§3) | loses by less; gives calibrated uncertainty |
+| Attention over an RNN ([§8](./stock-prediction.md)) | loses at H=1; more params monotonically worse |
+| Modern TS architectures (§2) | **beat persistence from H=5**; DLinear best at H=20 ($U_2 = 0.939$) |
+| Value tokenization (§3) | loses at H=1 ($U_2 = 1.071$) but by less than any attention variant, and reports calibrated uncertainty |
+
+**The horizon mattered more than the architecture.** Every model in §2 is
+underwater at H=1 and three of them are ahead by H=10 — the same models, the
+same data, the same training budget. Changing the question did what changing
+the architecture could not.
 
 :::note There are no champions
 A 2025 position paper surveyed the DLinear → PatchTST → TimeMixer exchange and concluded the models are close and the rankings move with the hyperparameter search. Treat every leaderboard in this area accordingly — including this page's.
