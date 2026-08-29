@@ -176,7 +176,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # 14 suites, 653 checks, no GPU
+./tests/run_all.sh              # all 16 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 

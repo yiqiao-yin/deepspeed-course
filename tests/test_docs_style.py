@@ -245,10 +245,47 @@ def test_referenced_tests_exist(r: Results) -> None:
             "every referenced tests/test_*.py exists",
             "; ".join(sorted(set(bad))[:5]))
 
-    # And the guard must not be vacuous — the suites it protects must be real.
-    r.check(len(have) >= 10,
-            f"the test directory is populated ({len(have)} suites)",
-            "if this were near zero the check above would pass trivially")
+
+def test_suite_registration_is_complete(r: Results) -> None:
+    """
+    Every suite on disk must be in CLAUDE.md's count, run_all.sh, AND CI.
+
+    Adding a suite changes three things and nothing notices if you miss one:
+    `./tests/run_all.sh` silently becomes a PARTIAL run wearing the name of a
+    full one, CI silently stops covering the new code, and CLAUDE.md
+    advertises a stale number a future agent will trust.
+
+    Deliberately cheap — globbing and string matching, no subprocesses. An
+    earlier version of this check executed all sixteen suites to total their
+    assertions, which made a docs-style test take ten minutes. A guard nobody
+    will wait for is a guard that gets deleted. CLAUDE.md no longer quotes a
+    check TOTAL for the same reason: it rots on every commit and the suite
+    count carries the useful information.
+    """
+    import re
+
+    on_disk = {t.name for t in (REPO_ROOT / "tests").glob("test_*.py")}
+    r.check(len(on_disk) >= 10,
+            f"the test directory is populated ({len(on_disk)} suites)",
+            "if this were near zero the checks below would pass vacuously")
+
+    listed = set(re.findall(r"tests/(test_\w+\.py)",
+                            (REPO_ROOT / "tests" / "run_all.sh").read_text()))
+    r.check(listed == on_disk,
+            "run_all.sh lists every suite on disk",
+            f"missing: {sorted(on_disk - listed)}; "
+            f"stale: {sorted(listed - on_disk)}")
+
+    in_ci = set(re.findall(r"tests/(test_\w+\.py)",
+                           (REPO_ROOT / ".github" / "workflows" / "tests.yml").read_text()))
+    r.check(in_ci == on_disk,
+            "the CI workflow runs every suite on disk",
+            f"missing from CI: {sorted(on_disk - in_ci)}")
+
+    claude = (REPO_ROOT / "CLAUDE.md").read_text()
+    r.check(f"{len(on_disk)} suites" in claude,
+            f"CLAUDE.md's suite count is current ({len(on_disk)})",
+            "it has gone stale twice already — 11 suites, then 14")
 
 
 def main() -> int:
@@ -259,6 +296,7 @@ def main() -> int:
     test_diagram_hygiene(r)
     test_page_structure(r)
     test_referenced_tests_exist(r)
+    test_suite_registration_is_complete(r)
     return r.finish()
 
 
