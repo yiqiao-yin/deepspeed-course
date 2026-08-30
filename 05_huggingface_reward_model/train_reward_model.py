@@ -131,6 +131,13 @@ def main() -> None:
     parser.add_argument("--lora-rank", type=int, default=16)
     parser.add_argument("--no-lora", action="store_true")
     parser.add_argument("--epochs", type=float, default=1.0)
+    parser.add_argument("--max-samples", type=int, default=-1,
+                        help="Train on only the first N preference pairs. "
+                             "--max-steps caps the OPTIMIZER, but the trainer "
+                             "still tokenises the whole split first, which for "
+                             "ultrafeedback_binarized is ~62k pairs and minutes "
+                             "of wall clock before step 1. Use both for a "
+                             "genuinely cheap smoke test.")
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Cap steps; the RunPod --dry-run path uses this.")
     parser.add_argument("--batch-size", type=int, default=4,
@@ -175,6 +182,10 @@ def main() -> None:
     model.config.pad_token_id = tokenizer.pad_token_id
 
     dataset = load_dataset(args.dataset, split="train")
+    if args.max_samples > 0:
+        n = min(args.max_samples, len(dataset))
+        dataset = dataset.select(range(n))
+        print(f"  --max-samples: using {n} of the split's pairs")
 
     peft_config = None if args.no_lora else LoraConfig(
         r=args.lora_rank,
