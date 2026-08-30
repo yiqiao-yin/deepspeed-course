@@ -268,40 +268,10 @@ def main() -> None:
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
 
-    reward_model = judge = None
-    if args.reward_model:
-        from transformers import AutoModelForSequenceClassification
-        reward_model = AutoModelForSequenceClassification.from_pretrained(
-            args.reward_model, num_labels=1, dtype=torch.bfloat16
-        )
-    else:
-        # --judge was validated above and then, until this branch existed,
-        # silently ignored: `judge` stayed None and the trainer was handed no
-        # preference source at all. A flag the argument parser accepts, the
-        # banner prints, and nothing acts on is worse than no flag.
-        #
-        # Resolved by name off the trl module rather than a hardcoded table,
-        # so the set of judges tracks whatever TRL version is installed.
-        import trl
-        judge_cls = getattr(trl, args.judge, None)
-        if judge_cls is None:
-            available = sorted(n for n in dir(trl) if n.endswith("Judge"))
-            raise SystemExit(
-                f"Unknown judge {args.judge!r}. This TRL exposes: "
-                + ", ".join(available)
-                + "\n  PairRMJudge needs `uv pip install llm-blender`; the "
-                  "HF and OpenAI judges need API credentials. A reward model "
-                  "(--reward-model) needs neither and is usually the cheaper "
-                  "choice — build one with ../05_huggingface_reward_model/."
-            )
-        try:
-            judge = judge_cls()
-        except ImportError as exc:
-            raise SystemExit(
-                f"{args.judge} could not be constructed: {exc}\n"
-                "  Most TRL judges pull an extra dependency or an API key. "
-                "Install it, or use --reward-model instead."
-            )
+    # The preference source is built AFTER the trainer class is resolved
+    # (below), because which argument it goes into depends on the TRL version.
+    # Building it here would mean loading a reward model we might then have to
+    # hand over as a path string instead.
 
     common = dict(
         output_dir=output,
@@ -370,10 +340,65 @@ def main() -> None:
     Cfg, Trainer_ = _resolve(cfg_name), _resolve(trainer_name)
     print(f"  trainer          {Trainer_.__module__}.{Trainer_.__name__}")
 
+    # WHICH ARGUMENT the preference source goes into also changed.
+    #
+    # Older TRL: OnlineDPOTrainer(reward_model=..., judge=...) -- two separate
+    # parameters, and a set of *Judge classes to choose from.
+    # TRL 1.12:  OnlineDPOTrainer(reward_funcs=...) -- one parameter taking a
+    # model path, a PreTrainedModel or a callable, and NO judge classes at all;
+    # they were removed, not moved.
+    #
+    # Passing the old keyword to the new trainer raises
+    #   TypeError: OnlineDPOTrainer.__init__() got an unexpected keyword
+    #   argument 'reward_model'
+    # so this inspects the signature rather than assuming either shape.
+    import inspect as _inspect
+    _params = _inspect.signature(Trainer_.__init__).parameters
+    _modern = "reward_funcs" in _params
+
+    reward_model = judge = None
+    if args.judge:
+        import trl as _trl
+        judge_cls = getattr(_trl, args.judge, None)
+        if judge_cls is None:
+            available = sorted(n for n in dir(_trl) if n.endswith("Judge"))
+            raise SystemExit(
+                f"Unknown judge {args.judge!r}. "
+                + (f"This TRL exposes: {', '.join(available)}."
+                   if available else
+                   f"trl {getattr(_trl, '__version__', '?')} ships NO judge "
+                   "classes at all -- they were removed, not relocated. Use "
+                   "--reward-model instead: pass any sequence-classification "
+                   "model, e.g. one built by "
+                   "../05_huggingface_reward_model/.")
+            )
+        try:
+            judge = judge_cls()
+        except ImportError as exc:
+            raise SystemExit(
+                f"{args.judge} could not be constructed: {exc}\n"
+                "  Most TRL judges pull an extra dependency or an API key. "
+                "Install it, or use --reward-model instead."
+            )
+
+    if _modern:
+        # A path string is preferred over a loaded model: TRL then loads the
+        # matching tokenizer itself, which it cannot infer from a bare module.
+        source = args.reward_model if args.reward_model else judge
+        trainer_kwargs = {"reward_funcs": source}
+    else:
+        if args.reward_model:
+            from transformers import AutoModelForSequenceClassification
+            reward_model = AutoModelForSequenceClassification.from_pretrained(
+                args.reward_model, num_labels=1, dtype=torch.bfloat16
+            )
+        trainer_kwargs = {"reward_model": reward_model, "judge": judge}
+    print(f"  preference arg   {', '.join(trainer_kwargs)}")
+    print(f"  trainer          {Trainer_.__module__}.{Trainer_.__name__}")
+
     trainer = Trainer_(
         model=args.model,
-        reward_model=reward_model,
-        judge=judge,
+        **trainer_kwargs,
         args=Cfg(**common),
         train_dataset=dataset,
         peft_config=peft_config,
