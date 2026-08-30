@@ -59,7 +59,9 @@ export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 
 nvidia-smi
 
-deepspeed --num_gpus=2 train_ds_2xB200.py
+# "$@" forwards sbatch's extra arguments to the training script, so a
+# cluster user can dry-run without burning a full allocation.
+deepspeed --num_gpus=2 train_ds_2xB200.py "$@"
 
 echo "=================================================="
 echo "End: $(date)"

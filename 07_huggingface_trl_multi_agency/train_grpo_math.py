@@ -1,3 +1,4 @@
+import argparse
 import os
 import random
 import torch
@@ -10,6 +11,62 @@ from transformers import (
 from transformers import AutoModelForCausalLM
 from trl import GRPOTrainer
 import re
+
+
+def require_gpu() -> None:
+    """
+    Stop with a clear message when no CUDA device is available.
+
+    Without this, the run gets as far as loading the model and then dies deep
+    inside the training stack -- for this script, with
+    "Your setup doesn't support bf16/gpu", which tells a newcomer nothing
+    about what went wrong or what to do next. Worse, it happens AFTER the
+    model download, so the reader has already waited.
+
+    Set ALLOW_CPU=1 to bypass.
+    """
+    import os   # noqa: F811
+    import sys  # noqa: F811
+
+    try:
+        import torch
+    except ImportError:
+        print("\n[preflight] PyTorch is not installed. Install it with:")
+        print("            uv pip install torch --index-url "
+              "https://download.pytorch.org/whl/cu121\n")
+        sys.exit(1)
+
+    if torch.cuda.is_available():
+        return
+
+    if os.environ.get("ALLOW_CPU") == "1":
+        print("\n[preflight] No GPU detected; ALLOW_CPU=1 set, continuing.")
+        print("            You will also need bf16 disabled in the training")
+        print("            config, or the trainer raises anyway.\n")
+        return
+
+    bar = "=" * 72
+    print("\n" + bar)
+    print("  NO GPU DETECTED - stopping before the run fails obscurely")
+    print(bar)
+    print("\n  torch.cuda.is_available() returned False.")
+    print("\n  This example runs multi-agent GRPO with TRL. It downloads a")
+    print("  1.5B model and needs real GPU memory. On CPU the trainer")
+    print("  raises \"Your setup doesn't support bf16/gpu\" — AFTER the")
+    print("  download, which is why this check exists.")
+    print("\n  No GPU at all? These need none:")
+    print("      uv run tests/test_grpo_rewards.py   # the reward logic")
+    print("      https://yiqiao-yin.github.io/deepspeed-course/")
+    print("      ./tests/run_all.sh    # the full logic suite, no downloads")
+    print("\n  Check your setup:")
+    print("      nvidia-smi")
+    print("      ds_report")
+    print("\n  Rent one (needs RUNPOD_API_KEY):")
+    print("      uv run runpod/runpod_ctl.py recommend 07_huggingface_trl_multi_agency")
+    print("      uv run runpod/runpod_ctl.py run 07_huggingface_trl_multi_agency \\")
+    print("          --dry-run --collect --wait --terminate --yes")
+    print("\n" + bar + "\n")
+    sys.exit(1)
 
 
 class StopOnTokens(StoppingCriteria):
@@ -147,7 +204,8 @@ class MultiAgentLLM:
 
         return torch.stack(padded).mean(dim=0)
 
-    def train_grpo(self, hf_dataset: Dataset, num_samples: int = 1000):
+    def train_grpo(self, hf_dataset: Dataset, num_samples: int = 1000,
+                   max_steps: int = -1):
         """Train model using GRPO on a formatted dataset."""
 
         prompts = []
@@ -177,11 +235,18 @@ class MultiAgentLLM:
         # Pass the already-loaded model, not the model NAME. Passing the name
         # made GRPOTrainer load a second copy of the weights, leaving the model
         # built in __init__ untrained and merely resident in memory.
+        from trl import GRPOConfig
+
         trainer = GRPOTrainer(
             model=self.model,
             processing_class=self.tokenizer,
             train_dataset=formatted_dataset,
             reward_funcs=reward_answer_correct,
+            # max_steps=-1 means "ignore me, use epochs" — Trainer's own
+            # convention, so the default reproduces the previous behaviour.
+            # It is what makes a cheap dry run possible on a cluster.
+            args=GRPOConfig(output_dir="./multi_agent_trained",
+                            max_steps=max_steps),
         )
 
         trainer.train()
@@ -194,13 +259,24 @@ if __name__ == "__main__":
     MODEL_ID = "eagle0504/qwen-distilled-scout-1.5b-instruct-gen2"
     DATASET_ID = "eagle0504/openai-gsm8k-enhanced-using-together-ai-deepseek-train8k-test1k-v1"
 
+    require_gpu()
+
     print("🚀 Loading dataset...")
     raw_dataset = load_dataset(DATASET_ID, split="train")
 
     print("🤖 Initializing Multi-Agent LLM...")
     agent_model = MultiAgentLLM(MODEL_ID)
 
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means "
+                             "no cap. Makes `sbatch run_slurm.sh "
+                             "--max-steps 20` a real dry run.")
+    parser.add_argument("--num-samples", type=int, default=1000)
+    args = parser.parse_known_args()[0]
+
     print("🎯 Training with GRPO...")
-    agent_model.train_grpo(raw_dataset, num_samples=1000)
+    agent_model.train_grpo(raw_dataset, num_samples=args.num_samples,
+                           max_steps=args.max_steps)
 
     print("✅ Training complete. Model saved to ./multi_agent_trained")

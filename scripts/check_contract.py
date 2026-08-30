@@ -128,6 +128,27 @@ def entry_points(folder: Path) -> List[Path]:
     return out
 
 
+_CTL_CACHE = {}
+
+
+def _registered_script(folder: Path, name: str):
+    """
+    The script `runpod_ctl.py run <name>` would actually execute.
+
+    Resolved lazily and cached, because the checker asks per folder and
+    importing the module 23 times would be silly.
+    """
+    if "ctl" not in _CTL_CACHE:
+        spec = importlib.util.spec_from_file_location(
+            "ctl", REPO_ROOT / "runpod" / "runpod_ctl.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _CTL_CACHE["ctl"] = mod
+    ctl = _CTL_CACHE["ctl"]
+    spec_e = ctl.EXAMPLES.get(name)
+    return folder / spec_e["script"] if spec_e else None
+
+
 def check_reader_a(folder: Path, name: str, r: Report) -> None:
     """No GPU: must fail gracefully, not with a CUDA traceback."""
     eps = entry_points(folder)
@@ -234,14 +255,51 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
     # Training bounds work with --max-steps. Inference and evaluation bound it
     # differently -- frames, slices, questions -- so accept any of them. What
     # matters is that SOMETHING caps the work for a cheap dry run.
+    # Training bounds work with --max-steps. Other regimes bound the work
+    # differently and their own name is the RIGHT one: an MCMC sampler caps
+    # iterations, not optimizer steps, and renaming it for uniformity would
+    # make the flag lie about what it does. 04_bayesian_neuralnet was a false
+    # positive here until --num_iterations was recognised.
     CAPS = ("max-steps", "max_steps", "--frames", "--slices", "--limit",
-            "--questions", "--examples", "--dry-run")
-    capped = [p.name for p in entry_points(folder)
-              if any(c in p.read_text(errors="ignore") for c in CAPS)]
+            "--questions", "--examples", "--dry-run",
+            "--num_iterations", "--num-iterations", "--n-samples")
+    # Check the script that ACTUALLY RUNS -- the one registered in
+    # runpod_ctl.py -- not merely the files that happen to carry a __main__
+    # guard. Two real cases this gets wrong otherwise:
+    #
+    #   05_huggingface   train_ds.py is the registered entry point and has the
+    #                    cap, but has no __main__ guard, so a guard-based scan
+    #                    skips it and judges main.py instead.
+    #   07_gpt_oss       the registered script is lora/train_ds.py, in a
+    #                    SUBDIRECTORY that a folder-level glob never reaches.
+    #
+    # Both looked like missing caps and were not.
+    candidates = list(entry_points(folder))
+    registered = _registered_script(folder, name)
+    if registered is not None and registered.is_file():
+        candidates.append(registered)
+
+    capped = [c.name for c in candidates
+              if any(cap in c.read_text(errors="ignore") for cap in CAPS)]
     r.add(name, "B", "entry point accepts a work cap (dry-run path)",
           bool(capped),
           "add --max-steps (or --limit/--frames for inference) so a cluster "
           "user can validate without burning an allocation")
+
+    # A cap the launcher does not FORWARD is worse than no cap: `sbatch
+    # run_deepspeed.sh --max-steps 20` looks like a dry run and silently runs
+    # the full job. All eleven launchers were in exactly that state when the
+    # caps were first added -- the flags worked and none of them reached the
+    # training script.
+    for sh in slurm:
+        src = sh.read_text(errors="ignore")
+        launches = re.search(r"^\s*(uv run )?(deepspeed|python|torchrun|accelerate)",
+                             src, re.M)
+        if launches:
+            r.add(name, "B", f"{sh.name}: forwards \"$@\" to the training script",
+                  '"$@"' in src,
+                  "without it the dry-run flag is swallowed and the full job "
+                  "runs anyway")
 
 
 def check_reader_c(folder: Path, name: str, r: Report, ctl) -> None:

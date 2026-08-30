@@ -58,7 +58,10 @@ echo "=================================================="
 # Launch enhanced training with DeepSpeed
 # Uses train_ds_enhanced.py with W&B tracking and early stopping
 echo "Starting DeepSpeed training..."
-deepspeed --num_gpus=1 train_ds_enhanced.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=1 train_ds_enhanced.py "$@"
 
 # Alternative: Run basic version without W&B
 # deepspeed --num_gpus=1 train_ds.py

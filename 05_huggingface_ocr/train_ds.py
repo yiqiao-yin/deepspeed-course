@@ -383,6 +383,8 @@ def main():
     # Dataset arguments
     parser.add_argument("--instruction", type=str, default="Describe this image.")
     parser.add_argument("--max-samples", type=int, default=10)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means no cap (use epochs). HuggingFace Trainer honours this natively; it is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.")
     parser.add_argument("--max-length", type=int, default=512)
     
     # Training arguments
@@ -453,6 +455,9 @@ def main():
         training_args = TrainingArguments(
             output_dir=args.output_dir,
             num_train_epochs=args.num_epochs,
+            # -1 means "ignore me, use epochs" — Trainer's own convention, so
+            # the default preserves the previous behaviour exactly.
+            max_steps=args.max_steps,
             per_device_train_batch_size=args.batch_size,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             warmup_steps=args.warmup_steps,

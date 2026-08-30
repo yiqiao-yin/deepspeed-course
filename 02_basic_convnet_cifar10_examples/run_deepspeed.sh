@@ -74,7 +74,10 @@ echo "=================================================="
 # - Comprehensive W&B tracking
 echo "Starting DeepSpeed CIFAR-10 training..."
 echo "Expected result: 81% accuracy (Excellent tier)"
-deepspeed --num_gpus=2 cifar10_deepspeed.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=2 cifar10_deepspeed.py "$@"
 
 echo "=================================================="
 echo "End Time: $(date)"

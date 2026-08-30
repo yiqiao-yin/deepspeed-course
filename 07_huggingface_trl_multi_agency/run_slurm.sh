@@ -54,7 +54,10 @@ export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 
 nvidia-smi
 
-python train_grpo_math.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_slurm.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+python train_grpo_math.py "$@"
 
 echo "=================================================="
 echo "End: $(date)"

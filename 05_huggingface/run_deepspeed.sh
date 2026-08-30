@@ -56,7 +56,10 @@ export HF_HOME=${HF_HOME:-/scratch/$USER/hf_cache}
 
 nvidia-smi
 
-deepspeed --num_gpus=2 train_ds.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=2 train_ds.py "$@"
 
 echo "=================================================="
 echo "End: $(date)"

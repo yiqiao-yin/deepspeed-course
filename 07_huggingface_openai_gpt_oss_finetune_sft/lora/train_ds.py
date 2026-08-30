@@ -9,6 +9,7 @@ Without these tokens, the script will train and save models locally.
 """
 
 import logging
+import argparse
 import os
 from typing import List, Dict, Optional
 
@@ -283,9 +284,13 @@ def train(
         logger.info("📊 Logging to: TensorBoard only")
 
     # DeepSpeed-enabled training configuration
+    _args = parse_args()
     training_args = SFTConfig(
         # DeepSpeed configuration
         deepspeed="./ds_config.json",
+
+        # -1 means "ignore me, use epochs" — Trainer's own convention.
+        max_steps=_args.max_steps,
 
         # Training hyperparameters
         learning_rate=2e-4,
@@ -405,6 +410,24 @@ def evaluate(output_dir: str, tokenizer, prompt: str, reasoning_lang: str) -> No
 
     except Exception as e:
         logger.error(f"Evaluation failed: {e}")
+
+
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line options.
+
+    Added so a CoreWeave user can validate the pipeline without burning a full
+    allocation. Defaults reproduce the previous behaviour exactly.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means no cap (use epochs) — HuggingFace Trainer's own convention, so the default preserves the previous behaviour exactly. This is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run rather than a full job.")
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="Set by the deepspeed launcher; accepted so its "
+                             "argument does not cause a parse error.")
+    return parser.parse_known_args()[0]
 
 
 def main() -> None:

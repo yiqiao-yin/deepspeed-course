@@ -21,6 +21,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import deepspeed
 import sys
+import argparse
 import os
 
 # Optional Weights & Biases integration
@@ -148,10 +149,39 @@ def get_lr_schedule(epoch: int, initial_lr: float = 0.01, warmup_epochs: int = 1
         return initial_lr * 0.5 * (1 + torch.cos(torch.tensor(progress * 3.14159)).item())
 
 
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line options.
+
+    Added so a CoreWeave user can validate the whole pipeline without burning
+    a full allocation:
+
+        sbatch run_deepspeed.sh --max-steps 20
+
+    Both defaults preserve the previous behaviour exactly -- `--max-steps -1`
+    means no cap, and `--epochs` defaults to what the script always used.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--epochs", type=int, default=100,
+                        help="Training epochs (default: 100).")
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means "
+                             "no cap. Used by the dry-run path; a handful of "
+                             "steps proves the plumbing without training.")
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="Set by the deepspeed launcher; accepted so the "
+                             "launcher's argument does not cause a parse error.")
+    return parser.parse_known_args()[0]
+
+
 def main() -> None:
     """
     Enhanced training with multiple convergence strategies.
     """
+    args = parse_args()
+    global_step = 0
     require_gpu()
     print("=" * 80)
     print("🚀 Starting ENHANCED DeepSpeed Linear Regression Training")
@@ -276,7 +306,7 @@ def main() -> None:
     patience_counter = 0
     patience_limit = 20  # Increased patience for 100 epochs
     min_improvement = 1e-7  # More sensitive to small improvements
-    total_epochs = 100
+    total_epochs = args.epochs
 
     for epoch in range(total_epochs):
         epoch_loss_sum = 0.0
@@ -311,6 +341,13 @@ def main() -> None:
             epoch_grad_norms.append(total_norm)
 
             model_engine.step()
+            global_step += 1
+
+            # Dry-run cap. Breaks the inner loop here and the epoch loop just
+            # below, so `--max-steps 20` stops after 20 optimizer steps rather
+            # than finishing the epoch.
+            if 0 < args.max_steps <= global_step:
+                break
 
             epoch_loss_sum += loss.item()
             num_batches += 1
@@ -381,6 +418,10 @@ def main() -> None:
         if patience_counter >= patience_limit:
             print(f"\n🛑 Early stopping triggered! No improvement for {patience_limit} epochs.")
             print(f"   Best loss achieved: {best_loss:.6f}")
+            break
+
+        if 0 < args.max_steps <= global_step:
+            print(f"\n[dry run] stopped at --max-steps {args.max_steps}")
             break
 
     print(f"\n{'='*80}")

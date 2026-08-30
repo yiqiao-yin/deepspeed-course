@@ -92,6 +92,10 @@ echo "   - Expected samples: ~300 per replica"
 echo "   - Output: ./pt_samples/"
 echo ""
 
+# "$@" forwards sbatch's extra arguments to the training script. For MCMC
+# the work cap is --num_iterations (steps here are sampler sweeps, not
+# optimizer steps), so a dry run is `sbatch run_deepspeed.sh
+# --num_iterations 20`. Without this the flag is silently swallowed.
 deepspeed --num_gpus=2 parallel_tempering_mcmc.py \
     --num_iterations 2000 \
     --burn_in 500 \
@@ -103,7 +107,8 @@ deepspeed --num_gpus=2 parallel_tempering_mcmc.py \
     --batch_size 100 \
     --save_dir ./pt_samples \
     --wandb_project "parallel-tempering-mcmc" \
-    --experiment_name "pt_mcmc_2gpu_slurm_${SLURM_JOB_ID}"
+    --experiment_name "pt_mcmc_2gpu_slurm_${SLURM_JOB_ID}" \
+    "$@"
 
 # Check exit status
 if [ $? -eq 0 ]; then

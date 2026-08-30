@@ -70,7 +70,10 @@ echo "=================================================="
 echo "Starting DeepSpeed LSTM training..."
 echo "Task: Time series prediction (multi-frequency sine wave)"
 echo "Expected result: MSE < 0.05 (Excellent tier)"
-deepspeed --num_gpus=2 train_rnn_deepspeed.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=2 train_rnn_deepspeed.py "$@"
 
 echo "=================================================="
 echo "End Time: $(date)"

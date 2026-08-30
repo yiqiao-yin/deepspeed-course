@@ -92,7 +92,10 @@ echo "  - Epochs: 3"
 echo "  - Learning rate: 5e-5"
 echo "=================================================="
 
-deepspeed --num_gpus=2 grpo_gsm8k_train.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=2 grpo_gsm8k_train.py "$@"
 
 # Check exit status
 if [ $? -eq 0 ]; then

@@ -125,6 +125,9 @@ echo "=================================================="
 
 # Run training with DeepSpeed
 # Note: deepspeed launcher will automatically use SLURM environment variables
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch submit_job.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
 uv run deepspeed --num_gpus=2 train_ds.py \
     --model-name "$MODEL_NAME" \
     --use-4bit \
@@ -134,7 +137,8 @@ uv run deepspeed --num_gpus=2 train_ds.py \
     --num-epochs $NUM_EPOCHS \
     --learning-rate $LEARNING_RATE \
     --output-dir $OUTPUT_DIR \
-    --max-samples $MAX_SAMPLES
+    --max-samples $MAX_SAMPLES \
+    "$@"
 
 # Check if training completed successfully
 if [ $? -eq 0 ]; then

@@ -6,6 +6,7 @@ Memory-efficient version using LoRA for 8GB GPUs (RTX 3070, etc.)
 """
 
 import logging
+import argparse
 import os
 from typing import List
 
@@ -186,6 +187,24 @@ def format_gsm8k_example(example: dict) -> dict:
 #     trainer.tokenizer.save_pretrained(save_path)
 #     logger.info("Model and tokenizer saved.")
 
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line options.
+
+    Added so a CoreWeave user can validate the pipeline without burning a full
+    allocation. Defaults reproduce the previous behaviour exactly.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means no cap (use epochs) — HuggingFace Trainer's own convention, so the default preserves the previous behaviour exactly. This is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run rather than a full job.")
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="Set by the deepspeed launcher; accepted so its "
+                             "argument does not cause a parse error.")
+    return parser.parse_known_args()[0]
+
+
 def main() -> None:
     """
     Main function to train the model with GRPOTrainer and save the result.
@@ -218,8 +237,11 @@ def main() -> None:
 
     logger.info("Configuring training with DeepSpeed and LoRA...")
     # Create GRPO config with reduced batch size for 8GB GPUs
+    args = parse_args()
     grpo_config = GRPOConfig(
         output_dir="./grpo-trained-qwen-gsm8k-lora",
+        # -1 means "ignore me, use epochs" — Trainer's own convention.
+        max_steps=args.max_steps,
         learning_rate=5e-5,
         per_device_train_batch_size=4,  # Reduced from 32 for 8GB GPUs
         gradient_accumulation_steps=8,  # Increased to maintain effective batch size

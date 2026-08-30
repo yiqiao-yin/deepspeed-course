@@ -16,6 +16,7 @@ Requirements:
 """
 
 import json
+import argparse
 import os
 import sys
 from typing import Dict, Any, Optional
@@ -172,8 +173,7 @@ def verify_model_and_tokenizer(
 
 def get_training_arguments(
     output_dir: str = "./sft_qwen_model",
-    use_wandb: bool = False
-) -> TrainingArguments:
+    use_wandb: bool = False, max_steps: int = -1) -> TrainingArguments:
     """
     Create training arguments for SFTTrainer.
 
@@ -187,6 +187,8 @@ def get_training_arguments(
     return TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=3,
+        # -1 means "ignore me, use epochs" — Trainer's own convention.
+        max_steps=max_steps,
         per_device_train_batch_size=4,
         gradient_accumulation_steps=2,
         learning_rate=2e-5,
@@ -204,6 +206,24 @@ def get_training_arguments(
         remove_unused_columns=False,  # Keep all dataset columns
         dataloader_num_workers=2,
     )
+
+
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line options.
+
+    Added so a CoreWeave user can validate the pipeline without burning a full
+    allocation. Defaults reproduce the previous behaviour exactly.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means no cap (use epochs) — HuggingFace Trainer's own convention, so the default preserves the previous behaviour exactly. This is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run rather than a full job.")
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="Set by the deepspeed launcher; accepted so its "
+                             "argument does not cause a parse error.")
+    return parser.parse_known_args()[0]
 
 
 def main() -> None:
@@ -250,7 +270,9 @@ def main() -> None:
     model, tokenizer = verify_model_and_tokenizer(model_name)
 
     # Get training arguments
+    args = parse_args()
     training_args = get_training_arguments(
+        max_steps=args.max_steps,
         output_dir="./sft_qwen_model",
         use_wandb=use_wandb
     )

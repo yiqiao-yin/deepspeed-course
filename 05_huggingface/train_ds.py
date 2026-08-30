@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
@@ -69,9 +70,86 @@ if use_wandb:
 # Set Deepspeed configuration file path
 ds_config_path = "ds_config.json"
 
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line options.
+
+    Added so a CoreWeave user can validate the pipeline without burning a full
+    allocation. Defaults reproduce the previous behaviour exactly.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-steps", type=int, default=-1,
+                        help="Stop after this many optimizer steps. -1 means no cap (use epochs) — HuggingFace Trainer's own convention, so the default preserves the previous behaviour exactly. This is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run rather than a full job.")
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="Set by the deepspeed launcher; accepted so its "
+                             "argument does not cause a parse error.")
+    return parser.parse_known_args()[0]
+
+
+def require_gpu() -> None:
+    """
+    Stop with a clear message when no CUDA device is available.
+
+    Without this, the run gets as far as loading the model and then dies deep
+    inside the training stack -- for this script, with
+    "Your setup doesn't support bf16/gpu", which tells a newcomer nothing
+    about what went wrong or what to do next. Worse, it happens AFTER the
+    model download, so the reader has already waited.
+
+    Set ALLOW_CPU=1 to bypass.
+    """
+    import os   # noqa: F811
+    import sys  # noqa: F811
+
+    try:
+        import torch
+    except ImportError:
+        print("\n[preflight] PyTorch is not installed. Install it with:")
+        print("            uv pip install torch --index-url "
+              "https://download.pytorch.org/whl/cu121\n")
+        sys.exit(1)
+
+    if torch.cuda.is_available():
+        return
+
+    if os.environ.get("ALLOW_CPU") == "1":
+        print("\n[preflight] No GPU detected; ALLOW_CPU=1 set, continuing.")
+        print("            You will also need bf16 disabled in the training")
+        print("            config, or the trainer raises anyway.\n")
+        return
+
+    bar = "=" * 72
+    print("\n" + bar)
+    print("  NO GPU DETECTED - stopping before the run fails obscurely")
+    print(bar)
+    print("\n  torch.cuda.is_available() returned False.")
+    print("\n  This example fine-tunes a HuggingFace LLM with DeepSpeed")
+    print("  ZeRO. It downloads real weights and needs real GPU memory.")
+    print("\n  Examples 01-04 teach the same mechanics and DO run on CPU.")
+    print("\n  No GPU at all? These need none:")
+    print("      https://yiqiao-yin.github.io/deepspeed-course/")
+    print("      ./tests/run_all.sh    # the full logic suite, no downloads")
+    print("\n  Check your setup:")
+    print("      nvidia-smi")
+    print("      ds_report")
+    print("\n  Rent one (needs RUNPOD_API_KEY):")
+    print("      uv run runpod/runpod_ctl.py recommend 05_huggingface")
+    print("      uv run runpod/runpod_ctl.py run 05_huggingface \\")
+    print("          --dry-run --collect --wait --terminate --yes")
+    print("\n" + bar + "\n")
+    sys.exit(1)
+
+
+_args = parse_args()
+require_gpu()
+
 # Define TrainingArguments
 training_args = TrainingArguments(
     output_dir="./results",
+    # -1 means "ignore me, use epochs" — Trainer's own convention.
+    max_steps=_args.max_steps,
     per_device_train_batch_size=8,  # adjust per your GPU memory
     gradient_accumulation_steps=1,
     num_train_epochs=50,

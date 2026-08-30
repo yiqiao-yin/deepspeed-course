@@ -96,7 +96,10 @@ echo "   - Training: 3 epochs with 2 GPUs"
 echo "   - Output: ./sft_qwen_model"
 echo ""
 
-deepspeed --num_gpus=2 train_trl_deepspeed.py
+# "$@" forwards sbatch's extra arguments to the training script, which
+# is what makes `sbatch run_deepspeed.sh --max-steps 20` a real dry run.
+# Without it the flag is silently swallowed and the full job runs.
+deepspeed --num_gpus=2 train_trl_deepspeed.py "$@"
 
 # Check exit status
 if [ $? -eq 0 ]; then
