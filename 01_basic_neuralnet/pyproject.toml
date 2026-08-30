@@ -1,0 +1,50 @@
+# =============================================================================
+# 01_basic_neuralnet as a self-contained uv project.
+#
+#     cd 01_basic_neuralnet
+#     uv sync                       # creates .venv and installs the LOCKED set
+#     uv run train_ds_enhanced.py   # no activate step needed
+#
+# Why a project here rather than the `uv venv` + `uv pip install` recipe the
+# rest of the course uses: with a committed uv.lock, everyone who clones this
+# repository resolves to byte-identical dependency versions. `uv pip install
+# torch deepspeed` resolves to whatever is newest on the day you run it, which
+# is how a tutorial that worked in March stops working in September without
+# anyone touching it.
+#
+# The lock is the artefact that matters. Regenerate it deliberately with
+# `uv lock --upgrade`, not by accident.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-01-basic-neuralnet"
+version = "0.1.0"
+description = "Smallest possible DeepSpeed example: fitting y = 2x + 1"
+readme = "README.md"
+
+# torch 2.13 wheels start at 3.10, and DeepSpeed's own floor is 3.9. 3.10 is
+# the lower bound that actually resolves; anything looser produces a lockfile
+# that cannot be installed on the Python it claims to support.
+requires-python = ">=3.10"
+
+dependencies = [
+    # PyPI's torch now ships CUDA-enabled wheels by default -- torch 2.13.0
+    # resolves to +cu130 and reports cuda.is_available() == True with no extra
+    # index configured. The `--index-url .../whl/cu121` line this course used
+    # to require is no longer needed for a working GPU install, and pinning it
+    # would freeze you to an older CUDA than the wheel you would otherwise get.
+    "torch>=2.2",
+    "deepspeed>=0.14",
+]
+
+[project.optional-dependencies]
+# Weights & Biases stays optional, and the training scripts import it inside a
+# try/except. Install with `uv sync --extra tracking` if you want it.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Nothing exotic is needed here: DeepSpeed publishes wheels, so it does not
+# have to compile against an already-installed torch at build time. If a future
+# release goes back to an sdist-only build, this is where
+# `no-build-isolation-package = ["deepspeed"]` would go.
+package = false

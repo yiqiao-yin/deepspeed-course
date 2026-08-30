@@ -6,11 +6,44 @@ Train a simple linear regression model using DeepSpeed for distributed training 
 
 ### Setup with `uv`
 
+This folder is a **self-contained `uv` project** — it ships a `pyproject.toml`
+and a committed `uv.lock`, so after cloning the repository:
+
+```bash
+cd 01_basic_neuralnet
+uv sync                                  # creates .venv, installs the LOCKED versions
+uv run deepspeed --num_gpus=1 train_ds_enhanced.py
+```
+
+`uv run` uses the project environment directly, so there is no `activate` step.
+Add `uv sync --extra tracking` if you want Weights & Biases; it stays optional
+and the script runs without it.
+
+Why a lock file rather than the `uv pip install` recipe: everyone who clones
+this repository resolves to byte-identical versions. `uv pip install torch
+deepspeed` resolves to whatever is newest that day, which is how a tutorial
+that worked in March stops working in September with nobody having touched it.
+Regenerate deliberately with `uv lock --upgrade`.
+
+<details>
+<summary>Prefer not to use a project? The manual route still works</summary>
+
 ```bash
 uv venv .venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
-uv pip install deepspeed
+uv pip install torch deepspeed
 ```
+
+Note there is no `--index-url .../whl/cu121` here any more. PyPI's `torch` now
+ships CUDA-enabled wheels by default — the locked `torch 2.13.0` resolves to
+`+cu130` and reports `cuda.is_available() == True` with no extra index. Pinning
+cu121 today would give you an *older* CUDA than the default wheel.
+</details>
+
+> **If DeepSpeed stops with `CUDA_HOME environment variable is not set`,** you
+> have the NVIDIA driver but not the CUDA *toolkit*, so it cannot JIT-compile
+> its fused Adam. Add `"torch_adam": true` to the `optimizer.params` block of
+> `ds_config_fp32.json` and it will use PyTorch's Adam instead. For a model with
+> two parameters the difference is unmeasurable. Verified on this exact path.
 
 ### Running
 
