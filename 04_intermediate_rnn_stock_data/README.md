@@ -10,7 +10,7 @@ This example demonstrates intermediate RNN training for stock price delta predic
 uv venv .venv && source .venv/bin/activate
 uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed
-uv pip install yfinance pandas scikit-learn matplotlib seaborn
+uv pip install numpy yfinance pandas scikit-learn matplotlib seaborn
 ```
 
 ### Running
