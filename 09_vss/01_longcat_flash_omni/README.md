@@ -47,6 +47,39 @@ Because a full run is not feasible on a laptop, validate changes with the logic
 tests below before submitting to a cluster.
 
 
+### Doing less work: `--max-steps`
+
+Every training script here accepts `--max-steps N`, which stops after `N`
+optimizer steps instead of running the full schedule. `-1` (the default) means
+"train normally".
+
+The most expensive example in the course: a 560B model, a 1.1 TB download and two
+B200s. A capped run is the *only* sane way to validate a change here — it proves
+the data loader, LoRA adapters and ZeRO-3 offload all work together before you pay
+for an epoch.
+
+```bash
+# directly
+deepspeed --num_gpus=2 train_ds_2xB200.py --max-steps 5
+
+# through the bare launcher (RunPod / any single pod) — it forwards its arguments
+./run_2xB200.sh --max-steps 5
+
+# through the SLURM launcher (CoreWeave). Note this is run_deepspeed.sh, NOT
+# run_2xB200.sh — the latter carries no #SBATCH headers on purpose and is meant
+# to be executed directly.
+sbatch run_deepspeed.sh --max-steps 5
+```
+
+Two things worth knowing. The flag caps **optimizer steps, not epochs**, so with
+gradient accumulation of 4 a `--max-steps 5` run consumes 20 micro-batches. And
+the launcher only sees the flag because its last line ends in `"$@"` — drop that
+and the argument is silently swallowed, the script runs to completion, and
+nothing warns you.
+
+This is also what `runpod_ctl.py run <example> --dry-run` relies on to keep a
+rented pod's bill small.
+
 ### Verifying logic without a full run
 
 The repository ships regression tests that check the **logic** of these examples —

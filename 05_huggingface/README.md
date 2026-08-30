@@ -32,6 +32,33 @@ Because a full run is not feasible on a laptop, validate changes with the logic
 tests below before submitting to a cluster.
 
 
+### Doing less work: `--max-steps`
+
+Every training script here accepts `--max-steps N`, which stops after `N`
+optimizer steps instead of running the full schedule. `-1` (the default) means
+"train normally".
+
+From here on the cap is about money. This example downloads real weights and needs
+real GPU capacity, so `--max-steps 5` on a rented card answers "is my config
+valid?" for cents instead of for an hour of billing.
+
+```bash
+# directly
+deepspeed --num_gpus=2 train_ds.py --max-steps 5
+
+# through the launcher — it forwards its arguments, so this works on SLURM too
+sbatch run_deepspeed.sh --max-steps 5
+```
+
+Two things worth knowing. The flag caps **optimizer steps, not epochs**, so with
+gradient accumulation of 4 a `--max-steps 5` run consumes 20 micro-batches. And
+the launcher only sees the flag because its last line ends in `"$@"` — drop that
+and the argument is silently swallowed, the script runs to completion, and
+nothing warns you.
+
+This is also what `runpod_ctl.py run <example> --dry-run` relies on to keep a
+rented pod's bill small.
+
 ### Verifying logic without a full run
 
 The repository ships regression tests that check the **logic** of these examples —

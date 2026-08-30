@@ -387,6 +387,38 @@ def apply_lora(model) -> PeftModel:
     return peft_model
 
 
+def parse_args() -> "argparse.Namespace":
+    """
+    Command-line arguments.
+
+    Kept deliberately small: this example is configured mostly through
+    environment variables (HF_USER, VSS_DATA_DIR, PUSH_TO_HUB), and the one
+    thing a launcher genuinely needs to override is how much work to do.
+
+    `parse_known_args` rather than `parse_args` because the DeepSpeed launcher
+    injects --local_rank, which is not ours to validate.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=-1,
+        help="Stop after this many optimizer steps (-1 = train the full "
+             "schedule). A cheap dry run on hardware that costs real money: "
+             "--max-steps 5 proves the data, model and ZeRO config all work "
+             "together without paying for a full epoch.",
+    )
+    parser.add_argument(
+        "--local_rank",
+        type=int,
+        default=-1,
+        help="Injected by the DeepSpeed launcher; accepted and ignored here.",
+    )
+    return parser.parse_known_args()[0]
+
+
 def train(
     peft_model,
     train_dataset,
@@ -394,6 +426,7 @@ def train(
     hf_user: str,
     push_to_hub: bool = True,
     use_wandb: bool = False,
+    max_steps: int = -1,
 ) -> None:
     """Train the model using DeepSpeed with CONSERVATIVE settings for 2x B200."""
 
@@ -434,7 +467,7 @@ def train(
         bf16_full_eval=False,
         dataloader_pin_memory=False,        # Disabled to save memory
         dataloader_num_workers=0,           # No multiprocessing
-        max_steps=-1,
+        max_steps=max_steps,   # -1 = full schedule; see --max-steps
 
         # Logging and saving (verbose for monitoring)
         logging_steps=1,                    # Log every step
@@ -523,6 +556,7 @@ def train(
 def main() -> None:
     """Main entry point for fine-tuning on 2x B200."""
     require_gpu()
+    args = parse_args()
     model_name = "meituan-longcat/LongCat-Flash-Omni"
     output_dir = "longcat-flash-omni-vss-lora-2xB200"
     hf_user = os.getenv("HF_USER", "your-username")
@@ -581,7 +615,8 @@ def main() -> None:
     peft_model = apply_lora(model)
 
     # Train the model
-    train(peft_model, train_dataset, output_dir, hf_user, push_to_hub, use_wandb)
+    train(peft_model, train_dataset, output_dir, hf_user, push_to_hub,
+          use_wandb, max_steps=args.max_steps)
 
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         logger.info("=" * 70)

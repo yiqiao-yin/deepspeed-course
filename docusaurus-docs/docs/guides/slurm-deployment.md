@@ -49,9 +49,40 @@ scancel 12345                    # cancel
 sacct -j 12345                   # what happened after it finished
 ```
 
+### Submit a cheap smoke test first
+
+Every training script in the course accepts `--max-steps N`, and every batch
+script forwards its arguments through to that script. So the first thing to
+submit on a new cluster is not the real job:
+
+```bash
+sbatch run_deepspeed.sh --max-steps 5    # does the plumbing work?
+sbatch run_deepspeed.sh                  # the real allocation
+```
+
+The capped job still clones, installs, loads the model, initializes DeepSpeed
+and takes real optimizer steps — so genuine failures (a bad ZeRO stage, a
+mismatched batch invariant, a collator dropping half its inputs) surface
+exactly as they would in the full run. It just stops after five steps.
+
+The cap counts **optimizer steps, not epochs**. With gradient accumulation of
+4, `--max-steps 5` consumes 20 micro-batches.
+
+:::warning If you write your own batch script, end the launch line with `"$@"`
+```bash
+deepspeed --num_gpus=2 train_ds.py "$@"      # ✅ the flag arrives
+deepspeed --num_gpus=2 train_ds.py           # ❌ silently swallowed
+```
+Without it, `sbatch run_deepspeed.sh --max-steps 5` still submits successfully
+and still runs successfully — it just runs the **whole job**. Nothing warns you;
+you find out from the wall clock or the bill. Every launcher in this repository
+shipped this way at one point, which quietly made every documented dry-run
+command a no-op. `scripts/check_contract.py` now checks for it.
+:::
+
 ## 2a. Every Example Is Submittable
 
-All fourteen examples ship a SLURM batch script, so a CoreWeave user can run the
+All 23 examples ship a SLURM batch script, so a CoreWeave user can run the
 entire course:
 
 | Example | Script | GPUs |
@@ -63,13 +94,25 @@ entire course:
 | `04_bayesian_neuralnet` | `run_deepspeed.sh` | 2 |
 | `04_intermediate_rnn_stock_data` | `run_deepspeed.sh` | 2 |
 | `05_huggingface` | `run_deepspeed.sh` | 2 |
-| `05_huggingface_ocr` | `submit_job.sh` | 2 |
 | `05_huggingface_trl` | `run_deepspeed.sh` | 2 |
+| `05_huggingface_ocr` | `submit_job.sh` | 2 |
+| `05_huggingface_dpo` | `run_deepspeed.sh` | 1 |
+| `05_huggingface_reward_model` | `run_deepspeed.sh` | 1 |
 | `06_huggingface_grpo` | `run_deepspeed.sh` | 2 |
+| `06_huggingface_online_dpo` | `run_deepspeed.sh` | 2 |
 | `07_..._gpt_oss_finetune_sft` | `lora/run_deepspeed.sh` | 4 |
 | `07_huggingface_trl_multi_agency` | `run_slurm.sh` | 1 |
-| `08_vtt` | `hf_ds_vtt_test2/run_deepspeed.sh` | 2 |
-| `09_vss` | `run_deepspeed.sh` | 2 |
+| `08_vtt/01_qwen25vl_baseline` | `run_deepspeed.sh` | 2 |
+| `08_vtt/02_token_compression` | `run_deepspeed.sh` | 1 |
+| `08_vtt/03_streaming_memory` | `run_deepspeed.sh` | 1 |
+| `08_vtt/04_video_eval` | `run_deepspeed.sh` | 1 |
+| `09_vss/01_longcat_flash_omni` | `run_deepspeed.sh` | 2 |
+| `09_vss/02_thinker_talker` | `run_deepspeed.sh` | 2 |
+| `09_vss/03_duplex_streaming` | `run_deepspeed.sh` | 1 |
+| `09_vss/04_omni_eval` | `run_deepspeed.sh` | 1 |
+
+`08_vtt` and `09_vss` are also registered as bare top-level names for backward
+compatibility; each resolves to the subtopic shown above.
 
 A regression test asserts this coverage, so an example cannot be added without
 a way to submit it:

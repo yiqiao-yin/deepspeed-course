@@ -279,12 +279,42 @@ parser.add_argument("--max-steps", type=int, default=-1,
                     help="Cap steps; used by the dry-run path.")
 ```
 
-and document it in your README:
+Parse with **`parse_known_args()`**, not `parse_args()`. The DeepSpeed launcher
+injects `--local_rank` into your script's argv, and a strict parser rejects it
+and exits before training starts:
+
+```python
+return parser.parse_known_args()[0]      # ✅ tolerates --local_rank
+return parser.parse_args()               # ❌ "unrecognized arguments: --local_rank"
+```
+
+**And end your launcher's invocation line with `"$@"`.** This is the half that
+gets forgotten, and forgetting it is invisible:
+
+```bash
+deepspeed --num_gpus=2 train_ds.py "$@"      # ✅ the flag arrives
+deepspeed --num_gpus=2 train_ds.py           # ❌ silently swallowed
+```
+
+Without it, `sbatch run_deepspeed.sh --max-steps 20` still *submits fine* and
+still *runs fine* — it just runs the full job. The dry run is not refused, it is
+ignored, and you find out from the bill or the wall clock. Every launcher in
+this repository shipped without `"$@"` at one point, which made every documented
+dry-run command a no-op; `scripts/check_contract.py` now checks for it so it
+cannot come back.
+
+Then document it in your README:
 
 ```bash
 sbatch run_deepspeed.sh --max-steps 20      # smoke test
 sbatch run_deepspeed.sh                     # the real thing
 ```
+
+Two details worth stating in the README, because readers assume otherwise: the
+cap counts **optimizer steps, not epochs** (with gradient accumulation of 4,
+`--max-steps 5` consumes 20 micro-batches), and if your launcher is a bare
+script with no `#SBATCH` headers — like `09_vss/01_longcat_flash_omni/run_2xB200.sh` —
+say `./run_2xB200.sh --max-steps 5`, not `sbatch`.
 
 Document the full loop, because a first-time SLURM user does not know it:
 

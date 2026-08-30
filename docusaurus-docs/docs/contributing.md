@@ -137,6 +137,19 @@ sbatch run_deepspeed.sh --max-steps 20      # smoke test
 sbatch run_deepspeed.sh                     # the real thing
 ```
 
+Two halves, and the second is the one that gets forgotten. Parse with
+**`parse_known_args()`** — the DeepSpeed launcher injects `--local_rank` into
+your argv and a strict parser exits before training starts. And **end your
+launcher's invocation line with `"$@"`**:
+
+```bash
+deepspeed --num_gpus=2 train_ds.py "$@"      # ✅ the flag arrives
+deepspeed --num_gpus=2 train_ds.py           # ❌ silently swallowed
+```
+
+Without `"$@"` the dry run is not refused, it is *ignored*: the job submits, runs
+to completion, and nothing warns you. `scripts/check_contract.py` checks for it.
+
 ### 2.3 Reader C — RunPod: rent, run, **shut down**
 
 RunPod is a single-user pod with direct GPU access. There is **no SLURM** — the `#SBATCH` lines are inert comments — so the lifecycle is driven by API through `runpod/runpod_ctl.py`.

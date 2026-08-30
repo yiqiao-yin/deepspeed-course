@@ -144,7 +144,10 @@ echo ""
 echo "🚀 Launching DeepSpeed training..."
 echo ""
 
-deepspeed --num_gpus=2 train_ds_2xB200.py
+# "$@" forwards this script's arguments to the training script, so
+#   ./run_2xB200.sh --max-steps 5
+# is a cheap smoke test rather than a full multi-hour run.
+deepspeed --num_gpus=2 train_ds_2xB200.py "$@"
 
 # Check exit status
 if [ $? -eq 0 ]; then
