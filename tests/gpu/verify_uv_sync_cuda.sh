@@ -13,6 +13,10 @@
 # so it is worth one explicit test rather than an assumption.
 # =============================================================================
 set -uo pipefail
+# Mirror everything to VERIFY_LOG as well as stdout, so the RunPod driver
+# can ship the file back the same way the other harnesses do.
+LOG="${VERIFY_LOG:-/tmp/verify_uvsync.log}"
+exec > >(tee "$LOG") 2>&1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 echo "=============================================================================="
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | sed 's/^/  gpu: /'
