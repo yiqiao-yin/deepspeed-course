@@ -382,10 +382,32 @@ def main() -> None:
             )
 
     if _modern:
-        # A path string is preferred over a loaded model: TRL then loads the
-        # matching tokenizer itself, which it cannot infer from a bare module.
-        source = args.reward_model if args.reward_model else judge
+        # Pass LOADED models, not path strings.
+        #
+        # Given a string, TRL calls AutoModel*.from_pretrained itself, and
+        # transformers attaches a device_map -- which ZeRO-3 refuses:
+        #     ValueError: DeepSpeed Zero-3 is not compatible with passing a
+        #     `device_map`.
+        # This example is ZeRO-3 on purpose (it generates during training), so
+        # the loading has to happen here, without a device_map, and DeepSpeed
+        # places the shards.
+        if args.reward_model:
+            from transformers import (AutoModelForSequenceClassification,
+                                      AutoTokenizer as _AutoTok)
+            source = AutoModelForSequenceClassification.from_pretrained(
+                args.reward_model, num_labels=1, dtype=torch.bfloat16
+            )
+            reward_tok = _AutoTok.from_pretrained(args.reward_model)
+            if reward_tok.pad_token is None:
+                reward_tok.pad_token = reward_tok.eos_token
+        else:
+            source = judge
+            reward_tok = None
         trainer_kwargs = {"reward_funcs": source}
+        # Not every trainer takes it: NashMDTrainer has no
+        # reward_processing_classes parameter while OnlineDPO and XPO do.
+        if reward_tok is not None and "reward_processing_classes" in _params:
+            trainer_kwargs["reward_processing_classes"] = reward_tok
     else:
         if args.reward_model:
             from transformers import AutoModelForSequenceClassification
@@ -407,8 +429,13 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Same reason as the reward model: hand the trainer an already-loaded
+    # policy so transformers never gets the chance to attach a device_map.
+    from transformers import AutoModelForCausalLM
+    policy = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16)
+
     trainer = Trainer_(
-        model=args.model,
+        model=policy,
         **trainer_kwargs,
         args=Cfg(**common),
         train_dataset=dataset,
