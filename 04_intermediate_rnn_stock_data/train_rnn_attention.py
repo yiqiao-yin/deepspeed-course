@@ -315,7 +315,13 @@ def main() -> None:
                         help="Cap optimizer steps; the dry-run path uses this.")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--deepspeed", default="ds_config.json")
+    parser.add_argument(
+        "--deepspeed",
+        default="train_rnn_stock_data_config.json",
+        help="DeepSpeed config. The default is the one that actually "
+             "ships in this folder -- the previous default named a "
+             "ds_config.json that does not exist here, so the "
+             "DeepSpeed path silently never ran.")
     parser.add_argument("--seed", type=int, default=42,
                         help="Seeded so the architecture comparison is "
                              "reproducible. A table of results that cannot be "
@@ -431,6 +437,7 @@ def main() -> None:
             config=args.deepspeed,
         )
         device = engine.device
+        engine_dtype = next(engine.module.parameters()).dtype
     else:
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
@@ -444,7 +451,11 @@ def main() -> None:
             idx = perm[i:i + args.batch_size]
             xb, yb = x_train[idx], y_train[idx]
             if engine is not None:
-                loss = criterion(engine(xb.to(engine.dtype)).float(), yb)
+                # DeepSpeedEngine has no .dtype -- ask the wrapped module,
+                # the same way train_rnn_stock_data_ds.py does. With fp16
+                # enabled the parameters are half, and feeding fp32 inputs
+                # to a half model raises before the first backward.
+                loss = criterion(engine(xb.to(engine_dtype)).float(), yb)
                 engine.backward(loss); engine.step()
             else:
                 loss = criterion(model(xb), yb)

@@ -193,7 +193,13 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--deepspeed", default="ds_config.json")
+    parser.add_argument(
+        "--deepspeed",
+        default="train_rnn_stock_data_config.json",
+        help="DeepSpeed config. The default is the one that actually "
+             "ships in this folder -- the previous default named a "
+             "ds_config.json that does not exist here, so the "
+             "DeepSpeed path silently never ran.")
     parser.add_argument("--local_rank", type=int, default=-1)
     args = parser.parse_args()
 

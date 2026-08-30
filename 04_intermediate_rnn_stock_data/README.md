@@ -784,6 +784,41 @@ Full treatment: [Attention After the RNN](https://yiqiao-yin.github.io/deepspeed
 
 ---
 
+## If a multi-GPU run hangs: `NCCL_P2P_DISABLE=1`
+
+Verified on a rented 2x RTX 4000 Ada pod. A run that stops like this:
+
+```
+Watchdog caught collective operation timeout: WorkNCCL(SeqNum=1,
+OpType=BROADCAST, NumelIn=50, NumelOut=50, Timeout(ms)=600000)
+ran for 600044 milliseconds before timing out
+```
+
+is almost never this course's fault. On that pod a bare two-process
+`all_reduce` of **eight floats**, with no DeepSpeed involved at all, hung the
+same way — the machine advertises GPU peer-to-peer it cannot actually perform.
+`nvidia-smi topo -m` showed the two cards connected by `SYS` (across the CPU's
+NUMA interconnect), which is exactly where this happens.
+
+Diagnose it in about a minute:
+
+```bash
+bash tests/gpu/diagnose_nccl.sh 2
+```
+
+It walks up from topology to a bare `all_reduce`, then retries with each of
+the two usual workarounds, and tells you whether the machine or the script is
+at fault. If it names P2P, prefix your runs:
+
+```bash
+NCCL_P2P_DISABLE=1 deepspeed --num_gpus=2 train_rnn_stock_data_ds.py
+```
+
+With that flag the same script went from hanging for 683 s to finishing in
+66 s on the same pod. The cost of the flag is that inter-GPU traffic goes
+through host memory instead of directly card-to-card; for models this small
+that is not measurable.
+
 ## Renting a GPU on RunPod (with auto-shutdown)
 
 There is no SLURM on RunPod, so the pod lifecycle is driven by API instead —
