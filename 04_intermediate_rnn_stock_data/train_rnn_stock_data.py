@@ -14,7 +14,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-import wandb
+
+# Optional Weights & Biases integration. W&B is a convenience here, not a
+# dependency -- so an absent install must not stop training. Without this
+# guard the script dies at import time with ModuleNotFoundError, before any
+# preflight message can run, and does so whether or not a GPU is present.
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    wandb = None
 
 # Set random seed for reproducibility
 def set_seed(seed=42):
@@ -56,9 +66,60 @@ class SimpleRNN(nn.Module):
 
         return out
 
+def require_gpu() -> None:
+    """
+    Stop with a clear message when no CUDA device is available.
+
+    This script trains a plain-PyTorch RNN, so unlike the DeepSpeed variant it
+    has no CUDA_HOME problem -- it would simply fall back to the CPU and take
+    substantially longer while looking like it is working. That is the failure
+    this guard prevents: not a crash, but a silent slowdown a newcomer would
+    read as "deep learning is slow".
+
+    Set ALLOW_CPU=1 to train on the CPU deliberately.
+    """
+    import os   # noqa: F811
+    import sys  # noqa: F811
+
+    if torch.cuda.is_available():
+        return
+
+    if os.environ.get("ALLOW_CPU") == "1":
+        print("\n[preflight] No GPU detected; ALLOW_CPU=1 set, continuing on CPU.")
+        print("            Expect this to be slow, but it does work -- the model")
+        print("            is small and the dataset is a few thousand rows.\n")
+        return
+
+    bar = "=" * 72
+    print("\n" + bar)
+    print("  NO GPU DETECTED - stopping before a very slow CPU run")
+    print(bar)
+    print("\n  torch.cuda.is_available() returned False.")
+    print("\n  This script would still run, just far slower, which is why it")
+    print("  stops here rather than letting you wonder.")
+    print("\n  Train on the CPU anyway (it is genuinely feasible here):")
+    print("      ALLOW_CPU=1 uv run train_rnn_stock_data.py")
+    print("\n  No GPU at all? These need none:")
+    print("      uv run tests/test_ts_forecasting.py")
+    print("      ./tests/run_all.sh    # the full logic suite, no downloads")
+    print("\n  Check your setup:")
+    print("      nvidia-smi")
+    print("\n  Rent one (needs RUNPOD_API_KEY):")
+    print("      uv run runpod/runpod_ctl.py gpus --min-vram 24")
+    print("      uv run runpod/runpod_ctl.py run 04_intermediate_rnn_stock_data \\")
+    print("          --dry-run --collect --wait --terminate --yes")
+    print("\n" + bar + "\n")
+    sys.exit(1)
+
+
 def main():
+    require_gpu()
     # Check for WANDB_API_KEY
-    if 'WANDB_API_KEY' not in os.environ:
+    if not WANDB_AVAILABLE:
+        print("Note: wandb is not installed; training will run without tracking.")
+        print("      Install it with: uv pip install wandb")
+        use_wandb = False
+    elif 'WANDB_API_KEY' not in os.environ:
         print("Warning: WANDB_API_KEY not found in environment variables.")
         print("Please export your W&B API key with: export WANDB_API_KEY=your-api-key")
         use_wandb = False

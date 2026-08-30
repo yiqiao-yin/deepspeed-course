@@ -94,7 +94,8 @@ def require_gpu() -> None:
     print("      https://yiqiao-yin.github.io/deepspeed-course/")
     print("\n  Rent one (needs RUNPOD_API_KEY):")
     print("      uv run runpod/runpod_ctl.py gpus --min-vram 24")
-    print("      uv run runpod/runpod_ctl.py run 01_basic_neuralnet")
+    print("      uv run runpod/runpod_ctl.py run 04_intermediate_rnn_stock_data \\")
+    print("          --dry-run --collect --wait --terminate --yes")
     print("\n" + bar + "\n")
     sys.exit(1)
 
