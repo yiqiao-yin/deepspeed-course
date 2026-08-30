@@ -224,6 +224,12 @@ def main() -> None:
                         help="Full fine-tune. Needs far more memory AND a real "
                              "second copy of the weights for the reference.")
     parser.add_argument("--epochs", type=float, default=1.0)
+    parser.add_argument("--warmup-steps", type=int, default=10,
+                        help="LR warmup steps. Must be >0: ds_config.json "
+                             "leaves warmup_num_steps 'auto', HuggingFace "
+                             "fills it from this, and DeepSpeed rejects 0 "
+                             "with 'warmup_num_steps must be a positive "
+                             "integer'. Clamped for short runs.")
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Cap steps; the RunPod --dry-run path uses this.")
     parser.add_argument("--batch-size", type=int, default=2)
@@ -236,6 +242,16 @@ def main() -> None:
     # with "unrecognized arguments" before training starts -- breaking the
     # exact command this example documents. CONTRIBUTING.md section 3.2.
     args = parser.parse_known_args()[0]
+    # DeepSpeed's WarmupDecayLR rejects warmup_num_steps=0. ds_config.json
+    # leaves it "auto"; HuggingFace substitutes TrainingArguments.warmup_steps,
+    # which defaults to 0 -- so without setting it, EVERY DeepSpeed run of this
+    # example dies before step one with
+    #   ValueError: warmup_num_steps must be a positive integer, got 0
+    # Clamped so a short --max-steps smoke test does not request more warmup
+    # than it has steps to give.
+    warmup_steps = args.warmup_steps
+    if args.max_steps > 0:
+        warmup_steps = max(1, min(warmup_steps, max(1, args.max_steps // 2)))
     if args.list_methods:
         bar = "=" * 78
         print(bar)
@@ -310,6 +326,7 @@ def main() -> None:
     if spec["trainer"] == "dpo":
         from trl import DPOConfig, DPOTrainer
         cfg = DPOConfig(
+            warmup_steps=warmup_steps,
             beta=args.beta,
             # loss_type is a LIST in current TRL — it supports combining
             # objectives with loss_weights (that is how MPO is expressed).

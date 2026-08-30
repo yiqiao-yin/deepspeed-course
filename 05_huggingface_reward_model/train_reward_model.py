@@ -138,6 +138,12 @@ def main() -> None:
                              "ultrafeedback_binarized is ~62k pairs and minutes "
                              "of wall clock before step 1. Use both for a "
                              "genuinely cheap smoke test.")
+    parser.add_argument("--warmup-steps", type=int, default=10,
+                        help="LR warmup steps. Must be >0: ds_config.json "
+                             "leaves warmup_num_steps 'auto', HuggingFace "
+                             "fills it from this, and DeepSpeed rejects 0 "
+                             "with 'warmup_num_steps must be a positive "
+                             "integer'. Clamped for short runs.")
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Cap steps; the RunPod --dry-run path uses this.")
     parser.add_argument("--batch-size", type=int, default=4,
@@ -156,6 +162,16 @@ def main() -> None:
     # every time. CONTRIBUTING.md section 3.2 states the rule.
     args = parser.parse_known_args()[0]
 
+    # DeepSpeed's WarmupDecayLR rejects warmup_num_steps=0. ds_config.json
+    # leaves it "auto"; HuggingFace substitutes TrainingArguments.warmup_steps,
+    # which defaults to 0 -- so without setting it, EVERY DeepSpeed run of this
+    # example dies before step one with
+    #   ValueError: warmup_num_steps must be a positive integer, got 0
+    # Clamped so a short --max-steps smoke test does not request more warmup
+    # than it has steps to give.
+    warmup_steps = args.warmup_steps
+    if args.max_steps > 0:
+        warmup_steps = max(1, min(warmup_steps, max(1, args.max_steps // 2)))
     # Did a launcher start us? deepspeed and torchrun both export LOCAL_RANK
     # and WORLD_SIZE; the deepspeed launcher also passes --local_rank.
     launched_distributed = (
@@ -233,6 +249,7 @@ def main() -> None:
     trainer = RewardTrainer(
         model=model,
         args=RewardConfig(
+            warmup_steps=warmup_steps,
             output_dir=args.output,
             num_train_epochs=args.epochs,
             max_steps=args.max_steps,
