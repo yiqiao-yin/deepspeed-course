@@ -430,7 +430,21 @@ def main() -> None:
     print(bar)
 
     engine = None
-    if os.path.exists(args.deepspeed) and torch.cuda.is_available():
+    # Use DeepSpeed only when we were actually LAUNCHED by it.
+    #
+    # The presence of a config file is not evidence of that, and treating it as
+    # evidence breaks the plain `python train_rnn_attention.py` path: DeepSpeed
+    # finds no rank environment, falls back to MPI discovery, and dies with
+    # `ModuleNotFoundError: No module named 'mpi4py'` -- an error that says
+    # nothing about the real problem. The `deepspeed`/`torchrun` launchers both
+    # export LOCAL_RANK and WORLD_SIZE, and the deepspeed launcher additionally
+    # passes --local_rank, so any of the three is a reliable signal.
+    launched_distributed = (
+        os.environ.get("LOCAL_RANK") is not None
+        or os.environ.get("WORLD_SIZE") is not None
+        or getattr(args, "local_rank", -1) >= 0
+    )
+    if launched_distributed and os.path.exists(args.deepspeed) and torch.cuda.is_available():
         import deepspeed
         engine, optimizer, _, _ = deepspeed.initialize(
             args=args, model=model, model_parameters=model.parameters(),
