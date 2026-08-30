@@ -338,6 +338,42 @@ def main() -> None:
         return getattr(mod, name)
 
     Cfg, Trainer_ = _resolve(cfg_name), _resolve(trainer_name)
+
+    # nash_md is broken upstream in TRL 1.12, and the symptom is unhelpful.
+    #
+    # GeometricMixtureWrapper.forward -- which produces the logits the LOSS is
+    # computed from -- is decorated @torch.inference_mode(). Tensors created
+    # under inference mode cannot be saved for backward, so the first optimizer
+    # step dies with
+    #     RuntimeError: Inference tensors cannot be saved for backward.
+    # inside a LayerNorm, naming neither nash_md nor TRL.
+    #
+    # online_dpo and xpo are unaffected: they use inference_mode only around
+    # REWARD computation, whose outputs never need gradients. So this is
+    # specific to nash_md, not to this example.
+    #
+    # Detected by inspecting the decorator rather than matching a version
+    # string, so it stops firing by itself once TRL fixes it.
+    if args.method == "nash_md":
+        import inspect as _i
+        try:
+            from trl.experimental.nash_md import nash_md_trainer as _nm
+            _wrapper_src = _i.getsource(_nm.GeometricMixtureWrapper.forward)
+        except Exception:
+            _wrapper_src = ""
+        if "inference_mode" in _wrapper_src:
+            import trl as _t
+            raise SystemExit(
+                "nash_md cannot train on trl "
+                f"{getattr(_t, '__version__', '?')}: its GeometricMixtureWrapper"
+                ".forward is decorated @torch.inference_mode(), and the logits "
+                "it returns feed the loss. The first backward pass fails with "
+                "'Inference tensors cannot be saved for backward'.\n"
+                "  This is an upstream TRL bug, not a problem with your setup "
+                "or this repository.\n"
+                "  Use --method online_dpo or --method xpo, which take the same "
+                "arguments and are unaffected."
+            )
     print(f"  trainer          {Trainer_.__module__}.{Trainer_.__name__}")
 
     # WHICH ARGUMENT the preference source goes into also changed.

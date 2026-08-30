@@ -166,6 +166,13 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed transformers trl peft accelerate datasets
 ```
 
+:::danger Nash-MD is broken upstream on TRL 1.12
+`GeometricMixtureWrapper.forward` carries `@torch.inference_mode()`, and its
+logits feed the loss — so training dies on the first backward with `Inference
+tensors cannot be saved for backward`. `online_dpo` and `xpo` are fine; they
+use inference mode only for reward computation. Verified on trl 1.12.0.
+:::
+
 :::warning These moved in TRL 1.12
 `OnlineDPOTrainer`, `NashMDTrainer` and `XPOTrainer` are no longer top-level.
 As of TRL 1.12 they live under `trl.experimental.<method>`, alongside

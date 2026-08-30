@@ -147,11 +147,22 @@ SMALL="--max-samples 16 --max-steps 2 --batch-size 1 --grad-accum 1 \
 # --- 4. all three online methods, at $GPUS ------------------------------------
 # Run all three: they are different TRL trainers with different constructor
 # contracts, so passing one says nothing about the other two.
-for m in online_dpo nash_md xpo; do
+for m in online_dpo xpo; do
     step "${m}_${GPUS}gpu" 2400 "$GPUS" \
         "deepspeed --num_gpus=$GPUS train_online_dpo.py --method $m $SMALL \
          --output /tmp/odpo-$m"
 done
+
+# nash_md is expected to REFUSE on TRL 1.12: GeometricMixtureWrapper.forward is
+# decorated @torch.inference_mode() and its logits feed the loss, so the first
+# backward raises "Inference tensors cannot be saved for backward". That is an
+# upstream bug; what this repository owns is refusing early with an explanation
+# instead of surfacing a LayerNorm traceback. If TRL fixes it, the script stops
+# refusing and THIS check fails -- which is the correct signal to promote
+# nash_md back into the loop above.
+expect_fail nash_md_refuses 900 "upstream TRL bug" \
+    "deepspeed --num_gpus=$GPUS train_online_dpo.py --method nash_md $SMALL \
+     --output /tmp/odpo-nash_md"
 
 # --- 5. the shipped launcher, as a reader would run it ------------------------
 step launcher_${GPUS}gpu 2400 "$GPUS" \
@@ -162,8 +173,7 @@ step launcher_${GPUS}gpu 2400 "$GPUS" \
 if [ "$VISIBLE" -ge "$GPUS" ] && [ "$GPUS" -gt 1 ]; then
     echo ""
     echo "  --- checking the ${GPUS}-GPU steps ran distributed ---"
-    for lbl in "online_dpo_${GPUS}gpu" "nash_md_${GPUS}gpu" "xpo_${GPUS}gpu" \
-               "launcher_${GPUS}gpu"; do
+    for lbl in "online_dpo_${GPUS}gpu" "xpo_${GPUS}gpu" "launcher_${GPUS}gpu"; do
         sect=$(sed -n "/@@@@@ BEGIN $lbl @@@@@/,/@@@@@ END $lbl /p" "$LOG")
         if grep -qiE "world_size=?[ :]*$GPUS|num_gpus=$GPUS|world size[ :]*$GPUS" <<<"$sect"; then
             RESULTS+=("PASS  $lbl: confirmed world_size=$GPUS"); PASS=$((PASS+1))
@@ -176,7 +186,7 @@ fi
 # --- did anything actually get written? --------------------------------------
 echo ""
 echo "  --- checking saved artefacts ---"
-for d in "$RM_OUT" /tmp/odpo-online_dpo /tmp/odpo-nash_md /tmp/odpo-xpo /tmp/odpo-launcher; do
+for d in "$RM_OUT" /tmp/odpo-online_dpo /tmp/odpo-xpo /tmp/odpo-launcher; do
     [ -d "$d" ] || continue
     if find "$d" \( -name '*.safetensors' -o -name '*.bin' \) | grep -q .; then
         RESULTS+=("PASS  $(basename $d): weights written"); PASS=$((PASS+1))

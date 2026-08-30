@@ -131,6 +131,15 @@ any current install. `train_online_dpo.py` resolves either location, so you do
 not have to care which TRL you have; it prints the module it actually resolved
 at startup.
 
+**`nash_md` does not train on TRL 1.12.** Its `GeometricMixtureWrapper.forward`
+is decorated `@torch.inference_mode()`, and the logits it returns are what the
+loss is computed from — so the first backward pass raises `Inference tensors
+cannot be saved for backward` from inside a LayerNorm, naming neither Nash-MD
+nor TRL. `online_dpo` and `xpo` are unaffected: they use inference mode only
+around reward computation, whose outputs never need gradients. The script
+detects the decorator and refuses up front with that explanation rather than
+letting you meet the traceback. Verified on trl 1.12.0, 2× RTX 3090.
+
 A judge is mandatory: pass exactly one of `--reward-model` or `--judge`. Without
 one there is nothing to rank the sampled pairs, which is the entire point of
 going online — the script refuses rather than failing deep inside the trainer.
