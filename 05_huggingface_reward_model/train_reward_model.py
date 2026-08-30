@@ -148,7 +148,35 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=1024)
     parser.add_argument("--output", default="./reward-model")
     parser.add_argument("--deepspeed", default="ds_config.json")
-    args = parser.parse_args()
+    # parse_known_args, NOT parse_args. The DeepSpeed launcher injects
+    # --local_rank=N into every worker's argv, and a strict parser exits 2
+    # with "unrecognized arguments: --local_rank=0" before training starts.
+    # That made `deepspeed --num_gpus=N train_reward_model.py` -- the only
+    # command this example's README and run_deepspeed.sh document -- fail
+    # every time. CONTRIBUTING.md section 3.2 states the rule.
+    args = parser.parse_known_args()[0]
+
+    # Did a launcher start us? deepspeed and torchrun both export LOCAL_RANK
+    # and WORLD_SIZE; the deepspeed launcher also passes --local_rank.
+    launched_distributed = (
+        os.environ.get("LOCAL_RANK") is not None
+        or os.environ.get("WORLD_SIZE") is not None
+        or getattr(args, "local_rank", -1) >= 0
+    )
+
+    # Plain `python train_reward_model.py` on a machine with several GPUs makes
+    # HuggingFace Trainer wrap the model in nn.DataParallel. DataParallel is
+    # both slower than the launcher path and, with bf16 + LoRA + gradient
+    # checkpointing, simply broken. Pin to one device and say so, rather than
+    # letting the reader meet a device-mismatch traceback.
+    #
+    # Set before require_gpu() imports torch: CUDA_VISIBLE_DEVICES is read when
+    # the CUDA context is first created, so it has to be in place beforehand.
+    if not launched_distributed and "CUDA_VISIBLE_DEVICES" not in os.environ:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        _pinned_to_one_gpu = True
+    else:
+        _pinned_to_one_gpu = False
 
     require_gpu()
 
@@ -168,6 +196,10 @@ def main() -> None:
     print(f"  device     {torch.cuda.get_device_name(0)}")
     print(f"  dataset    {args.dataset}")
     print(f"  LoRA       {'disabled' if args.no_lora else f'rank {args.lora_rank}'}")
+    print(f"  launch     {'distributed (' + str(os.environ.get('WORLD_SIZE', '?')) + ' ranks)' if launched_distributed else 'single process'}")
+    if _pinned_to_one_gpu:
+        print("             pinned to GPU 0 — for multi-GPU use:")
+        print("               deepspeed --num_gpus=N train_reward_model.py")
     print(bar)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -212,7 +244,15 @@ def main() -> None:
             bf16=True,
             logging_steps=10,
             save_strategy="epoch",
-            deepspeed=args.deepspeed if os.path.exists(args.deepspeed) else None,
+            # Only when a launcher actually started us. A config file
+            # existing is not evidence of a distributed run, and half-enabling
+            # DeepSpeed in a single process leaves HuggingFace Trainer to fall
+            # back to nn.DataParallel on a multi-GPU box -- which fails with
+            # "module must have its parameters and buffers on device cuda:0
+            # but found one of them on device: cpu".
+            deepspeed=(args.deepspeed
+                       if launched_distributed and os.path.exists(args.deepspeed)
+                       else None),
             report_to="wandb" if (WANDB_AVAILABLE and os.environ.get("WANDB_API_KEY"))
                       else "none",
         ),

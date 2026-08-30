@@ -231,8 +231,11 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=5e-6)
     parser.add_argument("--output", default=None)
     parser.add_argument("--deepspeed", default="ds_config.json")
-    args = parser.parse_args()
-
+    # parse_known_args, NOT parse_args: the DeepSpeed launcher injects
+    # --local_rank=N into every worker's argv, and a strict parser exits 2
+    # with "unrecognized arguments" before training starts -- breaking the
+    # exact command this example documents. CONTRIBUTING.md section 3.2.
+    args = parser.parse_known_args()[0]
     if args.list_methods:
         bar = "=" * 78
         print(bar)

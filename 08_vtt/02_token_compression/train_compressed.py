@@ -308,8 +308,11 @@ def main() -> None:
     parser.add_argument("--deepspeed", default="ds_config.json",
                         help="ZeRO config. Omit the file to fall back to "
                              "a plain torch AdamW.")
-    args = parser.parse_args()
-
+    # parse_known_args, NOT parse_args: the DeepSpeed launcher injects
+    # --local_rank=N into every worker's argv, and a strict parser exits 2
+    # with "unrecognized arguments" before training starts -- breaking the
+    # exact command this example documents. CONTRIBUTING.md section 3.2.
+    args = parser.parse_known_args()[0]
     require_gpu()
     import torch
 

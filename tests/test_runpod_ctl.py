@@ -201,6 +201,45 @@ def main() -> int:
         r.check(proc.returncode == 0, f"{rel}: valid bash syntax",
                 proc.stderr.strip()[:200])
 
+    # ---- 8b. Every launcher-run script must TOLERATE --local_rank ----------
+    # The deepspeed launcher injects --local_rank=N into each worker's argv. A
+    # script using strict parse_args() exits 2 with "unrecognized arguments"
+    # before training starts, so `deepspeed --num_gpus=N <script>` -- the exact
+    # command these examples document -- fails every time, on every GPU count.
+    #
+    # It is invisible locally: the script runs fine under plain `python`, and
+    # the CPU suite never invokes a launcher. Six examples shipped this way and
+    # it took renting a 2-GPU pod to notice.
+    #
+    # parse_known_args() is the fix; declaring --local_rank explicitly also
+    # works, so either counts.
+    import re as _re
+    for name, spec in ctl.EXAMPLES.items():
+        if spec.get("launcher") == "python":
+            continue                      # not started by the deepspeed launcher
+        script = REPO_ROOT / name / spec["script"]
+        if not script.is_file():
+            continue
+        src = script.read_text(errors="ignore")
+        if "argparse" not in src:
+            continue                      # no parser, nothing to reject
+        # Strip comments first. The obvious check -- "parse_known_args" in
+        # src -- is satisfied by a COMMENT mentioning it, which is exactly
+        # what the fix for this bug adds. Verified: without this the guard
+        # passes on a file whose only mention is the comment above the call.
+        code = "\n".join(_re.sub(r"#.*$", "", ln) for ln in src.splitlines())
+        # Match --local_rank ANYWHERE in the add_argument call, not just as
+        # the first option string: 05_huggingface_ocr declares it as
+        # add_argument("--local-rank", "--local_rank", ...), which an anchored
+        # pattern reads as missing. That was a checker bug, not a code bug.
+        tolerant = (_re.search(r"\.parse_known_args\s*\(", code) is not None
+                    or _re.search(r"add_argument\([^)]*--local[-_]rank", code)
+                    is not None)
+        r.check(tolerant,
+                f"{name}/{spec['script']}: tolerates --local_rank",
+                "uses strict parse_args(); the deepspeed launcher injects "
+                "--local_rank=N and argparse will exit 2 before training")
+
     # ---- 9. The POD START COMMAND must parse too ---------------------------
     # bootstrap() returns one string that the pod runs as `bash -lc "<string>"`.
     # A syntax error there is far worse than in a checked-in script, because

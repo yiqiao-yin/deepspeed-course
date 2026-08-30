@@ -356,8 +356,11 @@ def main() -> None:
     parser.add_argument("--deepspeed", default="ds_config.json")
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Cap steps; used by the RunPod --dry-run path.")
-    args = parser.parse_args()
-
+    # parse_known_args, NOT parse_args: the DeepSpeed launcher injects
+    # --local_rank=N into every worker's argv, and a strict parser exits 2
+    # with "unrecognized arguments" before training starts -- breaking the
+    # exact command this example documents. CONTRIBUTING.md section 3.2.
+    args = parser.parse_known_args()[0]
     require_gpu()
 
     # Imported after the preflight so a missing GPU produces our message
