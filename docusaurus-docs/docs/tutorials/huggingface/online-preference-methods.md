@@ -166,8 +166,27 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed transformers trl peft accelerate datasets
 ```
 
+:::warning These moved in TRL 1.12
+`OnlineDPOTrainer`, `NashMDTrainer` and `XPOTrainer` are no longer top-level.
+As of TRL 1.12 they live under `trl.experimental.<method>`, alongside
+`CPOTrainer` and `BCOTrainer`, which moved earlier. A top-level import raises
+`ImportError: cannot import name 'OnlineDPOConfig' from 'trl'` — verified on
+trl 1.12.0.
+
+`06_huggingface_online_dpo/train_online_dpo.py` tries the stable location and
+falls back to the experimental one, so it works across both. If you are writing
+your own, do the same rather than pinning to whichever is current today:
+
 ```python
-from trl import OnlineDPOConfig, OnlineDPOTrainer
+try:
+    from trl import OnlineDPOConfig, OnlineDPOTrainer
+except ImportError:
+    from trl.experimental.online_dpo import OnlineDPOConfig, OnlineDPOTrainer
+```
+:::
+
+```python
+from trl import OnlineDPOConfig, OnlineDPOTrainer     # see the warning above
 
 trainer = OnlineDPOTrainer(
     model=model,

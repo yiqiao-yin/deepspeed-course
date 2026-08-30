@@ -124,6 +124,13 @@ deepspeed --num_gpus=2 train_online_dpo.py \
     --reward-model ./reward-model
 ```
 
+**These trainers moved.** `OnlineDPOTrainer`, `NashMDTrainer` and
+`XPOTrainer` are under `trl.experimental.<method>` as of TRL 1.12, not
+top-level — a plain `from trl import OnlineDPOConfig` raises `ImportError` on
+any current install. `train_online_dpo.py` resolves either location, so you do
+not have to care which TRL you have; it prints the module it actually resolved
+at startup.
+
 A judge is mandatory: pass exactly one of `--reward-model` or `--judge`. Without
 one there is nothing to rank the sampled pairs, which is the entire point of
 going online — the script refuses rather than failing deep inside the trainer.

@@ -322,15 +322,53 @@ def main() -> None:
                   else "none",
     )
 
-    if args.method == "online_dpo":
-        from trl import OnlineDPOConfig, OnlineDPOTrainer
-        Cfg, Trainer_ = OnlineDPOConfig, OnlineDPOTrainer
-    elif args.method == "nash_md":
-        from trl import NashMDConfig, NashMDTrainer
-        Cfg, Trainer_ = NashMDConfig, NashMDTrainer
-    else:
-        from trl import XPOConfig, XPOTrainer
-        Cfg, Trainer_ = XPOConfig, XPOTrainer
+    # WHERE these live depends on the TRL version, and it moved.
+    #
+    # Up to TRL 0.x all three were top-level (`from trl import OnlineDPOConfig`).
+    # As of TRL 1.12 the online trainers sit under trl.experimental.<method>,
+    # alongside CPOTrainer and BCOTrainer which moved earlier. A hardcoded
+    # top-level import raises
+    #     ImportError: cannot import name 'OnlineDPOConfig' from 'trl'
+    # on any current install -- which is what every 2-GPU run of this example
+    # did, for all three methods.
+    #
+    # Try the stable location first, then the experimental one, so this works
+    # across both. The warning TRL prints on experimental imports is expected
+    # and is silenced here rather than alarming the reader.
+    import os as _os
+    _os.environ.setdefault("TRL_EXPERIMENTAL_SILENCE", "1")
+
+    _WANTED = {
+        "online_dpo": ("OnlineDPOConfig", "OnlineDPOTrainer"),
+        "nash_md":    ("NashMDConfig", "NashMDTrainer"),
+        "xpo":        ("XPOConfig", "XPOTrainer"),
+    }
+    cfg_name, trainer_name = _WANTED[args.method]
+
+    def _resolve(name: str):
+        import importlib
+        import trl
+        if hasattr(trl, name):
+            return getattr(trl, name)
+        try:
+            mod = importlib.import_module(f"trl.experimental.{args.method}")
+        except ImportError as exc:
+            raise SystemExit(
+                f"{name} is not available in trl {getattr(trl, '__version__', '?')}: "
+                f"{exc}\n  It is neither top-level nor in "
+                f"trl.experimental.{args.method}. Online methods are a moving "
+                f"target in TRL; pin a version or use ../05_huggingface_dpo/, "
+                f"whose objectives are stable."
+            ) from exc
+        if not hasattr(mod, name):
+            raise SystemExit(
+                f"{name} not found in trl.experimental.{args.method} "
+                f"(trl {getattr(trl, '__version__', '?')})."
+            )
+        return getattr(mod, name)
+
+    Cfg, Trainer_ = _resolve(cfg_name), _resolve(trainer_name)
+    print(f"  trainer          {Trainer_.__module__}.{Trainer_.__name__}")
 
     trainer = Trainer_(
         model=args.model,
