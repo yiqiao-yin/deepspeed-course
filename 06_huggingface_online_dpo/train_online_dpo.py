@@ -177,6 +177,10 @@ def main() -> None:
                              "fills it from this, and DeepSpeed rejects 0 "
                              "with 'warmup_num_steps must be a positive "
                              "integer'. Clamped for short runs.")
+    parser.add_argument("--max-samples", type=int, default=-1,
+                        help="Use only the first N prompts. Online methods generate\n"
+                             "fresh completions every step, so the prompt set is\n"
+                             "cheap to shrink and the generation is what costs.")
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Cap steps; the RunPod --dry-run path uses this.")
     parser.add_argument("--batch-size", type=int, default=2)
@@ -246,6 +250,10 @@ def main() -> None:
     print(bar)
 
     dataset = load_dataset(args.dataset, split="train")
+    if args.max_samples > 0:
+        n = min(args.max_samples, len(dataset))
+        dataset = dataset.select(range(n))
+        print(f"  --max-samples: using {n} of the split's prompts")
 
     # A prompt-only dataset is required. Handing this an offline preference set
     # wastes the chosen/rejected columns silently, so say so.
@@ -266,6 +274,34 @@ def main() -> None:
         reward_model = AutoModelForSequenceClassification.from_pretrained(
             args.reward_model, num_labels=1, dtype=torch.bfloat16
         )
+    else:
+        # --judge was validated above and then, until this branch existed,
+        # silently ignored: `judge` stayed None and the trainer was handed no
+        # preference source at all. A flag the argument parser accepts, the
+        # banner prints, and nothing acts on is worse than no flag.
+        #
+        # Resolved by name off the trl module rather than a hardcoded table,
+        # so the set of judges tracks whatever TRL version is installed.
+        import trl
+        judge_cls = getattr(trl, args.judge, None)
+        if judge_cls is None:
+            available = sorted(n for n in dir(trl) if n.endswith("Judge"))
+            raise SystemExit(
+                f"Unknown judge {args.judge!r}. This TRL exposes: "
+                + ", ".join(available)
+                + "\n  PairRMJudge needs `uv pip install llm-blender`; the "
+                  "HF and OpenAI judges need API credentials. A reward model "
+                  "(--reward-model) needs neither and is usually the cheaper "
+                  "choice — build one with ../05_huggingface_reward_model/."
+            )
+        try:
+            judge = judge_cls()
+        except ImportError as exc:
+            raise SystemExit(
+                f"{args.judge} could not be constructed: {exc}\n"
+                "  Most TRL judges pull an extra dependency or an API key. "
+                "Install it, or use --reward-model instead."
+            )
 
     common = dict(
         output_dir=output,
