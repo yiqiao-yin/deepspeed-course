@@ -154,6 +154,31 @@ step modern_ts_ds_${GPUS}gpu 700 "$GPUS" \
 step token_lm_ds_${GPUS}gpu 700 "$GPUS" \
     "deepspeed --num_gpus=$GPUS train_token_lm.py --bits 8 --epochs 1 --max-steps 5 --deepspeed $CFG"
 
+# --- did the multi-GPU steps ACTUALLY go multi-GPU? --------------------------
+# A step exiting 0 under `deepspeed --num_gpus=2` proves nothing on its own:
+# if the script never calls deepspeed.initialize, the launcher simply runs it
+# twice, once per GPU, and both copies exit 0 having duplicated the work.
+# That is exactly what these two scripts used to do. Each rank now announces
+# its shard, so the absence of that line is the regression signal.
+if [ "$VISIBLE" -ge "$GPUS" ] && [ "$GPUS" -gt 1 ]; then
+    echo ""
+    echo "  --- checking the 2-GPU steps really sharded ---"
+    for lbl in "ds_registered_${GPUS}gpu" "attention_ds_${GPUS}gpu" \
+               "modern_ts_ds_${GPUS}gpu" "token_lm_ds_${GPUS}gpu"; do
+        sect=$(sed -n "/@@@@@ BEGIN $lbl @@@@@/,/@@@@@ END $lbl /p" "$LOG")
+        # Either the script prints its own shard line, or DeepSpeed reports the
+        # world size it built. Both are evidence of a real distributed run.
+        if grep -qE "data-parallel: $GPUS ranks|world_size=?[ :]*$GPUS" <<<"$sect"; then
+            RESULTS+=("PASS  $lbl: confirmed $GPUS-way data parallel")
+            PASS=$((PASS+1))
+        else
+            RESULTS+=("FAIL  $lbl: exited 0 but shows NO sign of $GPUS-way parallelism"
+                      "      (ran the same work $GPUS times?)")
+            FAIL=$((FAIL+1))
+        fi
+    done
+fi
+
 echo ""
 echo "=============================================================================="
 echo "  SUMMARY   pass=$PASS  fail=$FAIL  skip=$SKIP"

@@ -277,17 +277,56 @@ def main() -> None:
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  model  {n_params:,} parameters")
 
-    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    # --- DeepSpeed, only when actually LAUNCHED by it -----------------------
+    # A config file existing is NOT evidence of a distributed launch. Treating
+    # it as evidence breaks plain `python train_token_lm.py`: DeepSpeed finds
+    # no rank environment, falls back to MPI discovery and dies with
+    # `ModuleNotFoundError: No module named 'mpi4py'`.
+    engine = None
+    launched_distributed = (
+        os.environ.get("LOCAL_RANK") is not None
+        or os.environ.get("WORLD_SIZE") is not None
+        or getattr(args, "local_rank", -1) >= 0
+    )
+    if launched_distributed and os.path.exists(args.deepspeed) and torch.cuda.is_available():
+        import deepspeed
+        engine, opt, _, _ = deepspeed.initialize(
+            args=args, model=model, model_parameters=model.parameters(),
+            config=args.deepspeed,
+        )
+        device = engine.device
+        batch_size = engine.train_micro_batch_size_per_gpu()
+        rank, world = engine.global_rank, engine.world_size
+    else:
+        opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        batch_size = args.batch_size
+        rank, world = 0, 1
+
+    # NOTE: unlike the regression scripts, the inputs here are token INDICES.
+    # They stay int64 no matter what precision the engine runs in -- casting
+    # them to fp16 to match the parameters would silently corrupt every index
+    # above 2048, where half precision stops representing integers exactly.
+    # Only the logits are half, and those are cast back to float for the loss.
     x_tr = tr_tok[:, :-1].long().to(device)
     y_tr = tr_tok[:, 1:].long().to(device)
+
+    # Data parallelism means each rank trains on a DIFFERENT slice. Without
+    # this the launcher just runs the same work N times: DeepSpeed still
+    # all-reduces the gradients, they are simply identical, so two GPUs cost
+    # twice as much and learn exactly what one would have.
+    if world > 1:
+        x_tr, y_tr = x_tr[rank::world], y_tr[rank::world]
+        if rank == 0:
+            print(f"  data-parallel: {world} ranks x {len(x_tr)} sequences each")
 
     step = 0
     for epoch in range(args.epochs):
         perm = torch.randperm(len(x_tr))
         total = 0.0
-        for i in range(0, len(x_tr), args.batch_size):
-            idx = perm[i:i + args.batch_size]
-            logits = model(x_tr[idx])
+        for i in range(0, len(x_tr), batch_size):
+            idx = perm[i:i + batch_size]
+            logits = (engine(x_tr[idx]) if engine is not None
+                      else model(x_tr[idx])).float()
             if args.soft_sigma > 0:
                 # Ordinal-aware target: being one bin off should cost less than
                 # being two hundred off. Plain cross-entropy cannot express that.
@@ -296,9 +335,13 @@ def main() -> None:
             else:
                 loss = F.cross_entropy(logits.reshape(-1, vocab),
                                        y_tr[idx].reshape(-1))
-            opt.zero_grad(); loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
+            if engine is not None:
+                engine.backward(loss)      # DeepSpeed owns zero_grad and clipping
+                engine.step()
+            else:
+                opt.zero_grad(); loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                opt.step()
             total += loss.item(); step += 1
             if 0 < args.max_steps <= step:
                 break
@@ -307,9 +350,10 @@ def main() -> None:
         if 0 < args.max_steps <= step:
             break
 
-    model.eval()
+    net = engine.module if engine is not None else model
+    net.eval()
     with torch.no_grad():
-        logits = model(te_tok[:, :-1].long().to(device))[:, -1, :]
+        logits = net(te_tok[:, :-1].long().to(device)).float()[:, -1, :]
         probs = torch.softmax(logits.float(), dim=-1).cpu()
 
     # Point forecast = EXPECTATION over bins, which minimises squared error.

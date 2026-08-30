@@ -346,28 +346,70 @@ def run_one(model_name, horizon, values, args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(model_name, args.seq_len, horizon).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     crit = nn.MSELoss()
+
+    # --- DeepSpeed, only when actually LAUNCHED by it -----------------------
+    # A config file existing is NOT evidence of a distributed launch. Treating
+    # it as evidence breaks plain `python train_modern_ts.py`: DeepSpeed finds no rank
+    # environment, falls back to MPI discovery and dies with
+    # `ModuleNotFoundError: No module named 'mpi4py'`.
+    engine = None
+    launched_distributed = (
+        os.environ.get("LOCAL_RANK") is not None
+        or os.environ.get("WORLD_SIZE") is not None
+        or getattr(args, "local_rank", -1) >= 0
+    )
+    if launched_distributed and os.path.exists(args.deepspeed) and torch.cuda.is_available():
+        import deepspeed
+        engine, opt, _, _ = deepspeed.initialize(
+            args=args, model=model, model_parameters=model.parameters(),
+            config=args.deepspeed,
+        )
+        device = engine.device
+        engine_dtype = next(engine.module.parameters()).dtype
+        batch_size = engine.train_micro_batch_size_per_gpu()
+        rank, world = engine.global_rank, engine.world_size
+    else:
+        opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        engine_dtype = torch.float32
+        batch_size = args.batch_size
+        rank, world = 0, 1
+
     x_tr, y_tr = x_tr.to(device), y_tr.to(device)
+
+    # Data parallelism means each rank trains on a DIFFERENT slice. Without
+    # this the launcher just runs the same work N times: DeepSpeed still
+    # all-reduces the gradients, they are simply identical, so two GPUs cost
+    # twice as much and learn exactly what one would have.
+    if world > 1:
+        x_tr, y_tr = x_tr[rank::world], y_tr[rank::world]
+        if rank == 0:
+            print(f"  data-parallel: {world} ranks x {len(x_tr)} samples each")
 
     step = 0
     for _ in range(args.epochs):
         perm = torch.randperm(len(x_tr))
-        for i in range(0, len(x_tr), args.batch_size):
-            idx = perm[i:i + args.batch_size]
-            loss = crit(model(x_tr[idx]), y_tr[idx])
-            opt.zero_grad(); loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
+        for i in range(0, len(x_tr), batch_size):
+            idx = perm[i:i + batch_size]
+            if engine is not None:
+                loss = crit(engine(x_tr[idx].to(engine_dtype)).float(), y_tr[idx])
+                engine.backward(loss)      # DeepSpeed owns zero_grad and clipping
+                engine.step()
+            else:
+                loss = crit(model(x_tr[idx]), y_tr[idx])
+                opt.zero_grad(); loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                opt.step()
             step += 1
             if 0 < args.max_steps <= step:
                 break
         if 0 < args.max_steps <= step:
             break
 
-    model.eval()
+    net = engine.module if engine is not None else model
+    net.eval()
     with torch.no_grad():
-        pred = model(x_te.to(device)).cpu().numpy()
+        pred = net(x_te.to(device).to(engine_dtype)).float().cpu().numpy()
     rmse = float(np.sqrt(((inv(pred) - inv(y_te.numpy())) ** 2).mean()))
 
     return dict(model=model_name, horizon=horizon, params=n_params,
