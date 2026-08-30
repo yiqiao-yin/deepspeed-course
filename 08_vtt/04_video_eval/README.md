@@ -129,11 +129,38 @@ uv run tests/test_video_eval.py          # 39 checks
 
 ### Setup (uv — never bare pip)
 
+### Setup with `uv`
+
+This folder is a **self-contained `uv` project** — it ships a
+`pyproject.toml` and a committed `uv.lock`, so after cloning:
+
+```bash
+cd 08_vtt/04_video_eval
+uv sync                    # creates .venv, installs the LOCKED versions
+uv run python video_mme_eval.py
+```
+
+`uv run` uses the project environment directly, so there is no
+`activate` step. `uv sync --extra tracking` adds Weights & Biases,
+which stays optional.
+
+The lock is the point: everyone who clones resolves to identical
+versions, instead of whatever `uv pip install` finds that day.
+Regenerate deliberately with `uv lock --upgrade`.
+
+<details>
+<summary>Manual route, without the project</summary>
+
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed transformers accelerate opencv-python-headless
 ```
+
+PyPI's `torch` ships CUDA wheels now, so no `--index-url` is
+needed; pinning cu121 gives an older CUDA than the default wheel.
+</details>
+
 
 ### CoreWeave / SLURM
 

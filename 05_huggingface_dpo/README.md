@@ -34,11 +34,38 @@ method here is an argument about which you can drop.
 
 Packages via **`uv`**. Never bare `pip`.
 
+### Setup with `uv`
+
+This folder is a **self-contained `uv` project** — it ships a
+`pyproject.toml` and a committed `uv.lock`, so after cloning:
+
+```bash
+cd 05_huggingface_dpo
+uv sync                    # creates .venv, installs the LOCKED versions
+uv run deepspeed --num_gpus=1 train_dpo.py
+```
+
+`uv run` uses the project environment directly, so there is no
+`activate` step. `uv sync --extra tracking` adds Weights & Biases,
+which stays optional.
+
+The lock is the point: everyone who clones resolves to identical
+versions, instead of whatever `uv pip install` finds that day.
+Regenerate deliberately with `uv lock --upgrade`.
+
+<details>
+<summary>Manual route, without the project</summary>
+
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed transformers trl peft accelerate datasets
 ```
+
+PyPI's `torch` ships CUDA wheels now, so no `--index-url` is
+needed; pinning cu121 gives an older CUDA than the default wheel.
+</details>
+
 
 ### No GPU? The objectives still run — and they are the point
 

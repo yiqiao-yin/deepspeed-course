@@ -1,0 +1,41 @@
+# =============================================================================
+# 08_vtt/01_qwen25vl_baseline as a self-contained uv project.
+#
+#     cd 08_vtt/01_qwen25vl_baseline
+#     uv sync                    # creates .venv and installs the LOCKED versions
+#     uv run deepspeed --num_gpus=2 train_qwen25vl.py
+#
+# The committed uv.lock is the point: everyone who clones this repository
+# resolves to byte-identical versions. `uv pip install` resolves to whatever is
+# newest that day, which is how a tutorial that worked in March stops working in
+# September with nobody having touched it. Regenerate deliberately with
+# `uv lock --upgrade`.
+#
+# No custom index is configured. PyPI's torch ships CUDA-enabled wheels now, so
+# the `--index-url .../whl/cu121` this course used to require is not needed and
+# would pin you to an older CUDA than the default wheel.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-08-vtt-01-qwen25vl-baseline"
+version = "0.1.0"
+description = "Qwen2.5-VL video-text baseline"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "deepspeed>=0.14",
+    "numpy>=1.24",
+    "opencv-python-headless>=4.8",
+    "peft>=0.10",
+    "torch>=2.2",
+    "transformers>=4.40",
+]
+
+[project.optional-dependencies]
+# W&B stays optional: every training script wraps `import wandb` in try/except
+# and only enables tracking when WANDB_API_KEY is set.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+package = false

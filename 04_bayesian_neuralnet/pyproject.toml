@@ -1,0 +1,39 @@
+# =============================================================================
+# 04_bayesian_neuralnet as a self-contained uv project.
+#
+#     cd 04_bayesian_neuralnet
+#     uv sync                    # creates .venv and installs the LOCKED versions
+#     uv run deepspeed --num_gpus=2 parallel_tempering_mcmc.py
+#
+# The committed uv.lock is the point: everyone who clones this repository
+# resolves to byte-identical versions. `uv pip install` resolves to whatever is
+# newest that day, which is how a tutorial that worked in March stops working in
+# September with nobody having touched it. Regenerate deliberately with
+# `uv lock --upgrade`.
+#
+# No custom index is configured. PyPI's torch ships CUDA-enabled wheels now, so
+# the `--index-url .../whl/cu121` this course used to require is not needed and
+# would pin you to an older CUDA than the default wheel.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-04-bayesian-neuralnet"
+version = "0.1.0"
+description = "Bayesian neural net via parallel-tempering MCMC"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "deepspeed>=0.14",
+    "matplotlib>=3.7",
+    "numpy>=1.24",
+    "torch>=2.2",
+]
+
+[project.optional-dependencies]
+# W&B stays optional: every training script wraps `import wandb` in try/except
+# and only enables tracking when WANDB_API_KEY is set.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+package = false

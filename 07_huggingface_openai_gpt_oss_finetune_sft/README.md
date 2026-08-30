@@ -6,12 +6,36 @@ Fine-tune OpenAI GPT-OSS-20B on multilingual reasoning using LoRA, TRL SFTTraine
 
 ### Setup with `uv`
 
+This folder is a **self-contained `uv` project** — it ships a
+`pyproject.toml` and a committed `uv.lock`, so after cloning:
+
+```bash
+cd 07_huggingface_openai_gpt_oss_finetune_sft
+uv sync                    # creates .venv, installs the LOCKED versions
+uv run deepspeed --num_gpus=4 lora/train_ds.py
+```
+
+`uv run` uses the project environment directly, so there is no
+`activate` step. `uv sync --extra tracking` adds Weights & Biases,
+which stays optional.
+
+The lock is the point: everyone who clones resolves to identical
+versions, instead of whatever `uv pip install` finds that day.
+Regenerate deliberately with `uv lock --upgrade`.
+
+<details>
+<summary>Manual route, without the project</summary>
+
 ```bash
 uv venv .venv && source .venv/bin/activate
 uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 uv pip install deepspeed
 uv pip install transformers datasets accelerate trl peft
 ```
+
+PyPI's `torch` ships CUDA wheels now, so no `--index-url` is needed;
+pinning cu121 today gives an older CUDA than the default wheel.
+</details>
 
 ### Running
 
