@@ -396,11 +396,23 @@ def main() -> None:
     print(f"  preference arg   {', '.join(trainer_kwargs)}")
     print(f"  trainer          {Trainer_.__module__}.{Trainer_.__name__}")
 
+    # TRL 1.12 requires the tokenizer explicitly -- older versions inferred it
+    # from the model string. Without it:
+    #     ValueError: `processing_class` must be provided.
+    # A padding token is mandatory too, because online methods batch generated
+    # completions of different lengths every step; Qwen and most causal models
+    # ship without one.
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     trainer = Trainer_(
         model=args.model,
         **trainer_kwargs,
         args=Cfg(**common),
         train_dataset=dataset,
+        processing_class=tokenizer,
         peft_config=peft_config,
     )
 
