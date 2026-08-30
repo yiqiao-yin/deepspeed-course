@@ -201,6 +201,65 @@ def main() -> int:
         r.check(proc.returncode == 0, f"{rel}: valid bash syntax",
                 proc.stderr.strip()[:200])
 
+    # ---- 8a. Every example must be a uv PROJECT ---------------------------
+    # CONTRIBUTING.md section 4 requires that
+    #     cd <example> && uv sync
+    # works from a fresh clone. That needs two committed files, and the lock is
+    # the one that matters: without it `uv pip install torch deepspeed` resolves
+    # to whatever is newest that day, so a tutorial that worked in March breaks
+    # in September with nobody having touched it.
+    #
+    # Checked structurally rather than by running uv, so this stays a fast,
+    # network-free CPU test.
+    import tomllib
+    for name, spec in ctl.EXAMPLES.items():
+        folder = REPO_ROOT / name
+        if not folder.is_dir():
+            continue
+        # The project lives beside the registered training script, which is not
+        # always the topic root: `08_vtt` and `09_vss` are legacy aggregate
+        # entries whose script sits inside a subtopic that carries its own
+        # project. Walk up from the script to the topic root and take the first
+        # pyproject found.
+        cand = (folder / spec["script"]).parent
+        proj_dir = None
+        while True:
+            if (cand / "pyproject.toml").is_file():
+                proj_dir = cand
+                break
+            if cand == folder or folder not in cand.parents:
+                break
+            cand = cand.parent
+
+        r.check(proj_dir is not None, f"{name}: has pyproject.toml",
+                f"expected beside {spec['script']} or at the topic root; "
+                "cd there and run `uv add <deps>` -- CONTRIBUTING.md section 4")
+        if proj_dir is None:
+            continue
+        pyproject = proj_dir / "pyproject.toml"
+        r.check((proj_dir / "uv.lock").is_file(),
+                f"{name}: has a committed uv.lock",
+                f"run `uv lock` in {proj_dir.relative_to(REPO_ROOT)} and commit "
+                "it -- an unlocked example is a tutorial with an unwritten "
+                "expiry date")
+        try:
+            cfg = tomllib.loads(pyproject.read_text())
+        except Exception as exc:
+            r.check(False, f"{name}: pyproject.toml parses", str(exc)[:120])
+            continue
+        proj = cfg.get("project", {})
+        r.check(bool(proj.get("dependencies")),
+                f"{name}: declares dependencies")
+        r.check(cfg.get("tool", {}).get("uv", {}).get("package") is False,
+                f"{name}: sets [tool.uv] package = false",
+                "these are runnable examples, not distributable libraries; "
+                "without it uv tries to BUILD the folder and uv sync fails")
+        # W&B is optional everywhere -- the scripts guard the import.
+        r.check("wandb" not in " ".join(proj.get("dependencies", [])),
+                f"{name}: wandb is not a hard dependency",
+                "every script wraps `import wandb` in try/except; it belongs "
+                "in [project.optional-dependencies]")
+
     # ---- 8b. Every launcher-run script must TOLERATE --local_rank ----------
     # The deepspeed launcher injects --local_rank=N into each worker's argv. A
     # script using strict parse_args() exits 2 with "unrecognized arguments"

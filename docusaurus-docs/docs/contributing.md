@@ -150,6 +150,29 @@ deepspeed --num_gpus=2 train_ds.py           # ❌ silently swallowed
 Without `"$@"` the dry run is not refused, it is *ignored*: the job submits, runs
 to completion, and nothing warns you. `scripts/check_contract.py` checks for it.
 
+### Every example is a `uv` project
+
+A contributed folder must ship a `pyproject.toml` **and a committed `uv.lock`**, so that this works from a fresh clone with no other setup:
+
+```bash
+cd 10_my_topic
+uv sync
+uv run deepspeed --num_gpus=1 train_ds.py
+```
+
+The lock is the requirement, not a nicety. Without it `uv pip install torch deepspeed` resolves to whatever is newest the day someone runs it — which is how a tutorial that worked in March breaks in September with nobody having touched it. Regenerate deliberately with `uv lock --upgrade`.
+
+Four rules the checker enforces:
+
+| Rule | Why |
+|---|---|
+| Per-folder lock, not a workspace | Examples are self-contained; one folder must run without the other 22 existing. |
+| `package = false` under `[tool.uv]` | These are runnable examples, not libraries — otherwise `uv sync` tries to *build* the folder and fails. |
+| `wandb` in `[project.optional-dependencies]` | Every script wraps `import wandb` in `try/except`; making it required contradicts the code. |
+| No custom torch index | PyPI's `torch` ships CUDA wheels now; pinning `cu121` gives an **older** CUDA than the default. |
+
+`tests/test_runpod_ctl.py` fails a PR that is missing either file.
+
 ### 2.3 Reader C — RunPod: rent, run, **shut down**
 
 RunPod is a single-user pod with direct GPU access. There is **no SLURM** — the `#SBATCH` lines are inert comments — so the lifecycle is driven by API through `runpod/runpod_ctl.py`.

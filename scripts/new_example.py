@@ -501,6 +501,51 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", base.lower()).strip("_") or "example"
 
 
+
+PYPROJECT = """\
+# =============================================================================
+# __FOLDER__ as a self-contained uv project.
+#
+#     cd __FOLDER__
+#     uv sync                    # creates .venv, installs the LOCKED versions
+#     uv run deepspeed --num_gpus=__GPUS__ __SCRIPT__
+#
+# The committed uv.lock is required (CONTRIBUTING.md section 4): it is what
+# makes every reader install the same versions. Without it `uv pip install`
+# resolves to whatever is newest that day, which is how a tutorial that worked
+# in March breaks in September with nobody having touched it.
+#
+# After adding your real dependencies below, run `uv lock` and COMMIT the lock.
+# No custom index for torch: PyPI ships CUDA-enabled wheels, and pinning cu121
+# gives an older CUDA than the default wheel.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-__PROJNAME__"
+version = "0.1.0"
+description = "__TITLE__"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.2",
+    "deepspeed>=0.14",
+    # TODO: add what your example actually imports, e.g.
+    # "transformers>=4.40", "datasets>=2.18", "peft>=0.10",
+]
+
+[project.optional-dependencies]
+# W&B stays OPTIONAL: the training script wraps `import wandb` in try/except
+# and only tracks when WANDB_API_KEY is set. Making it required contradicts
+# the code and tests/test_runpod_ctl.py will fail you for it.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Runnable example, not a distributable library. Without this uv tries to BUILD
+# the folder as a package and `uv sync` fails.
+package = false
+"""
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -543,6 +588,7 @@ def main() -> int:
     testname = f"test_{slug}.py"
 
     subs = {
+        "__PROJNAME__": folder.replace("/", "-").replace("_", "-").lower(),
         "__FOLDER__": folder,
         "__TITLE__": title,
         "__SCRIPT__": script,
@@ -569,6 +615,7 @@ def main() -> int:
         ("ds_config.json", DS_CONFIG, False),
         ("run_deepspeed.sh", RUN_SH, True),
         ("README.md", README_MD, False),
+        ("pyproject.toml", PYPROJECT, False),
     ]:
         path = target / filename
         path.write_text(render(template), encoding="utf-8")
@@ -593,7 +640,15 @@ def main() -> int:
     print()
     print("  Next, in order:")
     print()
-    print("  1. Register the example so RunPod users can rent the right card.")
+    print("  1. Resolve and COMMIT the lock — `uv sync` must work from a clone:")
+    print()
+    print(f"         cd {folder}")
+    print("         uv lock && uv sync")
+    print("         uv run python -c \"import torch, deepspeed\"")
+    print()
+    print("     tests/test_runpod_ctl.py fails without a committed uv.lock.")
+    print()
+    print("  2. Register the example so RunPod users can rent the right card.")
     print("     Add to EXAMPLES in runpod/runpod_ctl.py:")
     print()
     print(f'         "{folder}": dict(min_vram={args.vram}, gpus={args.gpus}, '

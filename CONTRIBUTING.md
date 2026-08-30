@@ -23,7 +23,7 @@ written to be read by **two audiences**:
 1. [What this repository is](#1-what-this-repository-is)
 2. [What you can contribute](#2-what-you-can-contribute)
 3. [The three-platform contract](#3-the-three-platform-contract-the-part-that-matters-most)
-4. [The four-file contract](#4-the-four-file-contract)
+4. [The six-file contract](#4-the-six-file-contract)
 5. [Step by step](#5-step-by-step)
 6. [Hard rules](#6-hard-rules-these-will-block-a-merge)
 7. [Writing the test](#7-writing-the-test)
@@ -411,7 +411,7 @@ readers compare against it to decide whether their run worked.
 
 ---
 
-## 4. The four-file contract
+## 4. The six-file contract
 
 Every example folder has the same shape:
 
@@ -421,6 +421,48 @@ Every example folder has the same shape:
 | `ds_config*.json` | DeepSpeed config — ZeRO stage, precision, optimizer, batch sizes. |
 | `run_deepspeed.sh` | SLURM batch script. (`submit_job.sh` / `run_training.sh` are accepted legacy names.) |
 | `README.md` | Standalone walkthrough: hardware, setup, run command, expected output. |
+| **`pyproject.toml`** | **Makes the folder a `uv` project.** Declares the dependencies, `requires-python`, and the optional `tracking` extra for W&B. |
+| **`uv.lock`** | **Committed.** The exact resolved versions, so every reader installs the same thing. |
+
+### `uv sync` must work from a fresh clone
+
+This is the requirement, and it is testable in one command:
+
+```bash
+git clone <repo> && cd <repo>/10_my_topic
+uv sync                       # MUST succeed with no other setup
+uv run deepspeed --num_gpus=1 train_ds.py
+```
+
+If that fails, the example is not finished. `uv run` uses the project
+environment directly, so there is no `activate` step to forget.
+
+**Commit the lock.** It is the whole point. Without it `uv pip install torch
+deepspeed` resolves to whatever is newest the day someone runs it, which is how
+a tutorial that worked in March breaks in September with nobody having touched
+it. Regenerate deliberately with `uv lock --upgrade`, never as a side effect.
+
+Build one like this:
+
+```bash
+cd 10_my_topic
+uv init --no-workspace --no-readme        # or copy a neighbour's pyproject.toml
+uv add torch deepspeed                    # writes pyproject.toml AND uv.lock
+uv sync && uv run python -c "import torch, deepspeed"
+```
+
+Rules the existing examples follow, and which yours should:
+
+| Rule | Why |
+|---|---|
+| **Per-folder lock, not a workspace** | Examples are self-contained by design. A reader opening one folder must be able to run it without the other 22 existing. |
+| **`package = false` under `[tool.uv]`** | These are runnable examples, not distributable libraries. Without it `uv sync` tries to build the folder as a package and fails. |
+| **W&B goes in `[project.optional-dependencies]`** | Every training script wraps `import wandb` in `try/except` and only tracks when `WANDB_API_KEY` is set. Making it required contradicts the code. |
+| **No custom index for torch** | PyPI's `torch` ships CUDA-enabled wheels — the locked 2.13.0 resolves to `+cu130` with `cuda.is_available() == True`. The old `--index-url .../whl/cu121` line pins you to an *older* CUDA than the default. |
+| **`requires-python = ">=3.10"`** | The floor that actually resolves for current torch. A looser bound produces a lock that cannot install on the Python it claims to support. |
+
+`tests/test_runpod_ctl.py` fails if a registered example is missing either
+file, so this is enforced rather than merely requested.
 
 Larger examples may add `HARDWARE_REQUIREMENTS.md` or similar.
 
@@ -572,11 +614,26 @@ git fetch upstream && git rebase upstream/main
 
 ## 6. Hard rules (these will block a merge)
 
-### 🔴 Use `uv`, never bare `pip`
+### 🔴 Use `uv`, never bare `pip` — and ship a lock
 
 In docs, READMEs, SLURM scripts, and docstrings. `uv pip install X`, not
 `pip install X`. This is a `uv`-managed course and mixed instructions strand
 readers halfway.
+
+Beyond that, **every example folder must be a `uv` project**: a
+`pyproject.toml` and a **committed `uv.lock`**, such that
+
+```bash
+cd <your_example> && uv sync
+```
+
+works from a fresh clone with no other setup. See
+[the six-file contract](#4-the-six-file-contract) for the specific rules and
+`tests/test_runpod_ctl.py` for the check that enforces them.
+
+A PR that adds an example without a lock will be asked for one. It is not
+bureaucracy: an unlocked example is a tutorial with an expiry date nobody
+wrote down.
 
 ### 🔴 Use `deepspeed` — this is a DeepSpeed course
 

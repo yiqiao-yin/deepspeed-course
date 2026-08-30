@@ -305,6 +305,31 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
 def check_reader_c(folder: Path, name: str, r: Report, ctl) -> None:
     """RunPod: registered, rentable, and auto-terminating."""
     registered = name in ctl.EXAMPLES
+    # ---- uv project: `cd <example> && uv sync` must work ------------------
+    # CONTRIBUTING.md section 4. tests/test_runpod_ctl.py gates this; the
+    # checker reports it too so `check_contract.py <folder>` gives the whole
+    # picture in one place.
+    import tomllib as _toml
+    _pp = folder / "pyproject.toml"
+    r.add(name, "uv", "pyproject.toml exists (folder is a uv project)",
+          _pp.is_file(), "run `uv add <deps>` in the folder")
+    r.add(name, "uv", "uv.lock is committed",
+          (folder / "uv.lock").is_file(),
+          "run `uv lock` and commit it -- without a lock every reader "
+          "resolves different versions")
+    if _pp.is_file():
+        try:
+            _c = _toml.loads(_pp.read_text())
+        except Exception:
+            _c = {}
+        r.add(name, "uv", "[tool.uv] package = false",
+              _c.get("tool", {}).get("uv", {}).get("package") is False,
+              "these are examples, not libraries; uv sync fails without it")
+        r.add(name, "uv", "wandb is optional, not a hard dependency",
+              "wandb" not in " ".join(_c.get("project", {}).get("dependencies", [])),
+              "the scripts guard `import wandb`; put it in "
+              "[project.optional-dependencies]")
+
     r.add(name, "C", "registered in runpod_ctl.py EXAMPLES", registered,
           "without it, `runpod_ctl.py run` cannot size or launch this topic")
     if not registered:

@@ -46,7 +46,7 @@ numbered subtopics**, because their subject matter escalates internally:
         03_duplex_streaming, 04_omni_eval, data/}
 ```
 
-Each subtopic keeps the full four-file contract independently and is registered
+Each subtopic keeps the full six-file contract independently and is registered
 separately in `runpod/runpod_ctl.py` under a **nested key** (`"09_vss/02_thinker_talker"`),
 so a reader rents a 24 GB card for the tractable subtopic instead of the
 frontier model's unobtainable hardware. `tests/test_runpod_ctl.py` only requires
@@ -64,7 +64,7 @@ token compression shrinks what it *looks at*; STAR memory bounds what it
 
 ## The per-example contract
 
-Every example folder follows the same four-file shape. When adding or editing an example, keep it:
+Every example folder follows the same six-file shape. When adding or editing an example, keep it:
 
 | File | Role |
 |---|---|
@@ -72,6 +72,8 @@ Every example folder follows the same four-file shape. When adding or editing an
 | `ds_config*.json` | DeepSpeed config — ZeRO stage, fp16/bf16, optimizer, batch sizes |
 | `run_deepspeed.sh` (or `submit_job.sh`, `run_training.sh`, `run_2xB200.sh`) | SLURM batch script, or a bare launcher for single-pod platforms |
 | `README.md` | Full standalone walkthrough: hardware, setup, run command, expected output |
+| `pyproject.toml` | Makes the folder a **uv project**: dependencies, `requires-python`, `package = false`, W&B under an optional `tracking` extra |
+| `uv.lock` | **Committed.** `cd <example> && uv sync` must work from a fresh clone — enforced by `tests/test_runpod_ctl.py` |
 
 Larger examples add `HARDWARE_REQUIREMENTS.md` / `HARDWARE_GUIDE.md` / `MODEL_IMPROVEMENT_STRATEGY.md`.
 
@@ -90,7 +92,16 @@ SLURM workflow: `sbatch <script>` → `squeue -u $USER` → `tail -f logs/<name>
 ## Tooling: always `uv`
 
 Environments and package installs use **`uv`**, never bare `pip` or conda — including
-for throwaway checks:
+for throwaway checks. **Every example folder is a uv project** with a committed
+`uv.lock`, so the first thing a reader does is:
+
+```bash
+cd 02_basic_convnet && uv sync && uv run deepspeed --num_gpus=1 train_ds.py
+```
+
+Locks are per folder rather than a workspace, matching the no-shared-module
+rule: one folder must run without the other 22 existing. Regenerate with
+`uv lock --upgrade`, deliberately. Ad-hoc commands still use uv directly:
 
 ```bash
 uv venv .venv && source .venv/bin/activate
