@@ -356,9 +356,20 @@ https://wandb.ai/your-username/projects
 
 ## 🔧 Configuration
 
-### DeepSpeed Configuration (`ds_config.json`)
+### DeepSpeed Configuration (`ds_config_2xB200.json`)
 
 Current configuration uses **ZeRO Stage 3** with aggressive memory optimization:
+
+:::note Edit `ds_config_2xB200.json`, not `ds_config.json`
+`train_ds_2xB200.py` loads **`ds_config_2xB200.json`**. The plain
+`ds_config.json` is the generic ZeRO-3 starting point and is not what runs, so
+changes made there have no effect.
+
+The 2xB200 variant is not a cosmetic fork — it adds `activation_checkpointing`
+(with `partition_activations`) and an `aio` block for NVMe offload. Those are
+the settings that make 560B parameters fit at all, which is why the two files
+are kept separate rather than merged.
+:::
 
 ```json
 {
@@ -512,7 +523,7 @@ model = model.merge_and_unload()
 gradient_accumulation_steps=64  # Increase from 32
 
 # C. Enable more aggressive CPU offloading
-# Edit ds_config.json:
+# Edit ds_config_2xB200.json (the one the script actually loads):
 "stage3_max_live_parameters": 5e8  # Reduce from 1e9
 ```
 

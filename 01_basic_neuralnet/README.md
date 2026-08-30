@@ -117,6 +117,23 @@ basic-neuralnet-ds/
 
 ### 3. DeepSpeed Configuration
 
+:::warning Two configs ship here, and the script uses the *other* one
+`train_ds_enhanced.py` loads **`ds_config_fp32.json`**, not the
+`ds_config.json` shown below. The difference is `fp16.enabled`, and it matters
+more than it looks:
+
+For a problem this small — fitting `y = 2x + 1`, two learnable parameters — the
+gradients are tiny, and FP16's limited range lets them **underflow to zero**.
+DeepSpeed's loss scaler cannot recover them. Training then runs to completion,
+prints a falling-looking loss, and never updates the parameters. It fails
+*quietly*, which is the worst way to fail while learning a new framework.
+
+So: read the config below to understand the fields, but edit
+`ds_config_fp32.json` if you want to change the run. `ds_config.json` is kept
+because FP16 is what you *would* use on any real model, and later examples
+enable it.
+:::
+
 Create `ds_config.json`:
 
 ```json

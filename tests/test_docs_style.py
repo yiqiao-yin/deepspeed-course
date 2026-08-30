@@ -288,6 +288,39 @@ def test_suite_registration_is_complete(r: Results) -> None:
             "it has gone stale twice already — 11 suites, then 14")
 
 
+def test_published_counts_are_current(r: Results) -> None:
+    """
+    Counts the docs publish about themselves must match reality.
+
+    The root README advertises how many pages the site has, and CONTRIBUTING.md
+    says the mermaid palette is "load-bearing across N pages". Both are the
+    first thing a visitor reads and both rot silently every time a page is
+    added -- the page count had drifted to 26 against an actual 39, and the
+    SLURM guide claimed "all fourteen examples" when there were 23.
+
+    Kept to counts that are cheap to derive and genuinely user-facing. This is
+    deliberately NOT extended to a total assertion count, which rots on every
+    commit and was removed from CLAUDE.md for exactly that reason.
+    """
+    import re
+
+    pages = list(DOCS.rglob("*.md"))
+    diagram_pages = [p for p in pages if mermaid_blocks(p.read_text())]
+
+    readme = (REPO_ROOT / "README.md").read_text()
+    m = re.search(r"(\d+) pages with", readme)
+    r.check(m is not None and int(m.group(1)) == len(pages),
+            f"README.md's page count is current ({len(pages)})",
+            f"README says {m.group(1) if m else 'MISSING'}, site has {len(pages)}")
+
+    contributing = (REPO_ROOT / "CONTRIBUTING.md").read_text()
+    m = re.search(r"load-bearing across (\d+) pages", contributing)
+    r.check(m is not None and int(m.group(1)) == len(diagram_pages),
+            f"CONTRIBUTING.md's diagram-page count is current ({len(diagram_pages)})",
+            f"CONTRIBUTING says {m.group(1) if m else 'MISSING'}, "
+            f"{len(diagram_pages)} pages carry a mermaid block")
+
+
 def main() -> int:
     r = Results("Docs site style — mermaid house theme and page structure")
     test_global_theme(r)
@@ -297,6 +330,7 @@ def main() -> int:
     test_page_structure(r)
     test_referenced_tests_exist(r)
     test_suite_registration_is_complete(r)
+    test_published_counts_are_current(r)
     return r.finish()
 
 
