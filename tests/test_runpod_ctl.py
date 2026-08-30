@@ -16,6 +16,7 @@ manually — see runpod/README.md.
 """
 
 import importlib.util
+import pathlib
 import sys
 from pathlib import Path
 
@@ -199,6 +200,39 @@ def main() -> int:
                               capture_output=True, text=True)
         r.check(proc.returncode == 0, f"{rel}: valid bash syntax",
                 proc.stderr.strip()[:200])
+
+    # ---- 9. The POD START COMMAND must parse too ---------------------------
+    # bootstrap() returns one string that the pod runs as `bash -lc "<string>"`.
+    # A syntax error there is far worse than in a checked-in script, because
+    # nothing local ever executes it: the pod is created, it BILLS, and it
+    # silently runs nothing -- no clone, no training, no report. There is no
+    # error message anywhere, only an idle pod and an empty results directory.
+    #
+    # This is not hypothetical. The auto-terminate watchdog ended its line with
+    # `&`, and the steps are joined with "; ", producing `) &; report ...` --
+    # unparseable. Every --collect pod created after that commit did nothing at
+    # all, and the only symptom was silence.
+    import tempfile
+    for ex in sorted(ctl.EXAMPLES):
+        cmd = ctl.bootstrap(ex, ctl.EXAMPLES[ex], "main",
+                            topic="t", dry_run=True)
+        with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:
+            fh.write(cmd)
+            tmp = fh.name
+        proc = subprocess.run(["bash", "-n", tmp], capture_output=True, text=True)
+        pathlib.Path(tmp).unlink(missing_ok=True)
+        r.check(proc.returncode == 0,
+                f"{ex}: pod start command is valid bash",
+                proc.stderr.strip()[:200]
+                + "  <- the pod would bill while running NOTHING")
+
+    # The watchdog must survive being joined with "; " -- assert the shape
+    # directly, so the reason is documented at the point of failure.
+    one = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+                        "main", topic="t")
+    r.check(") &;" not in one,
+            "the watchdog does not leave a bare `&` before a `;`",
+            "`cmd &; next` is a bash syntax error and kills the whole command")
 
     return r.finish()
 

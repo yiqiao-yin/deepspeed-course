@@ -309,9 +309,20 @@ def bootstrap(example: str, spec: dict, branch: str,
     # pod gets shut down, but it dies with your laptop lid. This backstop kills
     # the container's main process after max_hours no matter what, so a hung run
     # cannot bill indefinitely. It does NOT need the API key on the pod.
+    # NOTE the trailing `true`. These steps are joined with "; ", and a command
+    # ending in `&` followed by `;` is a bash SYNTAX ERROR:
+    #
+    #     ( sleep 21600; ... ) &; report "[1/6] pod up"
+    #                            ^ syntax error near unexpected token `;'
+    #
+    # The whole start command is one `bash -lc` string, so a parse error means
+    # the container runs NOTHING -- it is created, it bills, and it never
+    # clones, never trains and never reports. Silent, and expensive.
+    # `&` already terminates the command; `true` gives the join something
+    # valid to attach its `;` to.
     watchdog = (
         f'( sleep {int(max_hours * 3600)}; echo "[watchdog] {max_hours}h cap reached";'
-        f' kill -TERM 1 2>/dev/null || true ) &'
+        f' kill -TERM 1 2>/dev/null || true ) & true'
     ) if max_hours else "true"
 
     steps = [
