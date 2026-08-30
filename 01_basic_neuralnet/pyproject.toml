@@ -28,11 +28,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
-    # PyPI's torch now ships CUDA-enabled wheels by default -- torch 2.13.0
-    # resolves to +cu130 and reports cuda.is_available() == True with no extra
-    # index configured. The `--index-url .../whl/cu121` line this course used
-    # to require is no longer needed for a working GPU install, and pinning it
-    # would freeze you to an older CUDA than the wheel you would otherwise get.
+    # The CUDA build is pinned via [[tool.uv.index]] at the bottom of this
+    # file rather than inherited from PyPI -- see the note there.
     "torch>=2.2",
     "deepspeed>=0.14",
 ]
@@ -48,3 +45,24 @@ tracking = ["wandb>=0.16"]
 # release goes back to an sdist-only build, this is where
 # `no-build-isolation-package = ["deepspeed"]` would go.
 package = false
+
+# torch is pinned to an explicit CUDA 12.8 build. This is NOT cosmetic:
+# PyPI's default torch is now a CUDA 13.0 wheel, and on a host whose driver
+# predates CUDA 13 -- 550 and 570 series, which is what much rented hardware
+# runs -- it installs fine and then reports cuda.is_available() == False with
+# "The NVIDIA driver on your system is too old". Verified on a driver 550.127
+# box: uv sync succeeded, torch could not see the GPU at all.
+#
+# That failure is silent in the worst way: require_gpu() then tells the reader
+# they have no GPU while nvidia-smi shows one.
+#
+# cu128 runs on both sides -- driver 550/570 (CUDA 12.x) and 580+ (CUDA 13.x,
+# backward compatible with cu12 wheels). If you are on a newer driver and want
+# the newest CUDA, change the URL below to cu130 and re-run `uv lock`.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

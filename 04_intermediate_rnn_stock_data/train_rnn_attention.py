@@ -55,7 +55,7 @@ RunPod (auto-shutdown): uv run runpod/runpod_ctl.py run 04_intermediate_rnn_stoc
                             --dry-run --collect --wait --terminate --yes
 
     uv venv && source .venv/bin/activate
-    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu128
     uv pip install deepspeed yfinance pandas scikit-learn matplotlib
 
 References:
@@ -101,7 +101,7 @@ def require_gpu() -> None:
     except ImportError:
         print("\n[preflight] PyTorch is not installed. Install it with:")
         print("            uv pip install torch --index-url "
-              "https://download.pytorch.org/whl/cu121\n")
+              "https://download.pytorch.org/whl/cu128\n")
         sys.exit(1)
 
     if torch.cuda.is_available():

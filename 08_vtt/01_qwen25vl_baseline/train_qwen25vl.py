@@ -59,7 +59,7 @@ RunPod (creates the pod, runs, and terminates it):
 
 Setup:
     uv venv && source .venv/bin/activate
-    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu128
     uv pip install deepspeed transformers accelerate peft datasets \\
         qwen-vl-utils opencv-python-headless
 
@@ -95,7 +95,7 @@ def require_gpu() -> None:
     except ImportError:
         print("\n[preflight] PyTorch is not installed. Install it with:")
         print("            uv pip install torch --index-url "
-              "https://download.pytorch.org/whl/cu121\n")
+              "https://download.pytorch.org/whl/cu128\n")
         sys.exit(1)
 
     if torch.cuda.is_available():

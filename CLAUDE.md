@@ -105,7 +105,7 @@ rule: one folder must run without the other 22 existing. Regenerate with
 
 ```bash
 uv venv .venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed wandb
 
 uv run script.py                    # run a script

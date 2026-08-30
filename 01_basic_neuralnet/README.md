@@ -30,13 +30,15 @@ Regenerate deliberately with `uv lock --upgrade`.
 
 ```bash
 uv venv .venv && source .venv/bin/activate
-uv pip install torch deepspeed
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
+uv pip install deepspeed
 ```
 
-Note there is no `--index-url .../whl/cu121` here any more. PyPI's `torch` now
-ships CUDA-enabled wheels by default — the locked `torch 2.13.0` resolves to
-`+cu130` and reports `cuda.is_available() == True` with no extra index. Pinning
-cu121 today would give you an *older* CUDA than the default wheel.
+The `--index-url` here is **required**, and pins the same CUDA build as
+`uv.lock`. PyPI's *default* `torch` is a CUDA 13 wheel; on a driver older
+than CUDA 13 it installs fine and then reports
+`cuda.is_available() == False`. Verified on a driver 550.127 box, where
+`uv sync` succeeded and torch could not see the GPU at all.
 </details>
 
 > **If DeepSpeed stops with `CUDA_HOME environment variable is not set`,** you

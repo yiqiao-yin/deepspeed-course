@@ -13,7 +13,7 @@ This directory contains **two separate video training frameworks** optimized for
 
 ```bash
 uv venv .venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 uv pip install transformers datasets accelerate trl huggingface_hub pillow requests opencv-python-headless
 ```

@@ -45,7 +45,7 @@ echo "=================================================="
 
 # Environment, built once on a LOGIN node with uv:
 #   uv venv ~/myenv && source ~/myenv/bin/activate
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   uv pip install deepspeed transformers accelerate peft datasets
 #   uv pip install qwen-vl-utils opencv-python-headless
 if [ -f ~/myenv/bin/activate ]; then

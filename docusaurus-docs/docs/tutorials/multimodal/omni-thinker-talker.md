@@ -267,7 +267,7 @@ Researched Aug 2026. All accept video + audio and emit speech.
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed transformers accelerate peft datasets
 uv pip install librosa soundfile opencv-python-headless
 ```

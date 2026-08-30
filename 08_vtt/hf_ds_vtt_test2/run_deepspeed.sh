@@ -38,7 +38,7 @@ echo "=================================================="
 
 # Activate your environment (built once on a LOGIN node with uv):
 #   uv venv ~/myenv && source ~/myenv/bin/activate
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   uv pip install deepspeed transformers datasets accelerate trl huggingface_hub
 #   uv pip install opencv-python-headless  # REQUIRED for frame extraction
 source ~/myenv/bin/activate

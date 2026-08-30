@@ -86,12 +86,13 @@ Regenerate deliberately with `uv lock --upgrade`.
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed transformers trl peft accelerate datasets
 ```
 
-PyPI's `torch` ships CUDA wheels now, so no `--index-url` is
-needed; pinning cu121 gives an older CUDA than the default wheel.
+The `--index-url` is **required**, and matches what the lock pins.
+PyPI's default `torch` is a CUDA 13 wheel and reports
+`cuda.is_available() == False` on a pre-CUDA-13 driver.
 </details>
 
 

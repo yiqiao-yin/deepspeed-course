@@ -458,8 +458,17 @@ Rules the existing examples follow, and which yours should:
 | **Per-folder lock, not a workspace** | Examples are self-contained by design. A reader opening one folder must be able to run it without the other 22 existing. |
 | **`package = false` under `[tool.uv]`** | These are runnable examples, not distributable libraries. Without it `uv sync` tries to build the folder as a package and fails. |
 | **W&B goes in `[project.optional-dependencies]`** | Every training script wraps `import wandb` in `try/except` and only tracks when `WANDB_API_KEY` is set. Making it required contradicts the code. |
-| **No custom index for torch** | PyPI's `torch` ships CUDA-enabled wheels — the locked 2.13.0 resolves to `+cu130` with `cuda.is_available() == True`. The old `--index-url .../whl/cu121` line pins you to an *older* CUDA than the default. |
+| **Pin torch to an explicit CUDA index** | `[[tool.uv.index]]` + `[tool.uv.sources]`, currently `cu128`. PyPI's *default* `torch` is a CUDA 13 wheel: on a driver older than CUDA 13 — the 550 and 570 series, which much rented hardware runs — it installs cleanly and then reports `cuda.is_available() == False`. Verified on a driver 550.127 box: `uv sync` succeeded and torch could not see the GPU. `cu128` works on both old and new drivers. |
 | **`requires-python = ">=3.10"`** | The floor that actually resolves for current torch. A looser bound produces a lock that cannot install on the Python it claims to support. |
+
+> **Why the CUDA index is not optional.** A lock that resolves torch from
+> PyPI gets whatever CUDA build is current — today a CUDA 13 wheel. On a host
+> whose driver predates CUDA 13, `uv sync` still succeeds, and then
+> `torch.cuda.is_available()` returns **False** while `nvidia-smi` happily
+> shows the card. `require_gpu()` then tells the reader they have no GPU. That
+> is the quiet-wrongness this repository exists to avoid, so the CUDA build is
+> pinned rather than inherited. `tests/gpu/verify_uv_sync_cuda.sh` checks it on
+> real hardware — it is what caught this.
 
 `tests/test_runpod_ctl.py` fails if a registered example is missing either
 file, so this is enforced rather than merely requested.
@@ -545,7 +554,7 @@ This repo uses [`uv`](https://docs.astral.sh/uv/) for everything. **Never bare
 curl -LsSf https://astral.sh/uv/install.sh | sh    # if you do not have it
 
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 ```
 

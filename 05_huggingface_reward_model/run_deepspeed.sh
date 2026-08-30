@@ -48,7 +48,7 @@ echo "=================================================="
 # Environment, built ONCE on a LOGIN node with uv. Compute nodes usually have
 # no network egress, so building it inside the job fails.
 #   uv venv ~/myenv && source ~/myenv/bin/activate
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   uv pip install deepspeed transformers trl peft accelerate datasets
 if [ -f ~/myenv/bin/activate ]; then
     # shellcheck disable=SC1090

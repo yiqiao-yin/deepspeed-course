@@ -172,7 +172,7 @@ of magnitude cheaper and, on most public benchmarks, competitive.
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed transformers trl peft accelerate datasets
 ```
 

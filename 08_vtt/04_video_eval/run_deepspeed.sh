@@ -45,7 +45,7 @@ echo "=================================================="
 
 # Environment, built once on a LOGIN node with uv:
 #   uv venv ~/myenv && source ~/myenv/bin/activate
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   uv pip install deepspeed transformers accelerate opencv-python-headless
 if [ -f ~/myenv/bin/activate ]; then
     # shellcheck disable=SC1090

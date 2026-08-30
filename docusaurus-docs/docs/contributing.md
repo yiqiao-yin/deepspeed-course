@@ -169,7 +169,7 @@ Four rules the checker enforces:
 | Per-folder lock, not a workspace | Examples are self-contained; one folder must run without the other 22 existing. |
 | `package = false` under `[tool.uv]` | These are runnable examples, not libraries — otherwise `uv sync` tries to *build* the folder and fails. |
 | `wandb` in `[project.optional-dependencies]` | Every script wraps `import wandb` in `try/except`; making it required contradicts the code. |
-| No custom torch index | PyPI's `torch` ships CUDA wheels now; pinning `cu121` gives an **older** CUDA than the default. |
+| Pin torch to an explicit CUDA index | Currently `cu128`. PyPI's *default* `torch` is a CUDA 13 wheel, which installs fine on a pre-CUDA-13 driver (550/570 series) and then reports `cuda.is_available() == False`. Verified on a driver 550.127 box. `cu128` works on old and new drivers alike. |
 
 `tests/test_runpod_ctl.py` fails a PR that is missing either file.
 

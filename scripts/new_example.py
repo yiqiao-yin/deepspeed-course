@@ -69,7 +69,7 @@ of the surrounding examples rather than trimming to taste.
 
 Requirements:
     uv venv && source .venv/bin/activate
-    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu128
     uv pip install deepspeed
     # ... plus whatever your example needs
 
@@ -104,7 +104,7 @@ def require_gpu() -> None:
     except ImportError:
         print("\\n[preflight] PyTorch is not installed. Install it with:")
         print("            uv pip install torch --index-url "
-              "https://download.pytorch.org/whl/cu121\\n")
+              "https://download.pytorch.org/whl/cu128\\n")
         sys.exit(1)
 
     if torch.cuda.is_available():
@@ -287,7 +287,7 @@ echo "=================================================="
 # Environment, built ONCE on a LOGIN node with uv. Compute nodes usually have
 # no network egress, so building it inside the job fails.
 #   uv venv ~/myenv && source ~/myenv/bin/activate
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 #   uv pip install deepspeed
 if [ -f ~/myenv/bin/activate ]; then
     # shellcheck disable=SC1090
@@ -351,7 +351,7 @@ Packages via **`uv`**. Never bare `pip`.
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 # TODO: your example's dependencies
 ```
@@ -516,8 +516,10 @@ PYPROJECT = """\
 # in March breaks in September with nobody having touched it.
 #
 # After adding your real dependencies below, run `uv lock` and COMMIT the lock.
-# No custom index for torch: PyPI ships CUDA-enabled wheels, and pinning cu121
-# gives an older CUDA than the default wheel.
+# torch is pinned to an explicit CUDA index (cu128) below. PyPI's DEFAULT torch
+# is a CUDA 13 wheel, which installs fine on a pre-CUDA-13 driver (550/570) and
+# then reports cuda.is_available() == False -- silently, while nvidia-smi shows
+# the card. cu128 works on old and new drivers alike.
 # =============================================================================
 
 [project]
@@ -544,6 +546,15 @@ tracking = ["wandb>=0.16"]
 # Runnable example, not a distributable library. Without this uv tries to BUILD
 # the folder as a package and `uv sync` fails.
 package = false
+
+# Pin the CUDA build rather than inheriting PyPI's default -- see the header.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
 """
 
 def main() -> int:

@@ -72,7 +72,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv ~/myenv
 source ~/myenv/bin/activate
 
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 uv pip install transformers datasets accelerate peft trl wandb
 

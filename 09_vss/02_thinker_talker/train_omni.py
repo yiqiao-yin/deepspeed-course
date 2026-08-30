@@ -65,7 +65,7 @@ RunPod (auto-shutdown): uv run runpod/runpod_ctl.py run 09_vss/02_thinker_talker
                             --collect --wait --terminate --yes
 
     uv venv && source .venv/bin/activate
-    uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+    uv pip install torch --index-url https://download.pytorch.org/whl/cu128
     uv pip install deepspeed transformers accelerate peft datasets
     uv pip install librosa soundfile opencv-python-headless
 
@@ -106,7 +106,7 @@ def require_gpu() -> None:
     except ImportError:
         print("\n[preflight] PyTorch is not installed. Install it with:")
         print("            uv pip install torch --index-url "
-              "https://download.pytorch.org/whl/cu121\n")
+              "https://download.pytorch.org/whl/cu128\n")
         sys.exit(1)
 
     if torch.cuda.is_available():

@@ -73,7 +73,7 @@ uv venv myenv
 source myenv/bin/activate
 
 # PyTorch FIRST, matched to your CUDA toolkit
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 
 # Then DeepSpeed
 uv pip install deepspeed
@@ -93,7 +93,7 @@ Match the wheel index to your toolkit: `cu118`, `cu121`, `cu124` as appropriate.
 python -m venv myenv
 source myenv/bin/activate
 pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install torch --index-url https://download.pytorch.org/whl/cu128
 pip install deepspeed
 ```
 

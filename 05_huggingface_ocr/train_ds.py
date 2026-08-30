@@ -103,7 +103,7 @@ def require_gpu() -> None:
     except ImportError:
         print("\n[preflight] PyTorch is not installed. Install it with:")
         print("            uv pip install torch --index-url "
-              "https://download.pytorch.org/whl/cu121\n")
+              "https://download.pytorch.org/whl/cu128\n")
         sys.exit(1)
 
     if torch.cuda.is_available():

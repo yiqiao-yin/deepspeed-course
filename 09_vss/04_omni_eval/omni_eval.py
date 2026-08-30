@@ -601,7 +601,7 @@ def main() -> None:
         except ImportError:
             print("\n[preflight] PyTorch is not installed. Install it with:")
             print("            uv pip install torch --index-url "
-                  "https://download.pytorch.org/whl/cu121\n")
+                  "https://download.pytorch.org/whl/cu128\n")
             sys.exit(1)
         if not torch.cuda.is_available() and os.environ.get("ALLOW_CPU") != "1":
             print("\n[preflight] Evaluating a real omni model needs a GPU.")

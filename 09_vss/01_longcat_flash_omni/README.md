@@ -43,13 +43,16 @@ Regenerate deliberately with `uv lock --upgrade`.
 
 ```bash
 uv venv .venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 uv pip install transformers datasets accelerate trl peft torchaudio opencv-python-headless
 ```
 
-PyPI's `torch` ships CUDA wheels now, so no `--index-url` is needed;
-pinning cu121 today gives an older CUDA than the default wheel.
+The `--index-url` is **required** and matches what `uv.lock` pins.
+PyPI's *default* `torch` is a CUDA 13 wheel: on a driver older than
+CUDA 13 — the 550/570 series, common on rented hardware — it installs
+cleanly and then reports `cuda.is_available() == False` while
+`nvidia-smi` shows the card. Verified on a driver 550.127 box.
 </details>
 
 ### Running
