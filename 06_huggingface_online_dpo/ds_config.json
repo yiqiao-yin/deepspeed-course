@@ -23,7 +23,6 @@
   },
   "zero_optimization": {
     "stage": 3,
-    "_stage_comment": "Stage 3, unlike the offline DPO folder. Online methods hold the policy, the reference AND a judge or reward model, and they generate during training -- so there is a KV cache too. Every spare byte matters, which is worth 1.5x the communication (3-psi vs 2-psi). If it still will not fit, shrink the judge before you shrink the policy.",
     "overlap_comm": true,
     "contiguous_gradients": true,
     "sub_group_size": 1000000000.0,
@@ -39,5 +38,6 @@
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "steps_per_print": 10,
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+  "_zero_optimization_stage_comment": "Stage 3, unlike the offline DPO folder. Online methods hold the policy, the reference AND a judge or reward model, and they generate during training -- so there is a KV cache too. Every spare byte matters, which is worth 1.5x the communication (3-psi vs 2-psi). If it still will not fit, shrink the judge before you shrink the policy."
 }

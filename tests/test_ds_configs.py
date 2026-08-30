@@ -182,6 +182,39 @@ def main() -> int:
                     f"which is catastrophically slow.",
                 )
 
+    # ---- Explanatory keys must not sit INSIDE a typed sub-object -----------
+    # DeepSpeed validates zero_optimization (and the optimizer/scheduler
+    # blocks) with pydantic models that forbid extra fields. A teaching comment
+    # nested there is not ignored -- it is a hard ValidationError at
+    # deepspeed.initialize():
+    #
+    #     ValidationError: 1 validation error for DeepSpeedZeroConfig
+    #     _stage_comment  Extra inputs are not permitted [type=extra_forbidden]
+    #
+    # Six configs in this repository shipped that way and every one of them
+    # would have crashed on the first multi-GPU run. Unknown keys at the TOP
+    # level are fine, which is why _comment there is safe and the same string
+    # one level down is fatal.
+    TYPED_SECTIONS = ("zero_optimization", "optimizer", "scheduler",
+                      "bf16", "fp16", "amp", "activation_checkpointing")
+    for cfg_path in sorted(REPO_ROOT.rglob("ds_config*.json")):
+        if {"node_modules", "build", ".git"} & set(cfg_path.parts):
+            continue
+        try:
+            cfg = json.loads(cfg_path.read_text())
+        except Exception:
+            continue
+        rel = cfg_path.relative_to(REPO_ROOT)
+        for section in TYPED_SECTIONS:
+            block = cfg.get(section)
+            if not isinstance(block, dict):
+                continue
+            extras = [k for k in block if k.startswith("_")]
+            r.check(not extras,
+                    f"{rel}: {section} carries no explanatory keys",
+                    f"{extras} -- pydantic forbids extra fields here; move it "
+                    f"to the top level of the config")
+
     return r.finish()
 
 

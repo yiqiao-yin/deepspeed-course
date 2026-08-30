@@ -23,7 +23,6 @@
   },
   "zero_optimization": {
     "stage": 3,
-    "_stage_comment": "Stage 3 shards parameters as well as optimizer states and gradients, at 1.5x the communication of stage 2 (3-psi vs 2-psi). Worth it here because an omni model is FOUR models resident at once -- language backbone, vision encoder, audio encoder, speech decoder -- and the activations from two simultaneous token streams need every spare byte.",
     "overlap_comm": true,
     "contiguous_gradients": true,
     "sub_group_size": 1000000000.0,
@@ -32,18 +31,19 @@
     "stage3_param_persistence_threshold": "auto",
     "stage3_max_live_parameters": 1000000000.0,
     "stage3_max_reuse_distance": 1000000000.0,
-    "stage3_gather_16bit_weights_on_model_save": true,
-    "_gather_comment": "Required. Without it the checkpoint is written as shards that from_pretrained cannot load, which you discover after the run finishes.",
-    "_offload_comment": "Uncomment to trade speed for VRAM if 3B still will not fit. CPU offload costs roughly 2-3x step time over PCIe. Try shortening the clip first -- audio contributes 25 tokens per second on top of the video, so clip length buys more than offload does.",
-    "_offload_optimizer": {
-      "device": "cpu",
-      "pin_memory": true
-    }
+    "stage3_gather_16bit_weights_on_model_save": true
   },
   "gradient_accumulation_steps": "auto",
   "gradient_clipping": "auto",
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "steps_per_print": 1,
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+  "_zero_optimization_stage_comment": "Stage 3 shards parameters as well as optimizer states and gradients, at 1.5x the communication of stage 2 (3-psi vs 2-psi). Worth it here because an omni model is FOUR models resident at once -- language backbone, vision encoder, audio encoder, speech decoder -- and the activations from two simultaneous token streams need every spare byte.",
+  "_zero_optimization_gather_comment": "Required. Without it the checkpoint is written as shards that from_pretrained cannot load, which you discover after the run finishes.",
+  "_zero_optimization_offload_comment": "Uncomment to trade speed for VRAM if 3B still will not fit. CPU offload costs roughly 2-3x step time over PCIe. Try shortening the clip first -- audio contributes 25 tokens per second on top of the video, so clip length buys more than offload does.",
+  "_zero_optimization_offload_optimizer": {
+    "device": "cpu",
+    "pin_memory": true
+  }
 }

@@ -23,7 +23,6 @@
   },
   "zero_optimization": {
     "stage": 2,
-    "_stage_comment": "Stage 2 shards optimizer states and gradients (16-psi -> 2-psi + 14-psi/N) at the SAME 2-psi communication volume as plain data parallelism. It is free. Stage 3 costs 1.5x the communication and is not needed here: with LoRA the trainable parameter count is tiny, so the optimizer states this shards are already small. The memory that actually matters in DPO is the REFERENCE MODEL, and ZeRO does not shard a frozen model's weights below fp16. Use LoRA (reference = base with the adapter off) or a reference-free method instead.",
     "allgather_partitions": true,
     "allgather_bucket_size": 200000000.0,
     "overlap_comm": true,
@@ -36,5 +35,6 @@
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "steps_per_print": 10,
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+  "_zero_optimization_stage_comment": "Stage 2 shards optimizer states and gradients (16-psi -> 2-psi + 14-psi/N) at the SAME 2-psi communication volume as plain data parallelism. It is free. Stage 3 costs 1.5x the communication and is not needed here: with LoRA the trainable parameter count is tiny, so the optimizer states this shards are already small. The memory that actually matters in DPO is the REFERENCE MODEL, and ZeRO does not shard a frozen model's weights below fp16. Use LoRA (reference = base with the adapter off) or a reference-free method instead."
 }

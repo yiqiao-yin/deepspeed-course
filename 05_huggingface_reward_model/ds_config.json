@@ -23,7 +23,6 @@
   },
   "zero_optimization": {
     "stage": 2,
-    "_stage_comment": "Stage 2. A reward model is a normal sequence classifier with a scalar head, so there is nothing exotic here. The one thing to watch is that each example is a PAIR, so a batch of N does 2N forward passes -- size micro_batch accordingly rather than by the usual rule of thumb.",
     "allgather_partitions": true,
     "allgather_bucket_size": 200000000.0,
     "overlap_comm": true,
@@ -36,5 +35,6 @@
   "train_batch_size": "auto",
   "train_micro_batch_size_per_gpu": "auto",
   "steps_per_print": 10,
-  "wall_clock_breakdown": false
+  "wall_clock_breakdown": false,
+  "_zero_optimization_stage_comment": "Stage 2. A reward model is a normal sequence classifier with a scalar head, so there is nothing exotic here. The one thing to watch is that each example is a PAIR, so a batch of N does 2N forward passes -- size micro_batch accordingly rather than by the usual rule of thumb."
 }
