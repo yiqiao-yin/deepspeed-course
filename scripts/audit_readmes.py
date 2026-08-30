@@ -46,6 +46,17 @@ for rm in sorted(readmes):
         base = name.split("/")[-1]
         # search the folder tree and one level up
         hits = list(folder.rglob(base)) or list(folder.parent.rglob(base))
+        # ...and resolve the path AS WRITTEN, relative to the example folder and
+        # then to the repository root. READMEs routinely point at shared assets
+        # by repo-relative path -- `tests/test_tmrope.py`, `runpod/runpod_ctl.py`
+        # -- which the basename search above cannot see from inside a topic
+        # folder. Six of the auditor's findings were this, and false findings
+        # are expensive here: the tool is triaged by hand, so noise is the thing
+        # that stops it being read. Matching the path as written rather than
+        # rglob'ing the root keeps a genuinely missing reference flagged,
+        # instead of silencing it with some unrelated same-named file.
+        if not hits:
+            hits = [c for c in (folder / name, ROOT / name) if c.exists()]
         if not hits and base not in {"pyproject.toml", "uv.lock", "requirements.txt",
                                      "ds_config.json", "config.json", "run_all.sh",
                                      "train.py", "script.py"}:

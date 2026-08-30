@@ -128,13 +128,45 @@ DeepSpeed's loss scaler cannot recover them. Training then runs to completion,
 prints a falling-looking loss, and never updates the parameters. It fails
 *quietly*, which is the worst way to fail while learning a new framework.
 
-So: read the config below to understand the fields, but edit
-`ds_config_fp32.json` if you want to change the run. `ds_config.json` is kept
-because FP16 is what you *would* use on any real model, and later examples
-enable it.
+Both files ship in this folder, so if you cloned the repository there is
+nothing to create. The walkthrough below writes them out only because it is
+also usable as a from-scratch setup on a fresh pod.
 :::
 
-Create `ds_config.json`:
+Create `ds_config_fp32.json` — **this is the one the script loads**:
+
+```json
+{
+  "train_batch_size": 32,
+  "train_micro_batch_size_per_gpu": 32,
+  "gradient_accumulation_steps": 1,
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 0.01,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8,
+      "weight_decay": 0
+    }
+  },
+  "fp16": {
+    "enabled": false
+  },
+  "gradient_clipping": 1.0
+}
+```
+
+Note the learning rate is `0.01` here against `1e-3` in the FP16 file below.
+That is not a typo: with two parameters and no precision loss to fight, the
+larger step converges in seconds.
+
+If you skip this file, `train_ds_enhanced.py` fails immediately at
+`deepspeed.initialize(..., config="ds_config_fp32.json")` with a
+file-not-found error — which is the good outcome, because the alternative
+(silently falling back to FP16) is the run that trains nothing.
+
+And `ds_config.json`, the FP16 variant — kept because FP16 is what you *would*
+enable on any real model, and every later example does:
 
 ```json
 {
