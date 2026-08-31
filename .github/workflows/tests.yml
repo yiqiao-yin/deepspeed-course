@@ -78,6 +78,8 @@ jobs:
 
       - name: Omni evaluation (modality ablation)
         run: uv run tests/test_omni_eval.py
+
+      - name: Modern CIFAR-10 architectures
         run: uv run tests/test_modern_cifar.py
 
       - name: Every training script compiles

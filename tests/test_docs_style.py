@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.9"
-# dependencies = []
+# dependencies = ["pyyaml"]
 # ///
 """
 Regression test: documentation-site conventions, including the mermaid theme.
@@ -281,6 +281,59 @@ def test_suite_registration_is_complete(r: Results) -> None:
     r.check(in_ci == on_disk,
             "the CI workflow runs every suite on disk",
             f"missing from CI: {sorted(on_disk - in_ci)}")
+
+    # ---- the CI workflow must be VALID YAML --------------------------------
+    # A malformed workflow does not fail loudly -- GitHub refuses to run it, so
+    # every suite silently stops executing while the repository looks fine
+    # locally. This is not hypothetical: a scripted edit added a SECOND `run:`
+    # key to an existing step, which is a duplicate mapping key, and six
+    # consecutive pushes reported failure with no test output at all.
+    import yaml
+
+    class _NoDuplicates(yaml.SafeLoader):
+        """
+        SafeLoader that REJECTS duplicate mapping keys.
+
+        Plain yaml.safe_load accepts them and keeps the last, so the exact bug
+        this check exists for -- a second `run:` added to an existing step --
+        parses cleanly and the guard passes while CI stays broken. Verified:
+        the first version of this check used safe_load and did not catch the
+        bug it was written for.
+        """
+
+    def _no_dup(loader, node, deep=False):
+        mapping = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            if key in mapping:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"duplicate key {key!r}", key_node.start_mark)
+            mapping[key] = loader.construct_object(value_node, deep=deep)
+        return mapping
+
+    _NoDuplicates.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_dup)
+
+    wf = REPO_ROOT / ".github" / "workflows" / "tests.yml"
+    try:
+        parsed = yaml.load(wf.read_text(), Loader=_NoDuplicates)
+        ok, why = True, ""
+    except Exception as exc:
+        parsed, ok, why = None, False, str(exc).replace("\n", " ")[:200]
+    r.check(ok, "the CI workflow is valid YAML",
+            f"{why} -- a workflow that does not parse runs NOTHING, and the "
+            "only symptom is a red check with an empty log")
+
+    if parsed:
+        jobs = parsed.get("jobs") or {}
+        steps = [st for job in jobs.values() for st in (job.get("steps") or [])]
+        r.check(len(steps) > 5, f"the workflow defines steps ({len(steps)})")
+        # Each step that runs a suite must have a name, or a failure in CI is
+        # reported against an anonymous step.
+        unnamed = [st for st in steps
+                   if "tests/test_" in str(st.get("run", "")) and not st.get("name")]
+        r.check(not unnamed, "every suite step in CI has a name",
+                f"{len(unnamed)} unnamed")
 
     claude = (REPO_ROOT / "CLAUDE.md").read_text()
     r.check(f"{len(on_disk)} suites" in claude,
