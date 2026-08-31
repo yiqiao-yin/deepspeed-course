@@ -36,7 +36,18 @@ cd "$DIR" || exit 1
 PASS=0; FAIL=0
 declare -a RESULTS=()
 
+# Report progress as it happens. The pod's container can restart mid-run -- if
+# it does, everything written to the log is lost and the only evidence left is
+# what was already sent. NTFY_TOPIC is set by the RunPod driver; locally this
+# is a no-op.
+say() {
+    echo ">>> $*"
+    [ -n "${NTFY_TOPIC:-}" ] && curl -s -m 15 -d "$*" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null 2>&1
+    return 0
+}
+
 # The catalogue must work with no GPU work at all.
+say "starting: $GPUS GPUs, $EPOCHS epochs, 3 models"
 if timeout 300 "$PY_BIN" train_modern_cifar10.py --list-models >/dev/null 2>&1; then
     RESULTS+=("PASS  --list-models"); PASS=$((PASS+1))
 else RESULTS+=("FAIL  --list-models"); FAIL=$((FAIL+1)); fi
@@ -47,15 +58,24 @@ if timeout 900 deepspeed --num_gpus="$GPUS" train_modern_cifar10.py \
     RESULTS+=("PASS  dry run (--max-steps 3)"); PASS=$((PASS+1))
 else RESULTS+=("FAIL  dry run"); FAIL=$((FAIL+1)); fi
 
+say "dry run done (pass=$PASS fail=$FAIL)"
+
 for m in resnet9 cifarnet wrn_16_8; do
     echo ""
     echo "########## $m ##########"
+    say "training $m ..."
     t0=$(date +%s)
     timeout 5400 deepspeed --num_gpus="$GPUS" train_modern_cifar10.py \
         --model "$m" --epochs "$EPOCHS" 2>&1 | tail -45
     rc=${PIPESTATUS[0]}; dt=$(( $(date +%s) - t0 ))
-    if [ $rc -eq 0 ]; then RESULTS+=("PASS  $m trained (${dt}s)"); PASS=$((PASS+1))
-    else RESULTS+=("FAIL  $m rc=$rc (${dt}s)"); FAIL=$((FAIL+1)); fi
+    acc=$(grep -E "^  FINAL" "$LOG" | tail -1)
+    if [ $rc -eq 0 ]; then
+        RESULTS+=("PASS  $m trained (${dt}s)"); PASS=$((PASS+1))
+        say "$m OK ${dt}s | ${acc:-no FINAL line}"
+    else
+        RESULTS+=("FAIL  $m rc=$rc (${dt}s)"); FAIL=$((FAIL+1))
+        say "$m FAILED rc=$rc after ${dt}s | $(tail -3 "$LOG" | tr '\n' ' ' | head -c 300)"
+    fi
 done
 
 echo ""
