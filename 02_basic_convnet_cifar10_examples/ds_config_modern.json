@@ -1,0 +1,26 @@
+{
+  "_comment": "DeepSpeed config for train_modern_cifar10.py. train_batch_size is deliberately OMITTED so any --num_gpus works: DeepSpeed infers it as micro_batch * accumulation * world_size. The 'auto' convention used by the HuggingFace examples does NOT apply here — this script calls deepspeed.initialize() directly, and 'auto' would be a parse error.",
+  "train_micro_batch_size_per_gpu": 256,
+  "gradient_accumulation_steps": 1,
+  "optimizer": {
+    "type": "SGD",
+    "params": {
+      "lr": 0.2,
+      "momentum": 0.9,
+      "weight_decay": 0.0005,
+      "nesterov": true
+    }
+  },
+  "_optimizer_comment": "Plain SGD with Nesterov momentum. The speedrun scripts these architectures come from use a custom optimizer (Muon), which is the single biggest reason they finish in seconds rather than minutes — but the optimizer is chosen by this file, not by the model, so swapping it is a config change and not a code change. The learning rate here is overwritten every step by the warmup+cosine schedule in the training script.",
+  "gradient_clipping": 1.0,
+  "fp16": {
+    "enabled": false
+  },
+  "_precision_comment": "fp32 on purpose. These models are small enough that mixed precision buys little on a modern card, and fp16 without a tuned loss scale is a common source of silent divergence in short runs. Set bf16.enabled instead if you are on Ampere or newer and want the speed.",
+  "zero_optimization": {
+    "stage": 0
+  },
+  "_zero_comment": "Stage 0 — no sharding. A 6M-parameter model's optimizer state is ~50 MB; sharding it across GPUs costs more in communication than it saves in memory. ZeRO earns its keep in the 05-09 examples, not here.",
+  "steps_per_print": 100,
+  "wall_clock_breakdown": false
+}

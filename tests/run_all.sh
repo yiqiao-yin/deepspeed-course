@@ -35,6 +35,7 @@ TESTS=(
     tests/test_tmrope.py
     tests/test_duplex.py
     tests/test_omni_eval.py
+    tests/test_modern_cifar.py
 )
 
 for test in "${TESTS[@]}"; do
