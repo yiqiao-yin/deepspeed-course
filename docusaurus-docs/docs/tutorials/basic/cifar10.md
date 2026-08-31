@@ -362,6 +362,104 @@ Add weight decay. The current config has none, and $5\times10^{-4}$ with SGD+mom
 One caveat worth knowing: weight decay applied to BatchNorm's $\gamma$ and $\beta$ parameters is generally counterproductive, since BatchNorm makes the preceding layer scale-invariant and decaying $\gamma$ interacts with the effective learning rate in unintuitive ways. Production recipes exclude norm parameters and biases from decay via optimizer parameter groups.
 :::
 
+## 7a. Measured: three modern architectures
+
+The table above is a list of *expected* gains. This section is what the
+repository actually observed when those changes were implemented and run.
+
+`02_basic_convnet_cifar10_examples/train_modern_cifar10.py` trains three
+architectures on the same DeepSpeed setup, changing only the model and the
+recipe:
+
+```bash
+cd 02_basic_convnet_cifar10_examples
+uv sync
+uv run train_modern_cifar10.py --list-models          # no GPU needed
+deepspeed --num_gpus=2 train_modern_cifar10.py --model cifarnet --epochs 64
+```
+
+### Results
+
+Rented **2× RTX 3090** on RunPod, torch 2.8.0+cu128, **16 epochs**, batch 256
+per GPU, `flip=alternating translate=4 cutout=12`, label smoothing 0.2,
+SGD + Nesterov with warmup then cosine decay to zero:
+
+| Model | Params | Test accuracy | With mirror TTA | Wall clock |
+|---|---:|---:|---:|---:|
+| baseline `cifar10_deepspeed.py` | 269K | 81.07% | — | — |
+| `resnet9` | 6.6M | 92.93% | 93.18% | 142 s |
+| `cifarnet` | 6.1M | **93.32%** | **93.75%** | 128 s |
+| `wrn_16_8` | 11.0M | 93.09% | 93.22% | 302 s |
+
+:::warning 16 epochs is not a converged run
+These are the numbers this repository measured, not the numbers the papers
+report. Published results for these designs are 94–96%; the remaining gap is
+**training budget, not architecture**. Raise `--epochs` to close it — the table
+above is what fits in roughly two minutes per model on two consumer cards.
+
+A published accuracy nobody ran is worse than no accuracy at all, because a
+reader compares against it to decide whether their own run worked. See
+[CONTRIBUTING.md](/docs/contributing).
+:::
+
+### The ordering is the lesson
+
+`cifarnet` has the **fewest parameters** and the **shortest runtime**, and
+wins. `wrn_16_8` carries 80% more parameters than `resnet9`, takes twice as
+long, and finishes within a tenth of a point of it.
+
+At this budget capacity is not the binding constraint, which is the same
+conclusion the [mean-reversion page](/docs/tutorials/intermediate/mean-reversion-forecasting)
+reaches from the opposite direction — there, more parameters were monotonically
+*worse*.
+
+### What actually buys the accuracy
+
+Ordered by contribution, which is not the order most people would guess:
+
+1. **Augmentation** — `flip + translate + cutout`. The baseline uses none, and
+   this is worth more than the architecture change.
+2. **Schedule** — warmup then cosine decay **to zero**, not a fixed LR.
+3. **Label smoothing** ($\varepsilon = 0.2$), paired with logit scaling.
+4. **Test-time augmentation** — averaging an image with its mirror measured
+   **+0.13 to +0.43 points** for one extra forward pass.
+5. **The architecture**, last.
+
+Copy only the architecture and keep the baseline's augmentation, and the number
+will not move.
+
+### The models
+
+| Model | Source | What is unusual about it |
+|---|---|---|
+| `resnet9` | fast-CIFAR lineage | Nothing — the recognisable residual net, included as the familiar reference point. |
+| `cifarnet` | [arXiv:2404.00498](https://arxiv.org/abs/2404.00498) | First layer is a **frozen** 2×2 conv initialised from the eigenvectors of training-image patches — a whitening transform, not learned features. BatchNorm scales are frozen at 1; only biases train. |
+| `wrn_16_8` | [arXiv:1605.07146](https://arxiv.org/abs/1605.07146) | Wide ResNet: wider, not deeper. |
+
+The whitening initialisation is the one worth understanding. Measured on
+correlated inputs, it drops the off-diagonal/diagonal covariance ratio of the
+first layer's outputs from **0.28 to 0.000002** versus random init — the
+network starts with a decorrelated representation instead of learning one.
+`tests/test_modern_cifar.py` asserts that, because a "whitening" layer that
+does not whiten is just a frozen random projection, which is strictly worse
+than a learned one and fails silently.
+
+:::note What is deliberately not reproduced
+The speedruns these architectures come from reach 94% in **2.6 seconds** using
+a custom optimizer (Muon), GPU-resident pre-decoded data and a hand-tuned fp16
+schedule. This folder trains with DeepSpeed, so the optimizer comes from
+`ds_config_modern.json`. The architecture and recipe transfer; the wall clock
+does not, and quoting speedrun timings from a DeepSpeed run would be exactly
+the fabricated number the warning above is about.
+:::
+
+### Verify it yourself
+
+```bash
+uv run tests/test_modern_cifar.py                  # 33 property checks, no GPU
+bash tests/gpu/verify_02_modern_cifar.sh 2 64      # 2 GPUs, 64 epochs
+```
+
 ## 8. DeepSpeed Notes
 
 At ~269K parameters, model states are $16\Psi \approx 4.3$ MB — irrelevant. **This example is not memory-constrained**, so ZeRO stages buy nothing measurable here and the config correctly omits `zero_optimization`. The example exists to show the training mechanics on real data, not to demonstrate memory optimization.
@@ -403,4 +501,6 @@ Two things that *would* matter at scale, both covered in [ZeRO Stages](/docs/get
 8. He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep Residual Learning for Image Recognition. *CVPR 2016*. [arXiv:1512.03385](https://arxiv.org/abs/1512.03385)
 9. DeVries, T., & Taylor, G. W. (2017). Improved Regularization of Convolutional Neural Networks with Cutout. [arXiv:1708.04552](https://arxiv.org/abs/1708.04552)
 10. Zhang, H., Cisse, M., Dauphin, Y. N., & Lopez-Paz, D. (2018). mixup: Beyond Empirical Risk Minimization. *ICLR 2018*. [arXiv:1710.09412](https://arxiv.org/abs/1710.09412)
-11. Lin, M., Chen, Q., & Yan, S. (2014). Network In Network. *ICLR 2014*. [arXiv:1312.4400](https://arxiv.org/abs/1312.4400) — global average pooling.
+11. Jordan, K. (2024). 94% on CIFAR-10 in 3.29 Seconds on a Single GPU. [arXiv:2404.00498](https://arxiv.org/abs/2404.00498) — the `cifarnet` architecture, the whitening initialisation, and derandomised flipping.
+12. Zagoruyko, S., & Komodakis, N. (2016). Wide Residual Networks. *BMVC 2016*. [arXiv:1605.07146](https://arxiv.org/abs/1605.07146) — `wrn_16_8`.
+13. Lin, M., Chen, Q., & Yan, S. (2014). Network In Network. *ICLR 2014*. [arXiv:1312.4400](https://arxiv.org/abs/1312.4400) — global average pooling.

@@ -94,6 +94,77 @@ download required:
 
 See [`tests/README.md`](../tests/README.md) for what each suite covers.
 
+## Beyond 81%: modern architectures
+
+`cifar10_deepspeed.py` reaches about 81%, which is what a two-conv-layer
+network gets. `train_modern_cifar10.py` runs three architectures on the same
+DeepSpeed plumbing and closes most of the gap to published results.
+
+```bash
+uv sync
+uv run train_modern_cifar10.py --list-models        # no GPU needed
+deepspeed --num_gpus=2 train_modern_cifar10.py --model cifarnet --epochs 64
+```
+
+### Measured on hardware
+
+Rented 2x RTX 3090 (RunPod, pod `en2j2ziums255z`), torch 2.8.0+cu128,
+**16 epochs**, batch 256/GPU, `flip=alternating translate=4 cutout=12`,
+label smoothing 0.2, SGD+Nesterov with warmup then cosine decay:
+
+| model | params | test accuracy | with mirror TTA | wall clock |
+|---|---:|---:|---:|---:|
+| baseline `cifar10_deepspeed.py` | 0.5M | ~81% | — | — |
+| `resnet9` | 6.6M | 92.93% | 93.18% | 142 s |
+| `cifarnet` | 6.1M | **93.32%** | **93.75%** | 128 s |
+| `wrn_16_8` | 11.0M | 93.09% | 93.22% | 302 s |
+
+These are the numbers this repository actually observed, not the numbers the
+papers report. **16 epochs is not a converged run** — the published results for
+these designs are 94-96%, and the gap is training budget, not architecture.
+Raise `--epochs` to close it; the accuracy above is what fits in roughly two
+minutes per model.
+
+The ordering is the interesting part and it is not the ordering people expect:
+`cifarnet` has the *fewest* parameters and the *shortest* runtime, and wins.
+`wrn_16_8` has 80% more parameters than `resnet9`, takes twice as long, and
+lands within a tenth of a point of it. On CIFAR-10 at this budget, capacity is
+not the binding constraint.
+
+### What actually buys the accuracy
+
+Roughly in order of contribution, which is also not the expected order:
+
+1. **Augmentation** — `flip + translate + cutout`. The baseline uses none.
+2. **Schedule** — warmup then cosine decay to zero, not a fixed LR.
+3. **Label smoothing** (0.2), paired with the logit scaling in the models.
+4. **Test-time augmentation** — averaging an image with its mirror is worth
+   +0.13 to +0.43 points here, for one extra forward pass.
+5. **The architecture**, last.
+
+A reader who copies only the architecture and keeps the baseline's
+augmentation will not see the number move.
+
+### The models
+
+| Model | Source | Note |
+|---|---|---|
+| `resnet9` | fast-CIFAR lineage | The recognisable residual net. |
+| `cifarnet` | [arXiv:2404.00498](https://arxiv.org/abs/2404.00498) | Frozen whitening first layer, GELU, frozen BatchNorm scales. |
+| `wrn_16_8` | [arXiv:1605.07146](https://arxiv.org/abs/1605.07146) | Wide ResNet — wider, not deeper. |
+
+Not reproduced: the speedruns reach 94% in seconds using a custom optimizer
+(Muon), GPU-resident pre-decoded data and a hand-tuned fp16 schedule. This
+folder trains with DeepSpeed, so the optimizer comes from `ds_config_modern.json`.
+Quoting speedrun timings from a DeepSpeed run would be a fabricated number.
+
+Verify on your own hardware:
+
+```bash
+bash ../tests/gpu/verify_02_modern_cifar.sh 2 64     # 2 GPUs, 64 epochs
+uv run ../tests/test_modern_cifar.py                 # 33 checks, no GPU
+```
+
 ## Features
 
 - 🖼️ **Real Dataset**: CIFAR-10 (50,000 train + 10,000 test, 32x32 RGB images)
