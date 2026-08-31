@@ -48,13 +48,47 @@ say() {
 
 # The catalogue must work with no GPU work at all.
 say "starting: $GPUS GPUs, $EPOCHS epochs, 3 models"
+
+# --- fetch CIFAR-10 exactly ONCE ---------------------------------------------
+# The canonical host (cs.toronto.edu) served a rented pod at ~78 kB/s, so the
+# 170 MB archive took over half an hour -- longer than any single training step
+# was allowed, so every model died mid-download and the run produced nothing.
+#
+# Two fixes, both necessary. Download before the loop rather than inside each
+# run, and put it on /workspace, which is the pod's VOLUME and survives a
+# container restart; the default ./data lives on the container filesystem and
+# is wiped, so a restart re-downloaded from zero.
+DATA_DIR="${CIFAR_DATA_DIR:-/workspace/cifar10-data}"
+mkdir -p "$DATA_DIR"
+if [ -d "$DATA_DIR/cifar-10-batches-py" ]; then
+    say "CIFAR-10 already present in $DATA_DIR"
+else
+    for attempt in 1 2 3; do
+        say "downloading CIFAR-10 (attempt $attempt) — this host may be slow"
+        if timeout 3000 "$PY_BIN" - "$DATA_DIR" <<'PYEOF'
+import sys, torchvision
+root = sys.argv[1]
+torchvision.datasets.CIFAR10(root=root, train=True, download=True)
+torchvision.datasets.CIFAR10(root=root, train=False, download=True)
+print("download complete")
+PYEOF
+        then break; fi
+        say "attempt $attempt failed"
+    done
+fi
+if [ ! -d "$DATA_DIR/cifar-10-batches-py" ]; then
+    say "ABORT: could not fetch CIFAR-10 after 3 attempts"
+    echo "  Could not download CIFAR-10; nothing below would be meaningful."
+    exit 1
+fi
+say "CIFAR-10 ready"
 if timeout 300 "$PY_BIN" train_modern_cifar10.py --list-models >/dev/null 2>&1; then
     RESULTS+=("PASS  --list-models"); PASS=$((PASS+1))
 else RESULTS+=("FAIL  --list-models"); FAIL=$((FAIL+1)); fi
 
 # A capped run proves the pipeline before any real training is paid for.
 if timeout 900 deepspeed --num_gpus="$GPUS" train_modern_cifar10.py \
-      --model resnet9 --max-steps 3 --epochs 1 >/dev/null 2>&1; then
+      --model resnet9 --max-steps 3 --epochs 1 --data-dir "$DATA_DIR" >/dev/null 2>&1; then
     RESULTS+=("PASS  dry run (--max-steps 3)"); PASS=$((PASS+1))
 else RESULTS+=("FAIL  dry run"); FAIL=$((FAIL+1)); fi
 
@@ -66,7 +100,7 @@ for m in resnet9 cifarnet wrn_16_8; do
     say "training $m ..."
     t0=$(date +%s)
     timeout 5400 deepspeed --num_gpus="$GPUS" train_modern_cifar10.py \
-        --model "$m" --epochs "$EPOCHS" 2>&1 | tail -45
+        --model "$m" --epochs "$EPOCHS" --data-dir "$DATA_DIR" 2>&1 | tail -45
     rc=${PIPESTATUS[0]}; dt=$(( $(date +%s) - t0 ))
     acc=$(grep -E "^  FINAL" "$LOG" | tail -1)
     if [ $rc -eq 0 ]; then
