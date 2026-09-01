@@ -296,36 +296,46 @@ def run_model(key: str, spec: dict, pages, args, torch):
 
     # ---- everything else goes through AutoProcessor -------------------------
     processor = AutoProcessor.from_pretrained(hf_id, trust_remote_code=True)
-    model = AutoModelForImageTextToText.from_pretrained(
-        hf_id, dtype=dtype, trust_remote_code=True, device_map=device).eval()
 
+    load_kwargs = dict(dtype=dtype, trust_remote_code=True, device_map=device)
     if key.startswith("florence"):
-        # Supply the field the remote config is missing rather than patching
-        # transformers. Setting it on config and text_config was not enough --
-        # generate() reads it off whichever sub-config it walks to, so this
-        # walks them ALL. Guessing which one is why the first attempt failed
-        # with the identical error.
-        bos = processor.tokenizer.bos_token_id
+        # Build and repair the config BEFORE instantiating. Two earlier
+        # attempts patched the model's config AFTER from_pretrained and failed
+        # with the identical error every time, because the error is raised
+        # during loading -- so the patch never ran. The lesson is that "the fix
+        # did not take" and "the fix never executed" look the same from the
+        # outside, and only the traceback's position tells them apart.
+        from transformers import AutoConfig
+
+        cfg = AutoConfig.from_pretrained(hf_id, trust_remote_code=True)
+        bos = getattr(processor.tokenizer, "bos_token_id", None) or 0
         seen = set()
 
-        def _patch(cfg_obj) -> None:
-            if cfg_obj is None or id(cfg_obj) in seen:
+        def _patch(obj) -> None:
+            if obj is None or id(obj) in seen:
                 return
-            seen.add(id(cfg_obj))
-            if getattr(cfg_obj, "forced_bos_token_id", None) is None:
+            seen.add(id(obj))
+            if getattr(obj, "forced_bos_token_id", None) is None:
                 try:
-                    cfg_obj.forced_bos_token_id = getattr(
-                        cfg_obj, "bos_token_id", None) or bos
+                    obj.forced_bos_token_id = getattr(obj, "bos_token_id", None) or bos
                 except Exception:                      # noqa: BLE001
                     pass
             for attr in ("text_config", "vision_config", "language_config",
                          "decoder", "encoder"):
-                _patch(getattr(cfg_obj, attr, None))
+                _patch(getattr(obj, attr, None))
 
-        _patch(model.config)
-        _patch(getattr(model, "generation_config", None))
-        for module in model.modules():
-            _patch(getattr(module, "config", None))
+        _patch(cfg)
+        load_kwargs["config"] = cfg
+
+    model = AutoModelForImageTextToText.from_pretrained(hf_id, **load_kwargs).eval()
+
+    if key.startswith("florence"):
+        # generation_config is built from the (already repaired) config, but
+        # carries its own copy of the field on some versions.
+        gc = getattr(model, "generation_config", None)
+        if gc is not None and getattr(gc, "forced_bos_token_id", None) is None:
+            gc.forced_bos_token_id = getattr(
+                model.config, "forced_bos_token_id", None) or 0
 
     for image, _ in pages:
         if key == "got-ocr2":
