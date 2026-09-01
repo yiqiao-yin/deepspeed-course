@@ -313,6 +313,7 @@ def run_model(key: str, spec: dict, pages, args, torch):
 
     # ---- deepseek-ocr: custom entry point, no AutoProcessor ----------------
     if key == "deepseek-ocr":
+        import pathlib
         import tempfile
 
         from transformers import AutoModel, AutoTokenizer
@@ -333,12 +334,27 @@ def run_model(key: str, spec: dict, pages, args, torch):
             for i, (image, _) in enumerate(pages):
                 path = os.path.join(tmp, f"page_{i}.png")
                 image.save(path)
+                # save_results=True on purpose: this model's infer() WRITES
+                # its transcription and returns None. An earlier version took
+                # the return value, so every page scored the literal string
+                # "None" against the reference and the run reported a tidy
+                # CER of 0.9594 -- a number produced entirely by the harness.
                 out = model.infer(
                     tokenizer, prompt="<image>\n<|grounding|>OCR this image.",
                     image_file=path, output_path=tmp, base_size=640,
-                    image_size=640, crop_mode=False, save_results=False,
+                    image_size=640, crop_mode=False, save_results=True,
                     test_compress=False)
-                predictions.append(out if isinstance(out, str) else str(out))
+                text = out if isinstance(out, str) and out.strip() else ""
+                if not text:
+                    # Read whatever it wrote, newest first.
+                    written = sorted(
+                        (f for f in pathlib.Path(tmp).rglob("*")
+                         if f.is_file() and f.suffix in {".txt", ".mmd", ".md"}),
+                        key=lambda f: f.stat().st_mtime, reverse=True)
+                    if written:
+                        text = written[0].read_text(errors="ignore")
+                        written[0].unlink()          # do not re-read it next page
+                predictions.append(text)
         # The compressor's own budget, not an input-length proxy: this model's
         # entire claim is about how few vision tokens a page costs.
         vision_tokens = 100
@@ -435,6 +451,15 @@ def run_model(key: str, spec: dict, pages, args, torch):
             inputs = processor(text=[prompt], images=[image],
                                return_tensors="pt").to(model.device)
 
+        # Match the model's precision. A bf16 model handed float32 pixels dies
+        # with "Input type (float) and bias type (c10::BFloat16) should be the
+        # same" on the first convolution -- which is what stopped florence-2
+        # even after its config was repaired.
+        model_dtype = next(model.parameters()).dtype
+        for name, value in list(inputs.items()):
+            if hasattr(value, "is_floating_point") and value.is_floating_point():
+                inputs[name] = value.to(model_dtype)
+
         if vision_tokens is None:
             vision_tokens = int(inputs["input_ids"].shape[-1])
 
@@ -515,6 +540,17 @@ def main() -> None:
             # comparison that aborts on the first bad processor contract is
             # worth nothing.
             print(f"    FAILED: {type(exc).__name__}: {str(exc)[:200]}")
+            rows.append((key, spec["params"], None, None, None))
+            continue
+
+        # A model that returned nothing must be reported as FAILED, not
+        # scored. Scoring str(None) against a reference yields a plausible
+        # 0.96 that looks like a measurement and is purely an artefact of the
+        # harness -- which is exactly what happened before this check existed.
+        useful = [p for p in predictions if p and p.strip() and p.strip() != "None"]
+        if not useful:
+            print(f"    NO OUTPUT: every page returned empty or None -- refusing "
+                  f"to report a CER for this. Sample: {predictions[0]!r}")
             rows.append((key, spec["params"], None, None, None))
             continue
 
