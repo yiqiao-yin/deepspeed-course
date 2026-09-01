@@ -301,14 +301,31 @@ def run_model(key: str, spec: dict, pages, args, torch):
 
     if key.startswith("florence"):
         # Supply the field the remote config is missing rather than patching
-        # transformers. eos is the correct value for this decoder.
-        cfg = model.config
-        for holder in (cfg, getattr(cfg, "text_config", None)):
-            if holder is not None and getattr(holder, "forced_bos_token_id", None) is None:
-                holder.forced_bos_token_id = getattr(
-                    holder, "bos_token_id", None) or processor.tokenizer.bos_token_id
-        if getattr(model.generation_config, "forced_bos_token_id", None) is None:
-            model.generation_config.forced_bos_token_id = cfg.forced_bos_token_id
+        # transformers. Setting it on config and text_config was not enough --
+        # generate() reads it off whichever sub-config it walks to, so this
+        # walks them ALL. Guessing which one is why the first attempt failed
+        # with the identical error.
+        bos = processor.tokenizer.bos_token_id
+        seen = set()
+
+        def _patch(cfg_obj) -> None:
+            if cfg_obj is None or id(cfg_obj) in seen:
+                return
+            seen.add(id(cfg_obj))
+            if getattr(cfg_obj, "forced_bos_token_id", None) is None:
+                try:
+                    cfg_obj.forced_bos_token_id = getattr(
+                        cfg_obj, "bos_token_id", None) or bos
+                except Exception:                      # noqa: BLE001
+                    pass
+            for attr in ("text_config", "vision_config", "language_config",
+                         "decoder", "encoder"):
+                _patch(getattr(cfg_obj, attr, None))
+
+        _patch(model.config)
+        _patch(getattr(model, "generation_config", None))
+        for module in model.modules():
+            _patch(getattr(module, "config", None))
 
     for image, _ in pages:
         if key == "got-ocr2":

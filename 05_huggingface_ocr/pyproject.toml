@@ -22,6 +22,11 @@ requires-python = ">=3.10"
 
 dependencies = [
     "accelerate>=0.30",
+    # Required by deepseek-ai/DeepSeek-OCR's remote modeling code, which
+    # imports them at load time. Discovered by running it: the failure is
+    # an ImportError naming both, after the weights have downloaded.
+    "addict>=2.4",
+    "matplotlib>=3.7",
     "datasets>=2.18",
     "deepspeed>=0.14",
     "peft>=0.10",
