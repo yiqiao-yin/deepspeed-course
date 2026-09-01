@@ -353,16 +353,22 @@ def run_model(key: str, spec: dict, pages, args, torch):
             for i, (image, _) in enumerate(pages):
                 path = os.path.join(tmp, f"page_{i}.png")
                 image.save(path)
-                # save_results=True on purpose: this model's infer() WRITES
-                # its transcription and returns None. An earlier version took
-                # the return value, so every page scored the literal string
-                # "None" against the reference and the run reported a tidy
-                # CER of 0.9594 -- a number produced entirely by the harness.
+                # eval_mode=True is the whole ballgame. Reading its source:
+                #
+                #   if not eval_mode:      -> generate(..., streamer=...)   # prints,
+                #                                                          # returns None
+                #   else:                  -> outputs = tokenizer.decode(...)
+                #                             return outputs
+                #
+                # With the default (False) it STREAMS the transcription to
+                # stdout and returns None, which is why earlier runs scored the
+                # literal string "None" and then an empty file. Nothing about
+                # the model or the environment was wrong; the call was.
                 out = model.infer(
                     tokenizer, prompt="<image>\n<|grounding|>OCR this image.",
                     image_file=path, output_path=tmp, base_size=640,
-                    image_size=640, crop_mode=False, save_results=True,
-                    test_compress=False)
+                    image_size=640, crop_mode=False, save_results=False,
+                    test_compress=False, eval_mode=True)
                 text = out if isinstance(out, str) and out.strip() else ""
                 if not text:
                     # Read whatever it wrote, newest first.
