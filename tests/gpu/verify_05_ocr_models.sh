@@ -90,8 +90,19 @@ if uv venv --system-site-packages /workspace/legacy-tf >/dev/null 2>&1 && \
        "transformers==$LEGACY" addict easydict matplotlib timm einops \
        >/dev/null 2>&1; then
     LEGACY_PY=/workspace/legacy-tf/bin/python
-    "$LEGACY_PY" -c "import transformers;print('  pinned transformers', transformers.__version__)"
-    for m in florence-2-base deepseek-ocr; do
+    # VERIFY the pinned env is the one the script will import, from inside the
+    # same interpreter that runs it. Printing the installed version proves
+    # nothing about what gets imported when site-packages ordering surprises
+    # you -- which is exactly what happened, and cost several runs.
+    ACTUAL=$("$LEGACY_PY" -c "import transformers,os;print(transformers.__version__, os.path.dirname(transformers.__file__))")
+    say "pinned env imports: $ACTUAL"
+    case "$ACTUAL" in
+        "$LEGACY "*) : ;;
+        *) say "WRONG transformers in the pinned env ($ACTUAL) -- skipping"
+           RESULTS+=("FAIL  pinned env imports $ACTUAL, wanted $LEGACY")
+           FAIL=$((FAIL+1)); LEGACY_PY="" ;;
+    esac
+    [ -n "$LEGACY_PY" ] && for m in florence-2-base deepseek-ocr; do
         say "running $m on transformers==$LEGACY ..."
         t0=$(date +%s)
         timeout 2400 "$LEGACY_PY" run_modern_ocr.py --models "$m" \

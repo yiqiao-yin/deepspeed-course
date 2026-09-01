@@ -299,6 +299,25 @@ def run_model(key: str, spec: dict, pages, args, torch):
     import transformers
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
+    # Print WHICH transformers this process actually imported, not which one
+    # was installed. A pinned environment that is silently not on the path
+    # looks identical to a pinned environment that is -- and that cost several
+    # GPU runs here, chasing a model bug that was an environment bug.
+    print(f"    transformers  {transformers.__version__}  "
+          f"({os.path.dirname(transformers.__file__)})")
+
+    # Restore the pre-5.0 default the Florence-2 remote code relies on. Its
+    # Florence2LanguageConfig.__init__ reads self.forced_bos_token_id while
+    # constructing itself; transformers 5 moved the generation defaults off
+    # PretrainedConfig, so that read raises. A class attribute fixes it for any
+    # config that never sets one -- and it must be in place before the
+    # PROCESSOR loads, which is where the config is first built. Every earlier
+    # attempt patched at model-load time and therefore ran too late.
+    from transformers import PretrainedConfig
+
+    if not hasattr(PretrainedConfig, "forced_bos_token_id"):
+        PretrainedConfig.forced_bos_token_id = None
+
     dtype = getattr(torch, args.dtype)
 
     # transformers renamed this: `torch_dtype` through 4.x, `dtype` from 5.0.
@@ -464,8 +483,19 @@ def run_model(key: str, spec: dict, pages, args, torch):
             vision_tokens = int(inputs["input_ids"].shape[-1])
 
         with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=args.max_new_tokens,
-                                 do_sample=False)
+            if key.startswith("florence"):
+                # Explicit arguments: its processor returns keys generate()
+                # does not accept, and this is the call verified to work on
+                # transformers 4.47.1 (it reads a rendered line exactly).
+                out = model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs["pixel_values"],
+                    max_new_tokens=args.max_new_tokens,
+                    do_sample=False, num_beams=3)
+            else:
+                out = model.generate(**inputs,
+                                     max_new_tokens=args.max_new_tokens,
+                                     do_sample=False)
         # Strip the prompt: decoding the whole sequence would score the
         # instruction as if the model had read it off the page.
         generated = out[0][inputs["input_ids"].shape[-1]:]
