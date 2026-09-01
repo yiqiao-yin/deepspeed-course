@@ -227,8 +227,13 @@ pages**, greedy decoding:
 | `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
-| `florence-2-base` | 230M | — | — | — | did not run |
-| `deepseek-ocr` | 3B MoE | — | — | — | did not run |
+| `florence-2-base` | 230M | — | — | — | blocked |
+| `deepseek-ocr` | 3B MoE | — | — | — | blocked |
+
+Both Qwen models read **12/12 pages exactly**. `got-ocr2` read **6/12** exactly,
+with a per-page range of **0.0000 to 1.7639** — one page ran away and generated
+far more than the reference, which alone accounts for the gap between its pooled
+0.1530 and its median 0.0104.
 
 :::warning Rendered text is not a document benchmark
 These pages are cleanly rendered, so the error rates are a **floor**. Real
@@ -259,7 +264,25 @@ enough for them breaks Qwen2.5-VL. That is a genuine constraint on building one
 OCR pipeline across these models, and a concrete argument for the per-folder
 `uv.lock` this course now ships.
 
-Reaching that conclusion took four GPU runs, each surfacing the next layer:
+A pinned `transformers==4.47.1` environment (the last release containing
+`LlamaFlashAttention2`, checked against the tagged sources) gets both models
+further and neither to the finish: DeepSeek-OCR's `infer()` writes to disk and
+returns `None`, and Florence-2 still raises its missing-config-attribute error.
+**Neither has a verified number here**, and the table says so rather than
+guessing one.
+
+:::danger A number that nearly shipped
+An earlier harness took DeepSeek-OCR's `None`, `str()`'d it, and scored the
+literal string `"None"` against every reference. It produced a pooled CER of
+**0.9594**, median 0.9600, min/max 0.9231/0.9710 — the shape of a real
+measurement of a weak model, across twelve pages. It was caught only because
+0.9594 exactly matched an unrelated sanity run. The script now refuses to score
+any model whose pages all come back empty, because *reporting an accuracy for a
+model that produced no output is worse than reporting nothing* — it reads as
+evidence.
+:::
+
+Reaching that conclusion took seven GPU runs, each surfacing the next layer:
 `AutoProcessor` cannot instantiate DeepSeek-OCR → it needs a custom `infer()` →
 which imports `addict`, `matplotlib`, then `easydict` → which then hits the
 version wall. Every package was discovered *after* several GB had downloaded.

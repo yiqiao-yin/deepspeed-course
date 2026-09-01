@@ -27,8 +27,14 @@ pages**, greedy decoding, `max_new_tokens=256`:
 | `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
-| `florence-2-base` | 230M | — | — | — | did not run (see below) |
-| `deepseek-ocr` | 3B MoE | — | — | — | did not run (see below) |
+| `florence-2-base` | 230M | — | — | — | blocked (see below) |
+| `deepseek-ocr` | 3B MoE | — | — | — | blocked (see below) |
+
+`qwen2-vl-2b` and `qwen2.5-vl-3b` read **12/12 pages exactly**. `got-ocr2` read
+**6/12 exactly**, with a per-page CER range of **0.0000 to 1.7639** — one page
+ran away and generated far more text than the reference. That single page is
+what drags its pooled score to 0.1530 while its median stays at 0.0104, and it
+is precisely why this metric is not clipped at 1.0.
 
 **These pages are cleanly rendered text, not photographs.** Error rates here
 are a *floor*, not a document-benchmark score — real scans bring skew, noise
@@ -55,6 +61,30 @@ This is worth knowing before you plan around either: running them means a
 them breaks Qwen2.5-VL. That is a real constraint on building one OCR pipeline
 across these models, not a defect in this folder — and it is why the lock file
 in this directory matters.
+
+**What was tried, so you do not repeat it.** `tests/gpu/verify_05_ocr_models.sh`
+builds a second venv with `--system-site-packages` (reusing torch) and
+`transformers==4.47.1`, the last release that still contains
+`LlamaFlashAttention2` — verified against the tagged sources, not from memory:
+
+| transformers | `LlamaFlashAttention2` present |
+|---|---|
+| 4.46.3, 4.47.1 | yes |
+| 4.49.0, 5.16.1 | no |
+
+On that pinned environment both models load further and then stop again:
+DeepSeek-OCR's `infer()` writes its transcription to disk and returns `None`,
+and Florence-2 still raises the missing-config-attribute error. **Neither has a
+verified accuracy number here**, and rather than publish one, this folder says
+so. If you get either running, the harness is set up to score it.
+
+> One number that nearly shipped: an earlier version of the harness took
+> DeepSeek-OCR's `None` return, `str()`'d it, and scored the literal string
+> `"None"` against every reference — producing a pooled CER of **0.9594** with
+> a median of 0.9600 and a min/max of 0.9231/0.9710. That has the shape of a
+> real measurement of a weak model. It was caught only because 0.9594 happened
+> to match an unrelated sanity run exactly. The script now refuses to score any
+> model whose pages all come back empty.
 
 Getting there took four GPU runs, each surfacing the next layer:
 `AutoProcessor` cannot instantiate DeepSeek-OCR at all → it needs a custom
