@@ -85,10 +85,13 @@ say "degrade sanity done (clean run was CER $clean)"
 # own environment instead of being written off as "did not run".
 LEGACY="${LEGACY_TRANSFORMERS:-4.47.1}"
 say "building pinned env (transformers==$LEGACY) for the remote-code models"
-if uv venv --system-site-packages /workspace/legacy-tf >/dev/null 2>&1 && \
-   uv pip install --python /workspace/legacy-tf/bin/python -q \
+# Build output is NOT discarded. A package that fails to install here is
+# invisible otherwise, and the model that then fails looks like the problem --
+# which cost two runs and a wrong conclusion about florence-2.
+if uv venv --system-site-packages /workspace/legacy-tf 2>&1 | tail -2 && \
+   uv pip install --python /workspace/legacy-tf/bin/python \
        "transformers==$LEGACY" addict easydict matplotlib timm einops \
-       >/dev/null 2>&1; then
+       2>&1 | tail -3; then
     LEGACY_PY=/workspace/legacy-tf/bin/python
     # VERIFY the pinned env is the one the script will import, from inside the
     # same interpreter that runs it. Printing the installed version proves
@@ -105,8 +108,10 @@ if uv venv --system-site-packages /workspace/legacy-tf >/dev/null 2>&1 && \
     [ -n "$LEGACY_PY" ] && for m in florence-2-base deepseek-ocr; do
         say "running $m on transformers==$LEGACY ..."
         t0=$(date +%s)
+        # tail -25 truncated the traceback and hid why these failed. Keep it
+        # all: this is the branch that has been hardest to diagnose.
         timeout 2400 "$LEGACY_PY" run_modern_ocr.py --models "$m" \
-            --max-samples "$PAGES" 2>&1 | tail -25
+            --max-samples "$PAGES" 2>&1
         rc=${PIPESTATUS[0]}; dt=$(( $(date +%s) - t0 ))
         if [ $rc -eq 0 ]; then
             RESULTS+=("PASS  $m on transformers==$LEGACY (${dt}s)"); PASS=$((PASS+1))
