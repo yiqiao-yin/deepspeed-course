@@ -227,8 +227,20 @@ pages**, greedy decoding:
 | `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
-| `florence-2-base` | 230M | — | — | — | blocked |
+| `florence-2-base` | 230M | 0.4108 | 0.4800 | 10* | n/a |
 | `deepseek-ocr` | 3B MoE | — | — | — | blocked |
+
+**\*** Florence-2's `10` is the length of `input_ids` alone. Its visual tokens
+travel in `pixel_values` and never enter `input_ids`, so the figure is **not
+comparable** and no efficiency number is reported for it. Tabulating it as-is
+would have ranked the weakest model the most efficient by an order of
+magnitude — a conclusion produced entirely by where a model happens to keep
+its tokens.
+
+Florence-2 runs only on transformers 4.47.1, reads **0/12** exactly and merges
+lines (`'614.54order reference 028658'`) — the expected result for a 230M
+*general* VLM on multi-line pages, which is why it is in the table as a
+control rather than a contender.
 
 Both Qwen models read **12/12 pages exactly**. `got-ocr2` read **6/12** exactly,
 with a per-page range of **0.0000 to 1.7639** — one page ran away and generated
@@ -265,11 +277,23 @@ OCR pipeline across these models, and a concrete argument for the per-folder
 `uv.lock` this course now ships.
 
 A pinned `transformers==4.47.1` environment (the last release containing
-`LlamaFlashAttention2`, checked against the tagged sources) gets both models
-further and neither to the finish: DeepSeek-OCR's `infer()` writes to disk and
-returns `None`, and Florence-2 still raises its missing-config-attribute error.
-**Neither has a verified number here**, and the table says so rather than
-guessing one.
+`LlamaFlashAttention2`, checked against the tagged sources) **unblocks
+Florence-2** — its row above is measured there — and does not unblock
+DeepSeek-OCR, which loads, runs, and returns `'\n\n'` for every page.
+
+Florence-2 took four attempts, and the diagnosis is the lesson. The failure is
+inside `Florence2LanguageConfig.__init__`:
+
+```python
+if self.forced_bos_token_id is None and kwargs.get(...):
+```
+
+It reads the attribute **while constructing itself**, and transformers 5 moved
+that field off `PretrainedConfig`. It fires while loading the *processor*, so
+every fix applied at model-load time never executed. Three identical errors in
+a row were the signal — an unchanged symptom means an unchanged code path — and
+I read them as "the fix didn't take" instead. Reproducing it locally on CPU,
+which cost nothing, settled it in one run after several GPU runs had not.
 
 :::danger A number that nearly shipped
 An earlier harness took DeepSeek-OCR's `None`, `str()`'d it, and scored the

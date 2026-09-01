@@ -480,7 +480,18 @@ def run_model(key: str, spec: dict, pages, args, torch):
                 inputs[name] = value.to(model_dtype)
 
         if vision_tokens is None:
+            # NOTE what this counts: the length of input_ids. For the chat-style
+            # VLMs the image placeholder expands INTO input_ids, so this is a
+            # fair proxy for what a page costs the context.
+            #
+            # It is NOT fair for Florence-2, whose visual tokens travel in
+            # pixel_values and never enter input_ids -- it reports ~10, which
+            # would rank it an order of magnitude "cheaper" than anything else
+            # purely as an artefact of where its tokens live. Flagged rather
+            # than silently tabulated.
             vision_tokens = int(inputs["input_ids"].shape[-1])
+            if key.startswith("florence"):
+                vision_tokens = -abs(vision_tokens)   # negative = not comparable
 
         with torch.no_grad():
             if key.startswith("florence"):
@@ -586,8 +597,10 @@ def main() -> None:
 
         cer = corpus_cer(references, predictions)
         per_page = [char_error_rate(r, p) for r, p in zip(references, predictions)]
-        rows.append((key, spec["params"], cer, tokens,
-                     accuracy_per_token(cer, max(tokens, 1))))
+        comparable = tokens > 0
+        rows.append((key, spec["params"], cer, abs(tokens),
+                     accuracy_per_token(cer, max(abs(tokens), 1)) if comparable
+                     else None))
         ordered = sorted(per_page)
         exact = sum(1 for v in per_page if v == 0.0)
         print(f"    CER (pooled)  {cer:.4f}")
@@ -606,9 +619,15 @@ def main() -> None:
     for key, params, cer, tokens, apt in rows:
         if cer is None:
             print(f"  {key:<16} {params:<22} {'FAILED':>8}")
+        elif apt is None:
+            print(f"  {key:<16} {params:<22} {cer:>8.4f} {tokens:>9}*{'n/a':>10}")
         else:
             print(f"  {key:<16} {params:<22} {cer:>8.4f} {tokens:>9} {apt:>11.4f}")
     print(bar)
+    if any(r[4] is None for r in rows if r[2] is not None):
+        print("  * input_ids length only -- this model's visual tokens travel")
+        print("    outside input_ids, so its token count is NOT comparable and")
+        print("    no efficiency figure is reported for it.")
     print("  Lower CER is better. Higher acc/100tok is better. Read both:")
     print("  a model half a point better that spends ten times the tokens is")
     print("  not better, it is a different point on the same trade.")

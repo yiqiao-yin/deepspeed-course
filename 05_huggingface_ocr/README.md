@@ -27,8 +27,20 @@ pages**, greedy decoding, `max_new_tokens=256`:
 | `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
-| `florence-2-base` | 230M | — | — | — | blocked (see below) |
+| `florence-2-base` | 230M | 0.4108 | 0.4800 | 10* | n/a |
 | `deepseek-ocr` | 3B MoE | — | — | — | blocked (see below) |
+
+`florence-2-base` runs only on **transformers 4.47.1** (see below) and reads
+**0/12 exactly**, range 0.1957–0.6216, merging lines together
+(`'614.54order reference 028658'`). That is the expected result for a 230M
+*general* vision-language model on multi-line pages, and is why it is in the
+table as a control rather than as a contender.
+
+**\*** Its `10` is the length of `input_ids` only. Florence-2's visual tokens
+travel in `pixel_values` and never enter `input_ids`, so that number is **not
+comparable** to the others and no efficiency figure is reported for it —
+taking it at face value would rank the weakest model as the most efficient
+by an order of magnitude, purely because of where its tokens live.
 
 `qwen2-vl-2b` and `qwen2.5-vl-3b` read **12/12 pages exactly**. `got-ocr2` read
 **6/12 exactly**, with a per-page CER range of **0.0000 to 1.7639** — one page
@@ -72,11 +84,22 @@ builds a second venv with `--system-site-packages` (reusing torch) and
 | 4.46.3, 4.47.1 | yes |
 | 4.49.0, 5.16.1 | no |
 
-On that pinned environment both models load further and then stop again:
-DeepSeek-OCR's `infer()` writes its transcription to disk and returns `None`,
-and Florence-2 still raises the missing-config-attribute error. **Neither has a
-verified accuracy number here**, and rather than publish one, this folder says
-so. If you get either running, the harness is set up to score it.
+On that pinned environment **Florence-2 works** — the row above is measured
+there, and the harness prints which `transformers` each run actually imported
+so the provenance is in every log.
+
+**DeepSeek-OCR still does not.** On the pinned environment it loads and runs,
+and every page comes back as `'\n\n'` — its `infer()` writes to disk, and what
+it writes here is empty. The harness reports this as `NO OUTPUT` and refuses to
+score it, rather than turning empty strings into a CER near 1.0 that would read
+as a measurement.
+
+Getting Florence-2 there took four attempts because I kept mis-diagnosing it.
+The failure is inside `Florence2LanguageConfig.__init__`, which reads
+`self.forced_bos_token_id` *while constructing itself* — a field transformers 5
+moved off `PretrainedConfig` — and it fires while loading the **processor**, so
+every patch applied at model-load time ran too late. The identical error three
+times was the clue: an unchanged symptom means the code path never changed.
 
 > One number that nearly shipped: an earlier version of the harness took
 > DeepSeek-OCR's `None` return, `str()`'d it, and scored the literal string
