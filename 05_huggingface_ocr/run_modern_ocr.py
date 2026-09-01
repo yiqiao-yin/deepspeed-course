@@ -296,9 +296,17 @@ def run_model(key: str, spec: dict, pages, args, torch):
     model being bad. That is why each branch is written from that model's own
     documented usage.
     """
+    import transformers
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
     dtype = getattr(torch, args.dtype)
+
+    # transformers renamed this: `torch_dtype` through 4.x, `dtype` from 5.0.
+    # The remote-code models below only load on 4.47, so the script has to
+    # speak both. Passing the wrong one is a TypeError at construction, after
+    # the weights have already downloaded.
+    _major = int(transformers.__version__.split(".")[0])
+    dtype_kw = "dtype" if _major >= 5 else "torch_dtype"
     hf_id = spec["hf_id"]
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     predictions, vision_tokens = [], None
@@ -311,8 +319,9 @@ def run_model(key: str, spec: dict, pages, args, torch):
 
         tokenizer = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
         model = AutoModel.from_pretrained(
-            hf_id, trust_remote_code=True, dtype=dtype,
-            _attn_implementation="eager").eval().to(device)
+            hf_id, trust_remote_code=True,
+            _attn_implementation="eager",
+            **{dtype_kw: dtype}).eval().to(device)
         with tempfile.TemporaryDirectory() as tmp:
             for i, (image, _) in enumerate(pages):
                 path = os.path.join(tmp, f"page_{i}.png")
@@ -334,7 +343,8 @@ def run_model(key: str, spec: dict, pages, args, torch):
     # ---- everything else goes through AutoProcessor -------------------------
     processor = AutoProcessor.from_pretrained(hf_id, trust_remote_code=True)
 
-    load_kwargs = dict(dtype=dtype, trust_remote_code=True, device_map=device)
+    load_kwargs = {dtype_kw: dtype, "trust_remote_code": True,
+                   "device_map": device}
     if key.startswith("florence"):
         # Build and repair the config BEFORE instantiating. Two earlier
         # attempts patched the model's config AFTER from_pretrained and failed
@@ -364,7 +374,15 @@ def run_model(key: str, spec: dict, pages, args, torch):
         _patch(cfg)
         load_kwargs["config"] = cfg
 
-    model = AutoModelForImageTextToText.from_pretrained(hf_id, **load_kwargs).eval()
+    try:
+        model = AutoModelForImageTextToText.from_pretrained(hf_id, **load_kwargs).eval()
+    except (ValueError, KeyError):
+        # On transformers 4.x, Florence-2's remote config is not registered for
+        # the image-text-to-text auto class and raises "Unrecognized
+        # configuration class". Its documented loader there is AutoModelForCausalLM.
+        from transformers import AutoModelForCausalLM
+
+        model = AutoModelForCausalLM.from_pretrained(hf_id, **load_kwargs).eval()
 
     if key.startswith("florence"):
         # generation_config is built from the (already repaired) config, but
