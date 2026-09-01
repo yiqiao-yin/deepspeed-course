@@ -208,6 +208,94 @@ ZeRO-2 with BF16 is the right setting, for the reason given in [the overview](/d
 | 1× A100 80 GB | 80 GB | Single-GPU, room for larger `max_pixels` |
 | 8 GB card | — | Needs `--use-4bit` (QLoRA) and aggressive pixel caps |
 
+## 7a. Which OCR model, measured
+
+The page so far fine-tunes Qwen2-VL-2B. That teaches the mechanics and says
+nothing about *which* model to fine-tune, and the field moved: purpose-built OCR
+models now compete with general VLMs several times their size, and they differ
+by more than an order of magnitude in what a page costs them.
+
+`05_huggingface_ocr/run_modern_ocr.py` measures five on the same pages.
+
+### Results
+
+2× RTX 3090 (RunPod), torch 2.8.0+cu128, transformers 5.16, **12 rendered
+pages**, greedy decoding:
+
+| Model | Params | CER (pooled) | CER (median) | Tokens/page | Acc /100 tok |
+|---|---|---:|---:|---:|---:|
+| `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
+| `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
+| `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
+| `florence-2-base` | 230M | — | — | — | did not run |
+| `deepseek-ocr` | 3B MoE | — | — | — | did not run |
+
+:::warning Rendered text is not a document benchmark
+These pages are cleanly rendered, so the error rates are a **floor**. Real
+scans bring skew, noise and JPEG artefacts none of this measures. `0.0000`
+means "perfect on easy input", not "solved". Use `--source hf` for a real
+corpus, and read [OmniDocBench](https://github.com/opendatalab/OmniDocBench)
+for numbers that mean something about documents.
+:::
+
+`got-ocr2`'s pooled 0.1530 against a median of **0.0104** is the interesting
+row. That gap is the signature of a handful of pages failing badly while most
+are near-perfect — not a uniformly weak model. Reporting only the pooled figure
+would have libelled it; reporting only the median would have hidden the
+failures.
+
+### Two of five would not run, for the same reason
+
+Both are `trust_remote_code` models whose published code targets an **older
+transformers** than Qwen2.5-VL requires:
+
+| Model | Error |
+|---|---|
+| `deepseek-ocr` | `ImportError: cannot import name 'LlamaFlashAttention2'` |
+| `florence-2-base` | `AttributeError: 'Florence2LanguageConfig' object has no attribute 'forced_bos_token_id'` |
+
+Running them means a **separate pinned environment**, and pinning back far
+enough for them breaks Qwen2.5-VL. That is a genuine constraint on building one
+OCR pipeline across these models, and a concrete argument for the per-folder
+`uv.lock` this course now ships.
+
+Reaching that conclusion took four GPU runs, each surfacing the next layer:
+`AutoProcessor` cannot instantiate DeepSeek-OCR → it needs a custom `infer()` →
+which imports `addict`, `matplotlib`, then `easydict` → which then hits the
+version wall. Every package was discovered *after* several GB had downloaded.
+
+### The metric is where OCR benchmarks go wrong
+
+`ocr_metrics.py` runs on CPU. Four traps, each of which produces a plausible
+number and a wrong ranking:
+
+1. **CER divides by the reference.** A prediction-length denominator lets a
+   model improve its score by emitting less.
+2. **It is not clipped at 1.0**, so runaway generation stays visible.
+3. **An empty reference with invented text scores 1.0** — not 0.0, and not a
+   `ZeroDivisionError`.
+4. **Pooled ≠ averaged.** One 1000-character page read perfectly plus one
+   2-character page read wrong gives pooled 0.0020 and averaged 0.5000 —
+   **250× apart on identical predictions**.
+
+### Accuracy alone is the wrong axis
+
+DeepSeek-OCR ([arXiv:2510.18234](https://arxiv.org/abs/2510.18234)) makes the
+argument explicitly: a page compressed into ~100 vision tokens decodes at ~97%
+precision, falling to ~60% at 20× compression. That is the same bargain as
+[token compression in `08_vtt`](/docs/tutorials/multimodal/token-compression) —
+shrink what the model looks at, pay in accuracy. Ranking on accuracy alone
+recommends a model half a point better and sixty times more expensive.
+
+:::note One bug worth repeating
+The first version of this benchmark rendered fixed-length lines without
+measuring them, and **eight lines per run overflowed the image and were
+clipped**. The reference text contained words that were not in the picture, so
+every model was scored against text it could not read. It produced entirely
+plausible numbers. The generator now wraps to the font's measured width and
+asserts nothing overflows — the assertion is the fix, not the wrapping.
+:::
+
 ## 8. Troubleshooting
 
 **OOM after several successful steps.** Almost always a larger-than-usual image. Set `max_pixels` (§3) rather than lowering batch size, which is already 1.
@@ -229,6 +317,7 @@ ZeRO-2 with BF16 is the right setting, for the reason given in [the overview](/d
 - [ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — why Stage 2 rather than 3 under LoRA
 
 ## References
+
 
 1. Wang, P., Bai, S., Tan, S., et al. (2024). Qwen2-VL: Enhancing Vision-Language Model's Perception of the World at Any Resolution. [arXiv:2409.12191](https://arxiv.org/abs/2409.12191) — naive dynamic resolution and M-RoPE.
 2. Liu, H., Li, C., Wu, Q., & Lee, Y. J. (2023). Visual Instruction Tuning. *NeurIPS 2023*. [arXiv:2304.08485](https://arxiv.org/abs/2304.08485) — LLaVA; the projector design.

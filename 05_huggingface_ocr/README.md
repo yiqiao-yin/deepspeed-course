@@ -2,6 +2,103 @@
 
 Minimal Vision-Language Model (VLM) fine-tuning script using DeepSpeed for distributed training on 2 RTX 4000-series NVIDIA GPUs. This example uses the Qwen2-VL-2B-Instruct model for OCR and vision-language tasks.
 
+## Which OCR model should you actually use?
+
+`train_ds.py` fine-tunes Qwen2-VL-2B. That teaches the training mechanics and
+says nothing about *which* model to fine-tune, and the field moved: purpose-built
+OCR models now compete with general VLMs several times their size, and they
+differ by more than an order of magnitude in what a page costs them.
+
+`run_modern_ocr.py` measures five of them on the same pages:
+
+```bash
+uv sync
+uv run run_modern_ocr.py --list-models            # no GPU needed
+python run_modern_ocr.py --models all --max-samples 16
+```
+
+### Measured on hardware
+
+2x RTX 3090 (RunPod), torch 2.8.0+cu128, transformers 5.16, **12 rendered
+pages**, greedy decoding, `max_new_tokens=256`:
+
+| Model | Params | CER (pooled) | CER (median) | Tokens/page | Acc per 100 tok |
+|---|---|---:|---:|---:|---:|
+| `qwen2-vl-2b` | 2.2B | **0.0000** | 0.0000 | 164 | 0.610 |
+| `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
+| `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
+| `florence-2-base` | 230M | — | — | — | did not run (see below) |
+| `deepseek-ocr` | 3B MoE | — | — | — | did not run (see below) |
+
+**These pages are cleanly rendered text, not photographs.** Error rates here
+are a *floor*, not a document-benchmark score — real scans bring skew, noise
+and JPEG artefacts that none of this measures. Use `--source hf` for a real
+corpus. A 0.0000 means "perfect on easy input", not "solved".
+
+Note `got-ocr2`'s pooled 0.1530 against a median of 0.0104. That gap is the
+signature of a **few pages failing badly** while most are near-perfect, not of
+a uniformly weak model — which is exactly why the script reports both, and why
+[pooled and averaged CER are not interchangeable](#the-metric-is-not-obvious).
+
+### Two of the five could not run, and it is the same cause
+
+Both are `trust_remote_code` models whose published code targets an **older
+transformers** than the one Qwen2.5-VL requires:
+
+| Model | Error |
+|---|---|
+| `deepseek-ocr` | `ImportError: cannot import name 'LlamaFlashAttention2' from transformers.models.llama.modeling_llama` |
+| `florence-2-base` | `AttributeError: 'Florence2LanguageConfig' object has no attribute 'forced_bos_token_id'` |
+
+This is worth knowing before you plan around either: running them means a
+**separate pinned environment**, and pinning transformers back far enough for
+them breaks Qwen2.5-VL. That is a real constraint on building one OCR pipeline
+across these models, not a defect in this folder — and it is why the lock file
+in this directory matters.
+
+Getting there took four GPU runs, each surfacing the next layer:
+`AutoProcessor` cannot instantiate DeepSeek-OCR at all → it needs a custom
+`infer()` → which imports `addict`, `matplotlib`, then `easydict` → which then
+hits the transformers version wall. Each package was discovered only *after*
+several GB of weights had downloaded.
+
+### The metric is not obvious
+
+`ocr_metrics.py` runs on CPU and is where the scoring lives, because this is
+where OCR benchmarks go quietly wrong:
+
+```bash
+uv run ocr_metrics.py                 # a demo of every trap below
+uv run ../tests/test_ocr_metrics.py   # 40 property checks
+```
+
+- **CER divides by the reference**, so emitting half the page scores ~0.5. A
+  prediction-length denominator lets a model improve by saying less.
+- **It is not clipped at 1.0**, so runaway generation stays visible — the most
+  common VLM failure on a page it cannot parse.
+- **An empty reference with invented text scores 1.0**, not 0.0 and not a
+  `ZeroDivisionError`.
+- **Pooled ≠ averaged.** On a corpus of one 1000-character page read perfectly
+  and one 2-character page read wrong, pooled CER is 0.0020 and averaged is
+  0.5000 — **250x apart on identical predictions**. A benchmark that does not
+  say which it used is not comparable to anything.
+
+### Accuracy alone is the wrong axis
+
+DeepSeek-OCR ([arXiv:2510.18234](https://arxiv.org/abs/2510.18234)) argues the
+point directly: a page compressed into ~100 vision tokens decodes at ~97%
+precision, falling to ~60% at 20x compression. That is the same bargain as
+[`08_vtt/02_token_compression`](../08_vtt/02_token_compression/) — shrink what
+the model looks at, pay in accuracy — so the table reports tokens/page beside
+CER. Ranking on accuracy alone recommends a model that is half a point better
+and sixty times more expensive.
+
+### Reproduce it
+
+```bash
+bash ../tests/gpu/verify_05_ocr_models.sh 1 16     # 1 GPU, 16 pages
+```
+
 ## Environment & Local Testing
 
 ### Setup with `uv`
