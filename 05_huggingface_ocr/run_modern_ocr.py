@@ -139,39 +139,73 @@ def synthetic_pages(n: int, seed: int):
     """
     Render short passages to images. Exact ground truth, no download.
 
-    Honest about what this measures: clean rendered text is EASIER than a
-    photographed receipt or a scanned page with skew and JPEG artefacts, so
-    error rates here are a floor, not a document-benchmark score. It exists so
-    the comparison runs anywhere, deterministically, without a dataset
-    dependency -- use --source hf for real documents.
+    Lines are wrapped to the MEASURED width of the font, and the function
+    asserts afterwards that nothing overflows. That assertion is not
+    defensive decoration -- the first version of this generator laid out
+    fixed-length lines and 8 of them ran past the right edge, so the reference
+    text contained words that were not in the image at all. Every model was
+    then scored against text it could not possibly read, and the benchmark
+    reported plausible numbers for a comparison that meant nothing.
+
+    Honest about what this measures: cleanly rendered text is EASIER than a
+    photographed receipt or a skewed scan, so error rates here are a floor,
+    not a document-benchmark score. Use --source hf for real documents.
     """
     import random
     from PIL import Image, ImageDraw, ImageFont
 
     rng = random.Random(seed)
-    vocab = ("invoice total amount due date customer account number balance "
-             "payment received thank you for your business reference order "
-             "quantity unit price subtotal tax shipping discount").split()
+    # Document-like phrasing rather than a bag of words. Random word salad
+    # punishes models with strong language priors for no good reason, and no
+    # real page looks like it.
+    templates = [
+        "invoice number {n:05d}", "order reference {n:06d}",
+        "customer account {n:04d}", "date 2026-0{m}-{d:02d}",
+        "subtotal {a}.{b:02d} usd", "tax {c}.{b:02d} usd",
+        "shipping {c}.{b:02d} usd", "total amount due {a}.{b:02d} usd",
+        "payment received thank you", "quantity {q} unit price {a}.{b:02d}",
+        "balance carried forward {a}.{b:02d}", "please remit within 30 days",
+    ]
 
+    width, margin, font_size, line_h = 720, 24, 22, 34
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+    except OSError:
+        font = ImageFont.load_default()
+
+    def measure(text: str) -> float:
+        if hasattr(font, "getlength"):
+            return font.getlength(text)
+        return font.getbbox(text)[2]
+
+    usable = width - 2 * margin
     pages = []
-    for i in range(n):
-        n_lines = rng.randint(3, 6)
-        lines = [" ".join(rng.choices(vocab, k=rng.randint(4, 8)))
-                 for _ in range(n_lines)]
-        text = "\n".join(lines)
+    for _ in range(n):
+        lines = []
+        for _ in range(rng.randint(3, 6)):
+            line = rng.choice(templates).format(
+                n=rng.randint(1, 99999), m=rng.randint(1, 9), d=rng.randint(1, 28),
+                a=rng.randint(10, 999), b=rng.randint(0, 99),
+                c=rng.randint(1, 99), q=rng.randint(1, 40))
+            # Wrap on words until it fits; a line that cannot fit at all is a
+            # template bug and should be seen, not silently clipped.
+            while measure(line) > usable and " " in line:
+                line = line.rsplit(" ", 1)[0]
+            lines.append(line)
 
-        img = Image.new("RGB", (640, 40 + 34 * n_lines), "white")
+        img = Image.new("RGB", (width, 2 * margin + line_h * len(lines)), "white")
         draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
-        except OSError:
-            # No system font: the default bitmap font still renders legibly and
-            # keeps this runnable on a bare container.
-            font = ImageFont.load_default()
         for row, line in enumerate(lines):
-            draw.text((20, 20 + 34 * row), line, fill="black", font=font)
-        pages.append((img, text))
+            draw.text((margin, margin + line_h * row), line, fill="black", font=font)
+
+        overflow = [ln for ln in lines if measure(ln) > usable]
+        if overflow:
+            raise AssertionError(
+                f"rendered line does not fit the image and would be clipped: "
+                f"{overflow[0]!r} -- the reference would contain text that is "
+                "not in the picture, which silently invalidates every score")
+        pages.append((img, "\n".join(lines)))
     return pages
 
 
@@ -209,27 +243,77 @@ def run_model(key: str, spec: dict, pages, args, torch):
     """
     Load one model, read every page, return (predictions, vision_tokens).
 
-    Each family has a different processor contract, which is the entire reason
-    a comparison script like this is more work than it looks. Getting one of
-    them subtly wrong -- a missing chat template, the wrong task prompt --
-    produces plausible text and a quietly terrible score, so each branch is
-    written from that model's own documented usage rather than a shared guess.
+    Each family has a different contract, which is the whole reason a
+    comparison script is more work than it looks. Two of the five needed a
+    bespoke path, discovered by running them rather than by reading:
+
+      deepseek-ocr    AutoProcessor cannot instantiate it at all
+                      ("Unrecognized processing class"); it ships a custom
+                      `infer` entry point behind trust_remote_code.
+      florence-2      dies with "Florence2LanguageConfig object has no
+                      attribute forced_bos_token_id" -- its remote config
+                      predates a field transformers' generate() now reads.
+
+    Getting one of these subtly wrong does not raise: it produces plausible
+    text and a quietly terrible score, which is indistinguishable from the
+    model being bad. That is why each branch is written from that model's own
+    documented usage.
     """
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
     dtype = getattr(torch, args.dtype)
     hf_id = spec["hf_id"]
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     predictions, vision_tokens = [], None
 
+    # ---- deepseek-ocr: custom entry point, no AutoProcessor ----------------
+    if key == "deepseek-ocr":
+        import tempfile
+
+        from transformers import AutoModel, AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
+        model = AutoModel.from_pretrained(
+            hf_id, trust_remote_code=True, dtype=dtype,
+            _attn_implementation="eager").eval().to(device)
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, (image, _) in enumerate(pages):
+                path = os.path.join(tmp, f"page_{i}.png")
+                image.save(path)
+                out = model.infer(
+                    tokenizer, prompt="<image>\n<|grounding|>OCR this image.",
+                    image_file=path, output_path=tmp, base_size=640,
+                    image_size=640, crop_mode=False, save_results=False,
+                    test_compress=False)
+                predictions.append(out if isinstance(out, str) else str(out))
+        # The compressor's own budget, not an input-length proxy: this model's
+        # entire claim is about how few vision tokens a page costs.
+        vision_tokens = 100
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return predictions, vision_tokens
+
+    # ---- everything else goes through AutoProcessor -------------------------
     processor = AutoProcessor.from_pretrained(hf_id, trust_remote_code=True)
     model = AutoModelForImageTextToText.from_pretrained(
-        hf_id, dtype=dtype, trust_remote_code=True,
-        device_map="cuda:0" if torch.cuda.is_available() else "cpu").eval()
+        hf_id, dtype=dtype, trust_remote_code=True, device_map=device).eval()
+
+    if key.startswith("florence"):
+        # Supply the field the remote config is missing rather than patching
+        # transformers. eos is the correct value for this decoder.
+        cfg = model.config
+        for holder in (cfg, getattr(cfg, "text_config", None)):
+            if holder is not None and getattr(holder, "forced_bos_token_id", None) is None:
+                holder.forced_bos_token_id = getattr(
+                    holder, "bos_token_id", None) or processor.tokenizer.bos_token_id
+        if getattr(model.generation_config, "forced_bos_token_id", None) is None:
+            model.generation_config.forced_bos_token_id = cfg.forced_bos_token_id
 
     for image, _ in pages:
         if key == "got-ocr2":
-            # GOT-OCR2 takes the image alone with a format flag; it has no chat
-            # template and passing one produces the prompt back as "text".
+            # GOT-OCR2 takes the image alone; it has no chat template and
+            # passing one returns the prompt back as "text".
             inputs = processor(image, return_tensors="pt").to(model.device)
         elif key.startswith("florence"):
             inputs = processor(text="<OCR>", images=image,
@@ -246,9 +330,6 @@ def run_model(key: str, spec: dict, pages, args, torch):
                                return_tensors="pt").to(model.device)
 
         if vision_tokens is None:
-            # How many tokens this page cost. For the chat models the image
-            # placeholder expands inside the processor, so the honest count is
-            # the input length rather than anything the config advertises.
             vision_tokens = int(inputs["input_ids"].shape[-1])
 
         with torch.no_grad():
@@ -257,7 +338,11 @@ def run_model(key: str, spec: dict, pages, args, torch):
         # Strip the prompt: decoding the whole sequence would score the
         # instruction as if the model had read it off the page.
         generated = out[0][inputs["input_ids"].shape[-1]:]
-        predictions.append(processor.decode(generated, skip_special_tokens=True))
+        text = processor.decode(generated, skip_special_tokens=True)
+        if key.startswith("florence"):
+            # Florence returns its answer wrapped in the task token.
+            text = text.replace("<OCR>", "").strip()
+        predictions.append(text)
 
     del model
     if torch.cuda.is_available():
