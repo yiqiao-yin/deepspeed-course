@@ -82,6 +82,9 @@ jobs:
       - name: Modern CIFAR-10 architectures
         run: uv run tests/test_modern_cifar.py
 
+      - name: OCR metrics
+        run: uv run tests/test_ocr_metrics.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

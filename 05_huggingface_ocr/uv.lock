@@ -562,6 +562,7 @@ name = "deepspeed-course-05-huggingface-ocr"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "accelerate" },
     { name = "datasets" },
     { name = "deepspeed" },
     { name = "peft" },
@@ -577,6 +578,7 @@ tracking = [
 
 [package.metadata]
 requires-dist = [
+    { name = "accelerate", specifier = ">=0.30" },
     { name = "datasets", specifier = ">=2.18" },
     { name = "deepspeed", specifier = ">=0.14" },
     { name = "peft", specifier = ">=0.10" },
