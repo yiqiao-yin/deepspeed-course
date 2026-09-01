@@ -122,6 +122,13 @@ def parse_args() -> "argparse.Namespace":
                    help="Generation cap per page. Too low truncates a real "
                         "page and shows up as a high CER that is the harness's "
                         "fault, not the model's.")
+    p.add_argument("--degrade", default="none",
+                   choices=["none", "blur", "noise", "small"],
+                   help="Make the pages HARDER on purpose. A benchmark that "
+                        "reports 0.0000 should be able to show a non-zero, or "
+                        "you cannot tell a perfect model from a broken "
+                        "harness. 'small' shrinks to 60%% (fewer pixels per "
+                        "glyph), 'blur' softens, 'noise' adds speckle.")
     p.add_argument("--dtype", default="bfloat16",
                    choices=["bfloat16", "float16", "float32"])
     p.add_argument("--seed", type=int, default=42)
@@ -207,6 +214,36 @@ def synthetic_pages(n: int, seed: int):
                 "not in the picture, which silently invalidates every score")
         pages.append((img, "\n".join(lines)))
     return pages
+
+
+def degrade(image, how: str):
+    """
+    Make a page harder on purpose.
+
+    Exists to answer one question about any benchmark that reports a perfect
+    score: is the model perfect, or is the harness broken? A pipeline that
+    cannot produce a non-zero error rate on a deliberately degraded page is
+    not measuring anything, and no amount of reasoning about the code
+    substitutes for showing it move.
+    """
+    from PIL import Image, ImageFilter
+
+    if how == "blur":
+        return image.filter(ImageFilter.GaussianBlur(radius=1.6))
+    if how == "small":
+        w, h = image.size
+        small = image.resize((int(w * 0.6), int(h * 0.6)), Image.BILINEAR)
+        return small.resize((w, h), Image.BILINEAR)   # back up, detail gone
+    if how == "noise":
+        import random
+        px = image.load()
+        rng = random.Random(0)
+        for _ in range((image.size[0] * image.size[1]) // 12):
+            x, y = rng.randrange(image.size[0]), rng.randrange(image.size[1])
+            v = rng.choice((0, 255))
+            px[x, y] = (v, v, v)
+        return image
+    return image
 
 
 def hf_pages(dataset_id: str, n: int):
@@ -411,6 +448,8 @@ def main() -> None:
 
     pages = (synthetic_pages(n, args.seed) if args.source == "synthetic"
              else hf_pages(args.dataset, n))
+    if args.degrade != "none":
+        pages = [(degrade(img, args.degrade), text) for img, text in pages]
     references = [text for _, text in pages]
 
     print(bar)
@@ -441,8 +480,15 @@ def main() -> None:
         per_page = [char_error_rate(r, p) for r, p in zip(references, predictions)]
         rows.append((key, spec["params"], cer, tokens,
                      accuracy_per_token(cer, max(tokens, 1))))
+        ordered = sorted(per_page)
+        exact = sum(1 for v in per_page if v == 0.0)
         print(f"    CER (pooled)  {cer:.4f}")
-        print(f"    CER (median)  {sorted(per_page)[len(per_page) // 2]:.4f}")
+        print(f"    CER (median)  {ordered[len(ordered) // 2]:.4f}")
+        print(f"    CER (min/max) {ordered[0]:.4f} / {ordered[-1]:.4f}")
+        # A pooled 0.0000 is only meaningful next to this count. If every page
+        # is exact, say so explicitly rather than leaving the reader to wonder
+        # whether the harness is scoring anything at all.
+        print(f"    exact pages   {exact}/{len(per_page)}")
         print(f"    tokens/page   {tokens}")
         print(f"    sample        {predictions[0][:90]!r}")
 
