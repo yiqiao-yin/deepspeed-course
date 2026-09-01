@@ -318,10 +318,17 @@ def run_model(key: str, spec: dict, pages, args, torch):
         from transformers import AutoModel, AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
+        # float32, not bfloat16. Its infer() loads the image itself and builds
+        # a float32 tensor, so a bf16 model raises
+        #   RuntimeError: Input type (float) and bias type (c10::BFloat16)
+        #   should be the same
+        # on the first conv. Casting the model is the side we control; 3B MoE
+        # with 570M active fits in fp32 on a 24 GB card.
+        ds_dtype = torch.float32 if args.dtype != "float32" else dtype
         model = AutoModel.from_pretrained(
             hf_id, trust_remote_code=True,
             _attn_implementation="eager",
-            **{dtype_kw: dtype}).eval().to(device)
+            **{dtype_kw: ds_dtype}).eval().to(device)
         with tempfile.TemporaryDirectory() as tmp:
             for i, (image, _) in enumerate(pages):
                 path = os.path.join(tmp, f"page_{i}.png")
@@ -372,6 +379,23 @@ def run_model(key: str, spec: dict, pages, args, torch):
                 _patch(getattr(obj, attr, None))
 
         _patch(cfg)
+
+        # Patching the config INSTANCE was not enough -- from_pretrained
+        # rebuilds sub-configs from their dicts, discarding it, which is why
+        # the identical AttributeError survived three separate fixes. Setting
+        # the attribute on the CLASS means every instance has it however and
+        # whenever it is reconstructed.
+        def _patch_class(obj) -> None:
+            if obj is None:
+                return
+            klass = type(obj)
+            if not hasattr(klass, "forced_bos_token_id"):
+                setattr(klass, "forced_bos_token_id",
+                        getattr(obj, "bos_token_id", None) or bos)
+            for attr in ("text_config", "vision_config", "language_config"):
+                _patch_class(getattr(obj, attr, None))
+
+        _patch_class(cfg)
         load_kwargs["config"] = cfg
 
     try:
