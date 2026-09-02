@@ -37,6 +37,8 @@ TESTS=(
     tests/test_omni_eval.py
     tests/test_modern_cifar.py
     tests/test_ocr_metrics.py
+    tests/test_ranking_losses.py
+    tests/test_groupwise_ranking.py
 )
 
 for test in "${TESTS[@]}"; do

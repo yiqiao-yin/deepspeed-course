@@ -78,6 +78,16 @@ EXAMPLES = {
     "02_intermediate/02_rnn_stock_data": dict(min_vram=8, gpus=1, disk=20,
                                            script="train_rnn_stock_data_ds.py",
                                            note="Needs network egress for yfinance."),
+    "02_intermediate/03_learning_to_rank": dict(min_vram=8, gpus=2, disk=20,
+                                           script="train_learning_to_rank.py",
+                                           note="Four LTR objectives, one scorer. "
+                                                "Tiny model; 2 GPUs is to exercise "
+                                                "QUERY-level sharding, not memory."),
+    "02_intermediate/04_groupwise_ranking": dict(min_vram=8, gpus=2, disk=20,
+                                           script="train_groupwise_ranking.py",
+                                           note="GSF / SetRank vs a pointwise "
+                                                "control. Memory is O(list_len^2) "
+                                                "activation, not parameters."),
     "03_huggingface/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
                            script="train_ds.py",
                            note="HuggingFace LLM fine-tuning with ZeRO."),

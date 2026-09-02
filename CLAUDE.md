@@ -187,7 +187,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 18 suites, no GPU, no downloads
+./tests/run_all.sh              # all 20 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -358,6 +358,6 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 36 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 38 diagram pages conform.
 
 - **Verifying a deployed page needs a content check, not a status code.** A 200 only proves *a* page is there, not the new one — and a literal `grep` for text inside a KaTeX block will fail because it renders into split HTML spans. Match on plain prose instead.

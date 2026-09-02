@@ -34,6 +34,9 @@ const sidebars = {
             'tutorials/intermediate/bayesian-nn',
             'tutorials/intermediate/stock-prediction',
             'tutorials/intermediate/mean-reversion-forecasting',
+            // Ranking: 03 varies the OBJECTIVE, 04 varies the ARCHITECTURE.
+            'tutorials/intermediate/learning-to-rank',
+            'tutorials/intermediate/groupwise-ranking',
           ],
         },
         {

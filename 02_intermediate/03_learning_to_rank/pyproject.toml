@@ -1,0 +1,54 @@
+# =============================================================================
+# 02_intermediate/03_learning_to_rank as a self-contained uv project.
+#
+#     cd 02_intermediate/03_learning_to_rank
+#     uv sync                    # creates .venv, installs the LOCKED versions
+#     uv run deepspeed --num_gpus=2 train_learning_to_rank.py
+#
+# The committed uv.lock is required (CONTRIBUTING.md section 4): it is what
+# makes every reader install the same versions. Without it `uv pip install`
+# resolves to whatever is newest that day, which is how a tutorial that worked
+# in March breaks in September with nobody having touched it.
+#
+# torch is pinned to an explicit CUDA index (cu128) below. PyPI's DEFAULT torch
+# is a CUDA 13 wheel, which installs fine on a pre-CUDA-13 driver (550/570) and
+# then reports cuda.is_available() == False -- silently, while nvidia-smi shows
+# the card. cu128 works on old and new drivers alike.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-02-intermediate-03-learning-to-rank"
+version = "0.1.0"
+description = "Learning to Rank"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.2",
+    "deepspeed>=0.14",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+# Only needed for `--source hf`, which encodes a real reranking corpus. The
+# default `--source synthetic` path imports neither, so a reader who just
+# wants to compare the four objectives downloads no models at all.
+real-data = ["datasets>=2.18", "sentence-transformers>=2.6"]
+# W&B stays OPTIONAL: the training script wraps `import wandb` in try/except
+# and only tracks when WANDB_API_KEY is set. Making it required contradicts
+# the code and tests/test_runpod_ctl.py will fail you for it.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Runnable example, not a distributable library. Without this uv tries to BUILD
+# the folder as a package and `uv sync` fails.
+package = false
+
+# Pin the CUDA build rather than inheriting PyPI's default -- see the header.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

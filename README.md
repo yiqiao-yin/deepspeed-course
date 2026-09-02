@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 39 pages with
+The documentation site is the primary way to read this material: 41 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -143,7 +143,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 18 suites, no GPU and no downloads
+./tests/run_all.sh                  # 20 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -173,7 +173,9 @@ deepspeed-course/
 │
 ├── 02_intermediate/       # Still small, but the modelling questions get harder
 │   ├── 01_bayesian_neuralnet/   # Parallel-tempering MCMC — uncertainty, not point estimates
-│   └── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
+│   ├── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
+│   ├── 03_learning_to_rank/     # RankNet / LambdaRank / ListNet — ranking lives in the LOSS
+│   └── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
 │
 ├── 03_huggingface/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
 │   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point

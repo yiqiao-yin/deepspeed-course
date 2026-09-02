@@ -1,0 +1,29 @@
+{
+  "_comment": "DeepSpeed config for train_learning_to_rank.py. train_batch_size is deliberately OMITTED so any --num_gpus works: DeepSpeed infers it as micro_batch * accumulation * world_size. Do NOT add the 'auto' values used by the HuggingFace examples — this script calls deepspeed.initialize() directly, and 'auto' is a parse error there.",
+  "train_micro_batch_size_per_gpu": 64,
+  "_batch_comment": "The unit is QUERIES, not documents. One item is a query with its whole candidate list, because a pairwise loss or a listwise softmax that spans devices is not the same computation — so data parallelism shards queries and never splits a list. 64 queries x 16 documents = 1,024 document scorings per step.",
+  "gradient_accumulation_steps": 1,
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 0.001,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8
+    }
+  },
+  "_optimizer_comment": "Adam without weight decay. The scoring network is a few thousand parameters and the ranking objectives are already heavily regularised by their own structure — a pairwise loss sees O(L^2) constraints per query. Weight decay here mostly shrinks scores toward each other, which is the one thing a ranker must not do.",
+  "gradient_clipping": 1.0,
+  "fp16": {
+    "enabled": false
+  },
+  "bf16": {
+    "enabled": false
+  },
+  "_precision_comment": "fp32 on purpose, and this one is not a stylistic choice. LambdaRank multiplies its pair loss by |ΔNDCG|, which for deep positions is ~1e-4; in fp16 those weights underflow toward zero and LambdaRank silently degenerates into unweighted RankNet. It would still train and still report a number. Enable bf16 (Ampere or newer) if you want the speed and have checked your weights survive it.",
+  "zero_optimization": {
+    "stage": 0
+  },
+  "_zero_comment": "Stage 0 — no sharding. This model's optimizer state is well under a megabyte; sharding it would cost more in communication than it saves. ZeRO earns its keep in 03_huggingface and beyond, not here. The reason to run this under DeepSpeed at all is the LISTWISE data layout above.",
+  "steps_per_print": 200,
+  "wall_clock_breakdown": false
+}

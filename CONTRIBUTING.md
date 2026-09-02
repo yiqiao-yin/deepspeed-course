@@ -860,7 +860,7 @@ The layout engine and the base colours are set **globally**, once, in
 #### What you DO declare: the five node classes
 
 Add these `classDef` lines at the bottom of your diagram and assign nodes with
-`class`. Copy the block verbatim — the names are load-bearing across 36 pages:
+`class`. Copy the block verbatim — the names are load-bearing across 38 pages:
 
 ```
 classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff

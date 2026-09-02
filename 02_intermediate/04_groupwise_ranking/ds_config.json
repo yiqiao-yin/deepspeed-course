@@ -1,0 +1,30 @@
+{
+  "_comment": "Groupwise ranking. The unit of data is a QUERY with its whole candidate list, so the micro batch below counts queries, not documents -- 32 queries x 12 documents = 384 documents per step. train_batch_size is deliberately OMITTED so DeepSpeed derives it and any --num_gpus works without editing this file.",
+
+  "train_micro_batch_size_per_gpu": 32,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 3e-3,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8,
+      "weight_decay": 0.0
+    }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "Both disabled ON PURPOSE. SetRank's attention over a 12-document set produces small logit differences, and ListNet's softmax cross-entropy over the list is the quantity being compared across architectures -- running one model in reduced precision and reading a 0.005 NDCG difference would be measuring the dtype. These models are a few thousand parameters; fp32 costs nothing here.",
+  "fp16": { "enabled": false },
+  "bf16": { "enabled": false },
+
+  "_zero_comment": "Stage 0. The largest model here is ~68k parameters; sharding optimizer state across ranks would add communication to save kilobytes. The memory that actually matters is the O(list_len^2) activation of the groupwise scorers, which ZeRO does not touch.",
+  "zero_optimization": {
+    "stage": 0
+  },
+
+  "steps_per_print": 200,
+  "wall_clock_breakdown": false
+}
