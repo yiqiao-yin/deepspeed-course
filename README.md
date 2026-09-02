@@ -143,7 +143,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 20 suites, no GPU and no downloads
+./tests/run_all.sh                  # 21 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 

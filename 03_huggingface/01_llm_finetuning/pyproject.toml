@@ -25,8 +25,15 @@ dependencies = [
     "deepspeed>=0.14",
     "huggingface-hub>=0.23",
     "torch>=2.2",
-    "transformers>=4.40",
+    # GLM-5.3 (model_type glm_moe_dsa) needs >= 5.15. The lock already
+    # resolves 5.16.1; the floor is written down so the requirement survives a
+    # `uv lock --upgrade` and so a reader knows WHY it is high.
+    "transformers>=5.15",
     "trl>=0.9",
+    "datasets>=2.18",
+    # LoRA. train_glm53_ds.py adapts attention only — the 256 expert MLPs are
+    # 97% of GLM-5.3's parameters and are deliberately left frozen.
+    "peft>=0.10",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,31 @@
+{
+  "_comment": "GLM-5.3 LoRA fine-tuning. Values are 'auto' because a HuggingFace Trainer fills them from SFTConfig before DeepSpeed parses the file -- that is a Trainer convention, NOT a DeepSpeed feature. Calling deepspeed.initialize() directly with this file is a parse error. train_batch_size is omitted so any --num_gpus works.",
+
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+
+  "_precision_comment": "bf16, not fp16. GLM-5.3's router runs in float32 (moe_router_dtype in its config) and its |logit| range is wide; fp16's narrow exponent range makes router softmax overflow a real risk, and a router that saturates silently sends every token to the same expert. bf16 keeps fp32's exponent range.",
+  "bf16": { "enabled": "auto" },
+  "fp16": { "enabled": false },
+
+  "_zero_comment": "Stage 3 is not optional here. Stage 2 shards optimizer state and gradients but every rank still holds a FULL copy of the parameters -- 755 GB per GPU, which no card has. Only stage 3 shards the parameters themselves, so 8 ranks each hold ~94 GB.",
+  "zero_optimization": {
+    "stage": 3,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": "auto",
+    "stage3_prefetch_bucket_size": "auto",
+    "stage3_param_persistence_threshold": "auto",
+    "stage3_max_live_parameters": 1e9,
+    "stage3_max_reuse_distance": 1e9,
+    "stage3_gather_16bit_weights_on_model_save": true
+  },
+
+  "_save_comment": "stage3_gather_16bit_weights_on_model_save is REQUIRED with stage 3. Without it the checkpoint is written as per-rank shards that from_pretrained cannot load -- the run succeeds and the artefact is unusable, which is the failure mode this course keeps warning about. It lives at the top level because pydantic forbids extra fields inside the typed zero_optimization section.",
+
+  "_offload_comment": "Parameter offload to CPU is commented out rather than enabled. At 755 GB it is the difference between fitting on 8xH200 and not, but it moves every parameter across PCIe on every forward pass and is roughly an order of magnitude slower. Enable it deliberately, and never point NVMe offload at a network filesystem.",
+
+  "steps_per_print": 1,
+  "wall_clock_breakdown": false
+}

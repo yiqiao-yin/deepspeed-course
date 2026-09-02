@@ -39,6 +39,7 @@ TESTS=(
     tests/test_ocr_metrics.py
     tests/test_ranking_losses.py
     tests/test_groupwise_ranking.py
+    tests/test_glm53_arch.py
 )
 
 for test in "${TESTS[@]}"; do

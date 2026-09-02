@@ -91,6 +91,9 @@ jobs:
       - name: Groupwise ranking architectures
         run: uv run tests/test_groupwise_ranking.py
 
+      - name: GLM-5.3 architecture analysis and LoRA targeting
+        run: uv run tests/test_glm53_arch.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
