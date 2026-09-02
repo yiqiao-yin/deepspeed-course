@@ -374,6 +374,53 @@ def test_published_counts_are_current(r: Results) -> None:
             f"{len(diagram_pages)} pages carry a mermaid block")
 
 
+def test_readme_folder_tree(r: Results) -> None:
+    """
+    The README's folder tree must match the repository.
+
+    It had drifted three separate ways before this check existed: six paths
+    renamed by the section reorganisation, three examples added months earlier
+    and never listed, and files that no longer existed. A tree that is wrong is
+    worse than no tree, because it is the first thing a visitor reads and they
+    have no reason to doubt it.
+
+    Checked both directions -- nothing listed that is absent, nothing present
+    that is unlisted -- because either alone passes on a tree that is half
+    right.
+    """
+    import re
+
+    readme = (REPO_ROOT / "README.md").read_text()
+    if "## Folder Structure" not in readme:
+        r.check(False, "README has a Folder Structure section")
+        return
+
+    start = readme.index("## Folder Structure")
+    fence = readme.index("```", start)
+    tree = readme[fence:readme.index("```", fence + 3)]
+
+    # 1. every path the tree shows must exist
+    shown = {m for m in re.findall(r"([0-9]{2}_[a-z_0-9]+)/", tree)}
+    sections = {p.name for p in REPO_ROOT.glob("0[1-5]_*") if p.is_dir()}
+    topics = {t.name for sec in REPO_ROOT.glob("0[1-5]_*") if sec.is_dir()
+              for t in sec.iterdir() if t.is_dir() and t.name[:2].isdigit()}
+    ghosts = sorted(shown - sections - topics)
+    r.check(not ghosts,
+            "every folder in the README tree exists",
+            f"{ghosts} -- renamed or deleted without updating the tree")
+
+    # 2. every example must appear
+    absent = sorted(topics - shown)
+    r.check(not absent,
+            f"every example appears in the README tree ({len(topics)} examples)",
+            f"missing: {absent}")
+
+    # 3. and every section
+    missing_secs = sorted(sections - shown)
+    r.check(not missing_secs, "every section appears in the README tree",
+            f"missing: {missing_secs}")
+
+
 def main() -> int:
     r = Results("Docs site style — mermaid house theme and page structure")
     test_global_theme(r)
@@ -384,6 +431,7 @@ def main() -> int:
     test_referenced_tests_exist(r)
     test_suite_registration_is_complete(r)
     test_published_counts_are_current(r)
+    test_readme_folder_tree(r)
     return r.finish()
 
 

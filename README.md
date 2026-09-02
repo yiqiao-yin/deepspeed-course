@@ -85,7 +85,25 @@ See **[SECURITY.md](SECURITY.md)**.
 
 ### Package management: `uv`
 
-Every example uses [`uv`](https://docs.astral.sh/uv/) — not bare `pip` or conda.
+Every example uses [`uv`](https://docs.astral.sh/uv/) — not bare `pip` or conda —
+and **every example folder is a `uv` project with a committed `uv.lock`**. So
+after cloning, one command sets a folder up:
+
+```bash
+cd 01_basics/01_neuralnet
+uv sync                                   # creates .venv, installs the LOCKED versions
+uv run deepspeed --num_gpus=1 train_ds_enhanced.py
+```
+
+`uv run` uses the project environment directly, so there is no `activate` step.
+Add `uv sync --extra tracking` if you want Weights & Biases; it stays optional.
+
+The lock is the point: everyone who clones resolves to identical versions,
+instead of whatever `uv pip install` finds that day. Regenerate deliberately
+with `uv lock --upgrade`.
+
+<details>
+<summary>Manual route, without the project</summary>
 
 ```bash
 uv venv .venv && source .venv/bin/activate
@@ -93,25 +111,39 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cu128
 uv pip install deepspeed
 ```
 
+The `--index-url` is required: PyPI's default `torch` is a CUDA 13 wheel, and
+on a driver older than CUDA 13 it installs cleanly and then reports
+`cuda.is_available() == False`. Verified on a driver 550.127 box.
+</details>
+
 Each example folder's README has an **Environment & Local Testing** section with
 its exact dependencies, GPU requirement, and download size.
 
-All examples use DeepSpeed except `03_huggingface/09_multi_agency`, which drives
-TRL's `GRPOTrainer` directly and needs only `uv`.
+**Five examples deliberately skip the `deepspeed` launcher**, each for a stated
+reason — using a distributed launcher where there is nothing to distribute is
+cargo cult:
+
+| Example | Why |
+|---|---|
+| `03_huggingface/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
+| `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
+| `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
+| `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
+| `05_video_speech/04_omni_eval` | evaluation — modality-ablation `generate()` calls |
 
 ### What runs locally, and what does not
 
 | Examples | Scale | Can you run it on one machine? |
 |---|---|---|
-| `01`–`04` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
-| `05`–`09` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
+| `01_basics`, `02_intermediate` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
+| `03_huggingface`, `04_video_text`, `05_video_speech` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
 
 For the second group a full run is not a practical way to check a change. The
 repository therefore ships **logic tests** that exercise the code paths without a
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 125 checks, no GPU required
+./tests/run_all.sh                  # 18 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -126,162 +158,66 @@ See [`tests/README.md`](tests/README.md).
 
 ## Folder Structure 📁
 
+Five sections, each number used exactly once. Every example lives at
+`NN_section/NN_topic` and is self-contained — open one folder and run it
+without touching the rest.
+
 ```
 deepspeed-course/
-├── 01_basics/01_neuralnet/
-│   ├── train_ds.py                    # Basic neural network training
-│   ├── train_ds_enhanced.py           # Enhanced with W&B tracking
-│   ├── ds_config.json                 # DeepSpeed configuration
-│   ├── run_deepspeed.sh              # SLURM batch script
-│   └── README.md                      # Documentation
 │
-├── 01_basics/02_convnet/
-│   ├── train_ds.py                    # CNN training on synthetic MNIST
-│   ├── ds_config.json                 # DeepSpeed configuration
-│   ├── run_deepspeed.sh              # SLURM batch script
-│   └── README.md                      # Documentation
+├── 01_basics/             # Runs end to end on one machine, in seconds to minutes
+│   ├── 01_neuralnet/            # Fitting y = 2x + 1. Two parameters — the smallest real DeepSpeed run
+│   ├── 02_convnet/              # MNIST CNN — the first example with a real dataset
+│   ├── 03_convnet_cifar10/      # CIFAR-10: a documented failure-and-recovery, plus 3 modern nets at ~93%
+│   └── 04_rnn/                  # LSTM on sequence data
 │
-├── 01_basics/03_convnet_cifar10/
-│   ├── cifar10_deepspeed.py          # CIFAR-10 CNN (81% accuracy!)
-│   ├── ds_config.json                 # DeepSpeed config (SGD + BatchNorm)
-│   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
-│   ├── MODEL_IMPROVEMENT_STRATEGY.md  # Technical deep dive
-│   └── README.md                      # Comprehensive guide
+├── 02_intermediate/       # Still small, but the modelling questions get harder
+│   ├── 01_bayesian_neuralnet/   # Parallel-tempering MCMC — uncertainty, not point estimates
+│   └── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
 │
-├── 01_basics/04_rnn/
-│   ├── train_rnn_deepspeed.py        # LSTM time series prediction
-│   ├── ds_config_rnn.json            # DeepSpeed config (ZeRO-2 + FP16)
-│   ├── run_deepspeed.sh              # SLURM batch script
-│   └── README.md                      # Documentation with W&B guide
+├── 03_huggingface/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
+│   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point
+│   ├── 02_trl_sft/              # TRL supervised fine-tuning for function calling
+│   ├── 03_ocr/                  # Vision-language OCR + a measured comparison of 5 modern OCR models
+│   ├── 04_reward_model/         # Bradley-Terry reward modelling. This IS the RLHF pipeline
+│   ├── 05_dpo/                  # DPO and 5 descendants — deletes the REWARD MODEL
+│   ├── 06_grpo/                 # GRPO on GSM8K — deletes the CRITIC
+│   ├── 07_online_dpo/           # Online DPO, Nash-MD, XPO — re-adds sampling, needs a judge
+│   ├── 08_gpt_oss_lora/         # LoRA SFT of a 20B model
+│   └── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
 │
-├── 02_intermediate/01_bayesian_neuralnet/
-│   ├── parallel_tempering_mcmc.py    # Parallel tempering MCMC for Bayesian NNs
-│   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
-│   └── README.md                      # Bayesian inference with replica exchange
+├── 04_video_text/         # Video in, text out
+│   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers
+│   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME
+│   ├── 03_token_compression/    # ToMe, FastV, DyCoke — 'ZeRO for activations'
+│   ├── 04_streaming_memory/     # STAR: unbounded video in O(1) memory
+│   └── 05_video_eval/           # Did compression break understanding? Reports the TEMPORAL GAP
 │
-├── 02_intermediate/02_rnn_stock_data/
-│   ├── train_rnn_stock_data.py       # Single-machine stock RNN training
-│   ├── train_rnn_stock_data_ds.py    # DeepSpeed stock RNN with W&B
-│   ├── train_rnn_stock_data_config.json # DeepSpeed config (ZeRO-2 + FP16)
-│   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
-│   └── README.md                      # Stock prediction guide with uv setup
-│
-├── 03_huggingface/01_llm_finetuning/                    # HuggingFace examples
-├── 03_huggingface/02_trl_sft/                # TRL Function Calling with DeepSpeed
-│   ├── train_trl_deepspeed.py         # SFTTrainer with DeepSpeed + ZeRO-2
-│   ├── inference_trl_model.py         # Inference (sample/single/interactive modes)
-│   ├── ds_config.json                 # DeepSpeed config (batch_size=16, auto weight_decay)
-│   ├── run_deepspeed.sh               # SLURM batch script (2 GPUs)
-│   ├── tool_augmented_dataset.json    # Function calling training data
-│   └── README.md                      # Complete TRL + DeepSpeed guide
-│
-├── 03_huggingface/03_ocr/                # Vision-Language Model Fine-tuning
-│   ├── train_ds.py                    # Qwen2-VL OCR training (2x RTX 4000 GPUs)
-│   ├── submit_job.sh                  # SLURM batch script for CoreWeave
-│   ├── README.md                      # Complete uv setup guide with DeepSpeed
-│   └── HARDWARE_REQUIREMENTS.md       # GPU comparison table and recommendations
-│
-├── 03_huggingface/06_grpo/               # GRPO (Group Relative Policy Optimization)
-│   ├── grpo_gsm8k_train.py            # Memory-efficient GRPO training with LoRA
-│   ├── ds_config.json                 # DeepSpeed ZeRO-2 config (tested on RTX 3070 8GB)
-│   ├── run_deepspeed.sh               # SLURM batch script (CoreWeave/HPC clusters)
-│   ├── archive/                       # Experimental scripts and configs
-│   └── README.md                      # Complete guide: LoRA + DeepSpeed + W&B + ZeRO stages
-│
-├── 03_huggingface/08_gpt_oss_lora/  # SFT examples
-│   └── lora/                          # LoRA fine-tuning with PEFT
-│       ├── train_ds.py                # GPT-OSS-20B training (4x A100/RTX 4090)
-│       ├── train_ds_mistral7b.py      # Mistral-7B for 8GB GPUs (2x RTX 3070)
-│       ├── train_ds_h200.py           # Optimized for datacenter GPUs (H200/H100/RTX 5090)
-│       ├── ds_config.json             # DeepSpeed ZeRO-2 config with BF16
-│       ├── run_deepspeed.sh           # SLURM batch script (CoreWeave/HPC)
-│       ├── HARDWARE_GUIDE.md          # Hardware selection & comparison tables
-│       └── README.md                  # Complete guide: LoRA + DeepSpeed + W&B
-│
-├── 03_huggingface/09_multi_agency/   # Multi-agent systems
-│
-├── 04_video_text/                            # Video-Text-to-Text Training
-│   ├── README.md                      # The advanced track: why each subsection exists
-│   │
-│   ├── 01_qwen25vl_baseline/          # Modern baseline — a model that can represent TIME
-│   │   ├── train_qwen25vl.py          # Qwen2.5-VL + LoRA, dynamic FPS, absolute-time M-RoPE
-│   │   ├── ds_config.json             # ZeRO-3 (activations need the headroom)
-│   │   ├── run_deepspeed.sh           # SLURM batch script (CoreWeave/HPC)
-│   │   └── README.md
-│   │
-│   ├── 02_token_compression/          # "ZeRO for activations" — ToMe, FastV, DyCoke
-│   │   ├── token_compression.py       # The algorithms. Pure torch, CPU-runnable
-│   │   ├── train_compressed.py        # Measures REAL peak VRAM, on vs off
-│   │   ├── ds_config.json             # ZeRO-2 (isolates the sequence-length effect)
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   ├── 03_streaming_memory/           # Unbounded video in O(1) memory (STAR)
-│   │   ├── star_memory.py             # Four bounded buffers + weighted k-means
-│   │   ├── stream_infer.py            # 20,000 frames, context pinned at 306 tokens
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   ├── 04_video_eval/                 # Did compression break understanding?
-│   │   ├── video_mme_eval.py          # Video-MME-style harness; reports the TEMPORAL GAP
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   └── hf_ds_vtt_test2/               # Foundational example (LLaVA, 2024)
-│       ├── llava_video_trainer/       # Vision-language video understanding
-│       │   ├── video_training_script.py    # LLaVA 7B trainer (auto DeepSpeed config)
-│       │   ├── run_training.sh             # Multi-GPU launcher
-│       │   └── README.md                    # LLaVA guide with W&B tracking
-│       │
-│       ├── seq2seq_video_trainer/     # Text-to-text video metadata
-│       │   ├── video_text_trainer.py       # NLLB 600M trainer (external config)
-│       │   ├── ds_config.json              # DeepSpeed ZeRO-2 config
-│       │   ├── run_training.sh             # Multi-GPU launcher
-│       │   └── README.md                    # Seq2Seq guide
-│       │
-│       └── README.md                   # Comparison: LLaVA vs Seq2Seq
-│
-├── 05_video_speech/                            # Video-Speech-to-Speech — video AND audio in, speech out
-│   ├── README.md                      # The track, and the current model landscape
-│   │
-│   ├── 01_longcat_flash_omni/         # The frontier: 560B, ~3 TB host RAM
-│   │   ├── train_ds.py                # LongCat-Flash-Omni 560B training (8+ GPUs)
-│   │   ├── train_ds_2xB200.py         # Conservative config for 2x B200 GPUs
-│   │   ├── ds_config.json             # DeepSpeed ZeRO-3 standard config
-│   │   ├── ds_config_2xB200.json      # ZeRO-3 for 2x B200 (aggressive CPU offload)
-│   │   ├── run_2xB200.sh              # Automated launch script for 2x B200
-│   │   ├── check_storage.sh           # Storage verification utility
-│   │   ├── README.md                  # Complete guide: LongCat-Flash-Omni + LoRA
-│   │   ├── README_2xB200.md           # 2x B200 guide with memory analysis
-│   │   └── QUICKSTART_2xB200.md       # Quick start for 2x B200 setup
-│   │
-│   ├── 02_thinker_talker/             # Two streams onto ONE clock, then speech out
-│   │   ├── tmrope.py                  # The 40 ms shared clock. CPU-runnable, provable
-│   │   ├── train_omni.py              # Qwen2.5-Omni + LoRA, encoders frozen
-│   │   ├── ds_config.json             # ZeRO-3 (four models resident at once)
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   ├── 03_duplex_streaming/           # Listening AND watching while speaking
-│   │   ├── duplex.py                  # 480 ms slices, barge-in, ghost text, RTF
-│   │   ├── run_duplex.py              # Is it real-time? worst-case RTF, not mean
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   ├── 04_omni_eval/                  # Does it actually USE both streams?
-│   │   ├── omni_eval.py               # Ablation grid; reports the FUSION GAIN
-│   │   ├── run_deepspeed.sh
-│   │   └── README.md
-│   │
-│   └── data/                          # Shared corpus (44 MB), not duplicated per subtopic
-│       └── train/                     # 8 sample videos with audio I/O
-│           ├── 01/{in.mp4, in.wav, out.wav}
-│           └── ...
-│
-└── README.md                          # This file
+└── 05_video_speech/       # Video AND audio in, speech out
+    ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
+    ├── 02_thinker_talker/       # Two streams onto ONE 40 ms clock, then speech out
+    ├── 03_duplex_streaming/     # Listening and watching WHILE speaking
+    ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
+    └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
 ```
 
----
+**Every example folder has the same six files** (the contract in
+[CONTRIBUTING.md](CONTRIBUTING.md)), so this tree does not list them per folder:
+
+| File | Role |
+|---|---|
+| `train_*.py` | Entry point. Calls `deepspeed.initialize(...)`, starts with `require_gpu()` |
+| `ds_config*.json` | DeepSpeed config — ZeRO stage, precision, optimizer, batch sizes |
+| `run_deepspeed.sh` | SLURM batch script (`submit_job.sh` / `run_training.sh` in older folders) |
+| `README.md` | Standalone walkthrough: hardware, setup, run command, expected output |
+| `pyproject.toml` | Makes the folder a `uv` project |
+| `uv.lock` | **Committed**, so `cd <folder> && uv sync` works from a fresh clone |
+
+Some folders add `HARDWARE_REQUIREMENTS.md`, `MODEL_IMPROVEMENT_STRATEGY.md`, or
+extra scripts; those are documented in their own README.
+
+> Folder paths changed when the sections were introduced. [MOVED.md](MOVED.md)
+> maps every old path to its new one.
 
 ## CoreWeave vs RunPod: Understanding the Architectures
 
