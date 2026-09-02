@@ -6,8 +6,8 @@ runpod_ctl — find a GPU, start a pod, and run a course example on it.
 
     export RUNPOD_API_KEY=...                       # https://console.runpod.io/user/settings
     uv run runpod/runpod_ctl.py gpus --min-vram 24
-    uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
-    uv run runpod/runpod_ctl.py run 06_huggingface_grpo --yes
+    uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
+    uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --yes
     uv run runpod/runpod_ctl.py pods
     uv run runpod/runpod_ctl.py terminate <podId>
 
@@ -63,101 +63,99 @@ DEFAULT_IMAGE = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 
 # Per-example requirements. min_vram is per GPU, in GB.
 EXAMPLES = {
-    "01_basic_neuralnet": dict(min_vram=6, gpus=1, disk=20,
+    "01_basics/01_neuralnet": dict(min_vram=6, gpus=1, disk=20,
                                script="train_ds_enhanced.py", note="Trivial; any GPU."),
-    "02_basic_convnet": dict(min_vram=6, gpus=1, disk=20,
+    "01_basics/02_convnet": dict(min_vram=6, gpus=1, disk=20,
                              script="train_ds.py", note="Synthetic MNIST."),
-    "02_basic_convnet_cifar10_examples": dict(min_vram=8, gpus=1, disk=30,
+    "01_basics/03_convnet_cifar10": dict(min_vram=8, gpus=1, disk=30,
                                               script="cifar10_deepspeed.py",
                                               note="Downloads CIFAR-10 (~170 MB)."),
-    "03_basic_rnn": dict(min_vram=8, gpus=1, disk=20,
+    "01_basics/04_rnn": dict(min_vram=8, gpus=1, disk=20,
                          script="train_rnn_deepspeed.py", note="Small LSTM."),
-    "04_bayesian_neuralnet": dict(min_vram=8, gpus=2, disk=20,
+    "02_intermediate/01_bayesian_neuralnet": dict(min_vram=8, gpus=2, disk=20,
                                   script="parallel_tempering_mcmc.py",
                                   note="One temperature per rank; 2+ GPUs is the point."),
-    "04_intermediate_rnn_stock_data": dict(min_vram=8, gpus=1, disk=20,
+    "02_intermediate/02_rnn_stock_data": dict(min_vram=8, gpus=1, disk=20,
                                            script="train_rnn_stock_data_ds.py",
                                            note="Needs network egress for yfinance."),
-    "05_huggingface": dict(min_vram=24, gpus=2, disk=80,
+    "03_huggingface/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
                            script="train_ds.py",
                            note="HuggingFace LLM fine-tuning with ZeRO."),
-    "05_huggingface_trl": dict(min_vram=24, gpus=1, disk=60,
+    "03_huggingface/02_trl_sft": dict(min_vram=24, gpus=1, disk=60,
                                script="train_trl_deepspeed.py",
                                note="Qwen3-0.6B SFT."),
-    "05_huggingface_ocr": dict(min_vram=24, gpus=1, disk=60,
+    "03_huggingface/03_ocr": dict(min_vram=24, gpus=1, disk=60,
                                script="train_ds.py",
                                note="Qwen2-VL-2B; cap max_pixels to bound memory."),
-    "05_huggingface_dpo": dict(min_vram=24, gpus=1, disk=60,
+    "03_huggingface/05_dpo": dict(min_vram=24, gpus=1, disk=60,
                                script="train_dpo.py",
                                note="Offline PO: no generation, so far cheaper "
                                     "than GRPO. The reference model is the "
                                     "swing factor; LoRA removes it."),
-    "05_huggingface_reward_model": dict(min_vram=24, gpus=1, disk=60,
+    "03_huggingface/04_reward_model": dict(min_vram=24, gpus=1, disk=60,
                                         script="train_reward_model.py",
                                         note="Pairs mean 2x forward passes per "
                                              "batch; halve micro_batch vs SFT."),
-    "06_huggingface_grpo": dict(min_vram=24, gpus=1, disk=80,
+    "03_huggingface/06_grpo": dict(min_vram=24, gpus=1, disk=80,
                                 script="grpo_gsm8k_train.py",
                                 note="RL; memory driven by G rollouts."),
-    "06_huggingface_online_dpo": dict(min_vram=24, gpus=2, disk=80,
+    "03_huggingface/07_online_dpo": dict(min_vram=24, gpus=2, disk=80,
                                       script="train_online_dpo.py",
                                       note="Generates during training AND holds "
                                            "a judge: budget like GRPO."),
-    "07_huggingface_openai_gpt_oss_finetune_sft": dict(min_vram=80, gpus=4, disk=200,
+    "03_huggingface/08_gpt_oss_lora": dict(min_vram=80, gpus=4, disk=200,
                                                        script="lora/train_ds.py",
                                                        note="gpt-oss-20b MoE; ~40 GB of weights."),
-    "07_huggingface_trl_multi_agency": dict(min_vram=24, gpus=1, disk=60,
+    "03_huggingface/09_multi_agency": dict(min_vram=24, gpus=1, disk=60,
                                             script="train_grpo_math.py",
                                             launcher="python",
                                             note="Multi-agent GRPO. Uses TRL directly, "
                                                  "NOT the deepspeed launcher."),
-    "08_vtt": dict(min_vram=48, gpus=2, disk=120,
-                   script="hf_ds_vtt_test2/llava_video_trainer/video_training_script.py",
+    "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
+                   script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),
-    # --- 08_vtt advanced track -------------------------------------------
+    # --- 04_video_text advanced track -------------------------------------------
     # Nested paths are deliberate. These are SUBSECTIONS of topic 08, each
     # runnable on its own pod, so you can rent a cheap card for the
     # measurement sweep without paying for the 2x48GB the LLaVA baseline
     # needs. `folder = REPO_ROOT / name` handles the slash, and `bootstrap`
     # cd's into it the same way.
-    "08_vtt/01_qwen25vl_baseline": dict(min_vram=24, gpus=2, disk=100,
+    "04_video_text/02_qwen25vl": dict(min_vram=24, gpus=2, disk=100,
                                         script="train_qwen25vl.py",
                                         note="Qwen2.5-VL-3B + LoRA fits 16 GB; "
                                              "2 GPUs to exercise ZeRO-3."),
-    "08_vtt/02_token_compression": dict(min_vram=24, gpus=1, disk=60,
+    "04_video_text/03_token_compression": dict(min_vram=24, gpus=1, disk=60,
                                         script="train_compressed.py",
                                         note="ONE GPU on purpose — measures peak "
                                              "VRAM vs sequence length."),
-    "08_vtt/03_streaming_memory": dict(min_vram=24, gpus=1, disk=60,
+    "04_video_text/04_streaming_memory": dict(min_vram=24, gpus=1, disk=60,
                                        script="stream_infer.py",
                                        launcher="python",
                                        note="Streaming inference is sequential; "
                                             "the deepspeed launcher adds nothing."),
-    "08_vtt/04_video_eval": dict(min_vram=24, gpus=1, disk=60,
+    "04_video_text/05_video_eval": dict(min_vram=24, gpus=1, disk=60,
                                  script="video_mme_eval.py",
                                  launcher="python",
                                  note="Evaluation is generate() calls, not "
                                       "training. No launcher needed."),
-    "09_vss": dict(min_vram=180, gpus=2, disk=2000,
-                   script="01_longcat_flash_omni/train_ds_2xB200.py",
-                   note="NOT VIABLE on typical RunPod: needs ~3 TB HOST RAM."),
-    # --- 09_vss subtopics -------------------------------------------------
+
+    # --- 05_video_speech subtopics -------------------------------------------------
     # Video-speech-to-speech: video AND audio in, speech out. The frontier
     # model above is not rentable; these three are, which is the point of
     # splitting them out.
-    "09_vss/01_longcat_flash_omni": dict(min_vram=180, gpus=2, disk=2000,
+    "05_video_speech/01_longcat_omni": dict(min_vram=180, gpus=2, disk=2000,
                                          script="train_ds_2xB200.py",
-                                         note="560B. Same host-RAM wall as 09_vss."),
-    "09_vss/02_thinker_talker": dict(min_vram=24, gpus=2, disk=120,
+                                         note="560B. Same host-RAM wall as 05_video_speech."),
+    "05_video_speech/02_thinker_talker": dict(min_vram=24, gpus=2, disk=120,
                                      script="train_omni.py",
                                      note="Qwen2.5-Omni-3B + LoRA fits 24GB; "
                                           "two streams make the sequence long."),
-    "09_vss/03_duplex_streaming": dict(min_vram=24, gpus=1, disk=80,
+    "05_video_speech/03_duplex_streaming": dict(min_vram=24, gpus=1, disk=80,
                                        script="run_duplex.py",
                                        launcher="python",
                                        note="Duplex inference is sequential; "
                                             "the deepspeed launcher adds nothing."),
-    "09_vss/04_omni_eval": dict(min_vram=24, gpus=1, disk=80,
+    "05_video_speech/04_omni_eval": dict(min_vram=24, gpus=1, disk=80,
                                 script="omni_eval.py",
                                 launcher="python",
                                 note="generate() calls, not training. "
@@ -274,14 +272,14 @@ def cmd_recommend(args):
     print(f"\n  Suggested: {best['id']}  "
           f"(~${best['price'] * spec['gpus']:.2f}/hr for {spec['gpus']} GPU)")
     print(f"\n  uv run runpod/runpod_ctl.py run {args.example} --yes")
-    # Only the LongCat subtopic hits the host-RAM wall. The other 09_vss
+    # Only the LongCat subtopic hits the host-RAM wall. The other 05_video_speech
     # subtopics are ordinary 24 GB jobs and must NOT inherit this warning,
     # or readers will assume the whole topic is unrentable and skip it.
-    if args.example in ("09_vss", "09_vss/01_longcat_flash_omni"):
+    if args.example in ("05_video_speech", "05_video_speech/01_longcat_omni"):
         print("\n  WARNING: this example needs ~3 TB of HOST RAM, which RunPod pods")
         print("  do not normally provide. GPU VRAM alone is not sufficient.")
-        print("  The other 09_vss subtopics run fine on a single 24 GB card:")
-        print("      uv run runpod/runpod_ctl.py recommend 09_vss/02_thinker_talker")
+        print("  The other 05_video_speech subtopics run fine on a single 24 GB card:")
+        print("      uv run runpod/runpod_ctl.py recommend 05_video_speech/02_thinker_talker")
     return 0
 
 
@@ -573,8 +571,8 @@ def cmd_smoke(args):
     independent, so one failure does not block the rest.
     """
     targets = args.examples or [
-        "01_basic_neuralnet", "02_basic_convnet",
-        "02_basic_convnet_cifar10_examples", "03_basic_rnn",
+        "01_basics/01_neuralnet", "01_basics/02_convnet",
+        "01_basics/03_convnet_cifar10", "01_basics/04_rnn",
     ]
     unknown = [t for t in targets if t not in EXAMPLES]
     if unknown:

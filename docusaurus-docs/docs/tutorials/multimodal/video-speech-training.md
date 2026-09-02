@@ -6,14 +6,14 @@ sidebar_position: 2
 
 Fine-tuning **LongCat-Flash-Omni**, a 560-billion-parameter omni-modal model, for video-speech-to-speech on two GPUs. This is the largest example in the course, and the only one where DeepSpeed is not an optimization but the sole reason the run is possible at all.
 
-**Model:** `meituan-longcat/LongCat-Flash-Omni` · **Example:** `09_vss`
+**Model:** `meituan-longcat/LongCat-Flash-Omni` · **Example:** `05_video_speech`
 
 ## 1. The Task
 
 Video-speech-to-speech: given a video **and** a spoken utterance, produce a spoken response. The dataset layout makes the structure explicit:
 
 ```
-09_vss/data/train/
+05_video_speech/data/train/
 ├── 01/
 │   ├── in.mp4     # or in.MOV — visual context
 │   ├── in.wav     # input speech
@@ -92,7 +92,7 @@ Expected per-GPU usage from the example's own analysis: ~110 GB of 192 GB, leavi
 ## 3. Quick Start
 
 ```bash
-cd 09_vss
+cd 05_video_speech
 
 ./check_storage.sh      # verify disk before downloading ~1.1 TB
 ./run_2xB200.sh         # preflight checks, then launch

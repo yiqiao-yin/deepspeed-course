@@ -369,7 +369,7 @@ If you observe response length climbing while accuracy plateaus, suspect the $1/
 ### 8.1 Quick start
 
 ```bash
-cd 06_huggingface_grpo
+cd 03_huggingface/06_grpo
 
 # SLURM (CoreWeave / HPC)
 sbatch run_deepspeed.sh

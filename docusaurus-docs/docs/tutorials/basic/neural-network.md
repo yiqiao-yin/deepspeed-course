@@ -463,7 +463,7 @@ Its Hessian is constant, $\mathbf{H} = \tfrac{2}{n}\mathbf{X}^\top\mathbf{X}$, s
 ### 8.1 Quick start
 
 ```bash
-cd 01_basic_neuralnet
+cd 01_basics/01_neuralnet
 
 # Single GPU
 deepspeed --num_gpus=1 train_ds.py

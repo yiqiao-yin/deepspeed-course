@@ -7,7 +7,7 @@ sidebar_position: 2
 The most direct HuggingFace example in the course: supervised fine-tuning of a
 Llama-3.2 model on a domain corpus with TRL's `SFTTrainer` and DeepSpeed ZeRO-1.
 
-**Model:** `unsloth/Llama-3.2-3B-Instruct` · **Example:** `05_huggingface`
+**Model:** `unsloth/Llama-3.2-3B-Instruct` · **Example:** `03_huggingface/01_llm_finetuning`
 
 :::info Where this sits
 This is the *plainest* configuration in the HuggingFace group — no LoRA, no RL,
@@ -44,7 +44,7 @@ Swapping either is a one-line change, which makes this a good template.
 ## 2. Quick Start
 
 ```bash
-cd 05_huggingface
+cd 03_huggingface/01_llm_finetuning
 
 export HF_TOKEN=...          # required — Llama is a gated model
 sbatch run_deepspeed.sh      # SLURM / CoreWeave
@@ -139,12 +139,12 @@ If you only have one GPU, the honest options are the 1B model, LoRA, or
 [renting hardware](/docs/guides/runpod-setup#2a-provisioning-from-the-command-line):
 
 ```bash
-uv run runpod/runpod_ctl.py recommend 05_huggingface
+uv run runpod/runpod_ctl.py recommend 03_huggingface/01_llm_finetuning
 ```
 
 ## 5. Pinned Dependencies
 
-Unusually for this repository, `05_huggingface` ships a `requirements.txt` with
+Unusually for this repository, `03_huggingface/01_llm_finetuning` ships a `requirements.txt` with
 exact pins:
 
 ```

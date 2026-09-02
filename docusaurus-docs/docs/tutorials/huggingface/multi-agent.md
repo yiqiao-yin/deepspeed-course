@@ -6,7 +6,7 @@ sidebar_position: 12
 
 An **exploratory** example: multiple prompt-conditioned agents sharing one set of weights, trained with GRPO on mathematical reasoning.
 
-**Model:** Qwen-1.5B · **Example:** `07_huggingface_trl_multi_agency`
+**Model:** Qwen-1.5B · **Example:** `03_huggingface/09_multi_agency`
 
 :::warning Read this as a research sketch, not a recipe
 This is an exploratory example rather than a validated pipeline. The value is in the design questions it raises. If you want a production GRPO setup, use [GRPO Training](/docs/tutorials/huggingface/grpo-training).
@@ -73,7 +73,7 @@ Conditioning each rollout on a *different instruction* induces diversity at the 
 ## 2. Quick Start
 
 ```bash
-cd 07_huggingface_trl_multi_agency
+cd 03_huggingface/09_multi_agency
 
 python main.py              # synthetic data
 python train_grpo_math.py   # GSM8K-style data

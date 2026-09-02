@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "02_basic_convnet_cifar10_examples"))
+sys.path.insert(0, str(REPO_ROOT / "01_basics/03_convnet_cifar10"))
 
 from modern_cifar_models import (  # noqa: E402
     CifarNet, FrozenScaleBatchNorm, MODELS, ResNet9, WideResNet,

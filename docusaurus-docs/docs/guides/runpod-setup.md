@@ -65,8 +65,8 @@ example on it, and shut it down without touching the web console.
 export RUNPOD_API_KEY=...        # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24        # live catalogue + prices
-uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
-uv run runpod/runpod_ctl.py run 06_huggingface_grpo --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
+uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                      # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>
 ```
@@ -77,7 +77,7 @@ Stdlib only — `uv run` handles everything, nothing to install.
 lists the cheapest GPUs that satisfy them:
 
 ```
-06_huggingface_grpo
+03_huggingface/06_grpo
   Needs: >= 24 GB VRAM x 1 GPU, 80 GB disk
 
   Cheapest options (1 GPU(s), on-demand):
@@ -89,7 +89,7 @@ lists the cheapest GPUs that satisfy them:
 ### The one-liner: launch, collect, shut down
 
 ```bash
-uv run runpod/runpod_ctl.py run 06_huggingface_grpo \
+uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo \
     --dry-run --collect --wait --terminate --yes
 ```
 
@@ -102,7 +102,7 @@ out, or you press Ctrl-C, because the termination sits in a `finally` block.
   [2/6] repo cloned               [5/6] env captured
   [3/6] uv installed: 0.12.7      [6/6] DONE rc=0 — log attached
 
-  saved runpod/results/dsc-.../01_basic_neuralnet.log  (21830 bytes)
+  saved runpod/results/dsc-.../01_basics/01_neuralnet.log  (21830 bytes)
   Terminating uiufbvb9knxhg3 ... terminated
   pods still running: 0 (none)
 ```
@@ -156,7 +156,7 @@ backstop.
 ### Validating several topics at once
 
 ```bash
-uv run runpod/runpod_ctl.py smoke 01_basic_neuralnet 03_basic_rnn 06_huggingface_grpo
+uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_huggingface/06_grpo
 #   Combined burn rate: ~$0.48/hour
 #   Refusing without --yes.
 ```
@@ -190,7 +190,7 @@ uv run runpod/runpod_ctl.py pods        # should say "Nothing is billing."
 500 *"no instances currently available"*. The tool reports that as a plain
 message with alternatives; nothing is created and nothing is billed.
 
-**`09_vss` cannot run on RunPod.** It needs roughly **3 TB of host RAM**, which
+**`05_video_speech` cannot run on RunPod.** It needs roughly **3 TB of host RAM**, which
 pods do not provide. VRAM is not the binding constraint there.
 :::
 
@@ -235,7 +235,7 @@ Note the base images normally ship PyTorch already, so install `deepspeed` on to
 No queue, no submission:
 
 ```bash
-cd /workspace/deepspeed-course/01_basic_neuralnet
+cd /workspace/deepspeed-course/01_basics/01_neuralnet
 
 deepspeed --num_gpus=1 train_ds.py
 deepspeed --num_gpus=4 train_ds.py
@@ -262,7 +262,7 @@ tmux attach -t train
 jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
 ```
 
-Expose port 8888 in the pod configuration. Good for the notebook examples in `05_huggingface_trl`; less good for long training runs, where a dropped browser connection can interrupt the kernel.
+Expose port 8888 in the pod configuration. Good for the notebook examples in `03_huggingface/02_trl_sft`; less good for long training runs, where a dropped browser connection can interrupt the kernel.
 
 ## 5. Cost Discipline
 

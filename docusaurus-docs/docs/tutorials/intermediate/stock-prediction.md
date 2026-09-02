@@ -70,7 +70,7 @@ flowchart TB
 ## 2. Quick Start
 
 ```bash
-cd 04_intermediate_rnn_stock_data
+cd 02_intermediate/02_rnn_stock_data
 
 # SLURM (CoreWeave / HPC)
 sbatch run_deepspeed.sh
@@ -426,7 +426,7 @@ For $q, h$ with unit-variance components, $q^\top h$ has variance $d$. The softm
 | 128 | 0.8965 | 0.2539 |
 | 512 | 0.9412 | 0.2450 |
 
-Reproduce with `uv run 04_intermediate_rnn_stock_data/attention_layers.py`.
+Reproduce with `uv run 02_intermediate/02_rnn_stock_data/attention_layers.py`.
 
 ### Causal masking: needed less often than you would think
 
@@ -438,7 +438,7 @@ It becomes **required** the moment you add per-timestep losses, autoregressive m
 
 ### Three architectures, and a fourth that is not an RNN
 
-[`train_rnn_attention.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_intermediate_rnn_stock_data/train_rnn_attention.py) implements six models behind one `--model` flag, sharing the data pipeline, the split-then-scale discipline and the metrics — so only the architecture varies.
+[`train_rnn_attention.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/02_intermediate/02_rnn_stock_data/train_rnn_attention.py) implements six models behind one `--model` flag, sharing the data pipeline, the split-then-scale discipline and the metrics — so only the architecture varies.
 
 | `--model` | What it is |
 |---|---|
@@ -483,7 +483,7 @@ Had this page reported "we added attention and RMSE improved" without the persis
 Interpretability. The weights $\alpha_t$ say which of the sixty days the model used, and unlike most settings you can look at them:
 
 ```bash
-uv run 04_intermediate_rnn_stock_data/train_rnn_attention.py --model lstm_attn
+uv run 02_intermediate/02_rnn_stock_data/train_rnn_attention.py --model lstm_attn
 # ... prints the mean attention mass over the 60-day window, oldest to newest
 ```
 
@@ -503,7 +503,7 @@ In rough order of expected value:
 The mechanisms need no GPU and no download:
 
 ```bash
-uv run 04_intermediate_rnn_stock_data/attention_layers.py   # the demos above
+uv run 02_intermediate/02_rnn_stock_data/attention_layers.py   # the demos above
 uv run tests/test_attention_layers.py                       # 49 checks
 ```
 

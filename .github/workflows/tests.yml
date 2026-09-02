@@ -88,8 +88,8 @@ jobs:
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
-            01_basic_neuralnet 02_basic_convnet 02_basic_convnet_cifar10_examples \
-            03_basic_rnn 04_bayesian_neuralnet 04_intermediate_rnn_stock_data \
-            05_huggingface 05_huggingface_ocr 05_huggingface_trl \
-            06_huggingface_grpo 07_huggingface_openai_gpt_oss_finetune_sft \
-            07_huggingface_trl_multi_agency 08_vtt 09_vss tests
+            01_basics/01_neuralnet 01_basics/02_convnet 01_basics/03_convnet_cifar10 \
+            01_basics/04_rnn 02_intermediate/01_bayesian_neuralnet 02_intermediate/02_rnn_stock_data \
+            03_huggingface/01_llm_finetuning 03_huggingface/03_ocr 03_huggingface/02_trl_sft \
+            03_huggingface/06_grpo 03_huggingface/08_gpt_oss_lora \
+            03_huggingface/09_multi_agency 04_video_text 05_video_speech tests

@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "05_huggingface_reward_model"))
+sys.path.insert(0, str(REPO_ROOT / "03_huggingface/04_reward_model"))
 
 from reward_modeling import bradley_terry_loss, is_shift_invariant  # noqa: E402
 

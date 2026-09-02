@@ -12,7 +12,7 @@ There is a gap between those two, and it is where a lot of practical alignment
 lives: you want fresh on-policy samples, but you have **no verifier** — only a
 judge that can say which of two responses is better.
 
-**Example folder:** [`06_huggingface_online_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/06_huggingface_online_dpo) — `--method online_dpo|nash_md|xpo`, ZeRO-3 because it generates during training.
+**Example folder:** [`03_huggingface/07_online_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/03_huggingface/07_online_dpo) — `--method online_dpo|nash_md|xpo`, ZeRO-3 because it generates during training.
 
 **TRL trainers:** `OnlineDPOTrainer`, `NashMDTrainer`, `XPOTrainer`
 
@@ -180,7 +180,7 @@ As of TRL 1.12 they live under `trl.experimental.<method>`, alongside
 `ImportError: cannot import name 'OnlineDPOConfig' from 'trl'` — verified on
 trl 1.12.0.
 
-`06_huggingface_online_dpo/train_online_dpo.py` tries the stable location and
+`03_huggingface/07_online_dpo/train_online_dpo.py` tries the stable location and
 falls back to the experimental one, so it works across both. If you are writing
 your own, do the same rather than pinning to whichever is current today:
 
@@ -208,7 +208,7 @@ trainer.train()
 **Memory.** You are holding the policy, the reference model, *and* whatever
 plays the judge, plus a generation buffer. Budget as you would for
 [GRPO](./grpo-training.md) rather than for offline DPO — the ZeRO reasoning in
-[`06_huggingface_grpo/ds_config.json`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/06_huggingface_grpo/ds_config.json)
+[`03_huggingface/06_grpo/ds_config.json`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/03_huggingface/06_grpo/ds_config.json)
 transfers directly.
 
 ## 8. Next

@@ -16,7 +16,7 @@ set -uo pipefail
 GPUS="${1:-1}"
 PAGES="${2:-16}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$HERE/05_huggingface_ocr"
+DIR="$HERE/03_huggingface/03_ocr"
 LOG="${VERIFY_LOG:-/tmp/verify_05_ocr.log}"
 exec > >(tee "$LOG") 2>&1
 export HF_HOME="${HF_HOME:-/workspace/hf_cache}"

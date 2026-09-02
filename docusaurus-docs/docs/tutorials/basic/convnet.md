@@ -777,7 +777,7 @@ This example demonstrates:
 ### Quick Start
 
 ```bash
-cd 02_basic_convnet
+cd 01_basics/02_convnet
 
 # Single GPU
 deepspeed --num_gpus=1 train_ds.py

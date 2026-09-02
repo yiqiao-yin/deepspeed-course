@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Multi-GPU smoke test for every script in 04_intermediate_rnn_stock_data.
+# Multi-GPU smoke test for every script in 02_intermediate/02_rnn_stock_data.
 #
 #     bash tests/gpu/verify_04_multi_gpu.sh [num_gpus]     # default 2
 #
@@ -29,7 +29,7 @@ set -uo pipefail          # NOT -e: one failing step must not abort the sweep
 
 GPUS="${1:-2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$HERE/04_intermediate_rnn_stock_data"
+DIR="$HERE/02_intermediate/02_rnn_stock_data"
 LOG="${VERIFY_LOG:-/tmp/verify_04.log}"
 CFG="train_rnn_stock_data_config.json"
 
@@ -57,7 +57,7 @@ fi
 
 VISIBLE=$("$PY_BIN" -c "import torch;print(torch.cuda.device_count())")
 echo "=============================================================================="
-echo "  04_intermediate_rnn_stock_data — multi-GPU smoke test"
+echo "  02_intermediate/02_rnn_stock_data — multi-GPU smoke test"
 echo "=============================================================================="
 "$PY_BIN" - <<'PY'
 import torch

@@ -14,7 +14,7 @@ and §8 of that page measures six RNN and attention architectures against it. **
 
 This page takes that result seriously and asks the follow-up: if attention over an RNN is not the answer, what is? Two directions, both measured.
 
-**Example folder:** [`04_intermediate_rnn_stock_data/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/04_intermediate_rnn_stock_data) — `modern_ts_layers.py`, `tokenize_series.py`, `train_modern_ts.py`, `train_token_lm.py`
+**Example folder:** [`02_intermediate/02_rnn_stock_data/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/02_intermediate/02_rnn_stock_data) — `modern_ts_layers.py`, `tokenize_series.py`, `train_modern_ts.py`, `train_token_lm.py`
 
 ## 1. Why the Previous Result Was About the Setup, Not the Models
 
@@ -34,7 +34,7 @@ Not *"which architecture wins?"* — that has no stable answer. But *"at what ho
 `modern_ts_layers.py` implements each as its actual mechanism. All CPU-runnable:
 
 ```bash
-uv run 04_intermediate_rnn_stock_data/modern_ts_layers.py
+uv run 02_intermediate/02_rnn_stock_data/modern_ts_layers.py
 ```
 
 ### N-BEATS — the constraint is the point
@@ -166,7 +166,7 @@ This is not a stretched analogy. It is what real systems do:
 With $B$ bins you can never predict better than half a bin width. Run the diagnostic **before** building anything:
 
 ```bash
-uv run 04_intermediate_rnn_stock_data/train_token_lm.py --floor-only
+uv run 02_intermediate/02_rnn_stock_data/train_token_lm.py --floor-only
 ```
 
 ### The result that matters — and it is not about resolution
@@ -262,15 +262,15 @@ uv pip install deepspeed yfinance pandas scikit-learn
 **CPU, no download** — the primitives and the diagnostic:
 
 ```bash
-uv run 04_intermediate_rnn_stock_data/modern_ts_layers.py
-uv run 04_intermediate_rnn_stock_data/tokenize_series.py
+uv run 02_intermediate/02_rnn_stock_data/modern_ts_layers.py
+uv run 02_intermediate/02_rnn_stock_data/tokenize_series.py
 uv run tests/test_ts_forecasting.py          # 74 checks
 ```
 
 **CoreWeave / SLURM:**
 
 ```bash
-cd 04_intermediate_rnn_stock_data
+cd 02_intermediate/02_rnn_stock_data
 MODEL=nbeats sbatch run_deepspeed.sh
 sbatch run_deepspeed.sh --max-steps 20        # cheap dry run
 ```
@@ -279,7 +279,7 @@ sbatch run_deepspeed.sh --max-steps 20        # cheap dry run
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 04_intermediate_rnn_stock_data \
+uv run runpod/runpod_ctl.py run 02_intermediate/02_rnn_stock_data \
     --dry-run --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods       # confirm: "Nothing is billing."
 ```

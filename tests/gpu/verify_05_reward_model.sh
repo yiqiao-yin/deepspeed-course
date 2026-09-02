@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Multi-GPU smoke test for 05_huggingface_reward_model.
+# Multi-GPU smoke test for 03_huggingface/04_reward_model.
 #
 #     bash tests/gpu/verify_05_reward_model.sh [num_gpus]      # default 2
 #
@@ -28,7 +28,7 @@ set -uo pipefail
 
 GPUS="${1:-2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$HERE/05_huggingface_reward_model"
+DIR="$HERE/03_huggingface/04_reward_model"
 LOG="${VERIFY_LOG:-/tmp/verify_05.log}"
 
 PY_BIN="${PYTHON:-}"
@@ -49,7 +49,7 @@ fi
 VISIBLE=$("$PY_BIN" -c "import torch;print(torch.cuda.device_count())")
 
 echo "=============================================================================="
-echo "  05_huggingface_reward_model — multi-GPU smoke test"
+echo "  03_huggingface/04_reward_model — multi-GPU smoke test"
 echo "=============================================================================="
 "$PY_BIN" - <<'PY'
 import torch

@@ -7,7 +7,7 @@ sidebar_position: 3
 A CNN on real image data — and, more usefully, a documented **failure-and-recovery case study**: a run that produced `NaN` and 10.07% accuracy (exactly chance on 10 classes), diagnosed to root cause, and repaired to 81.07%.
 
 :::info Why this page is structured around a bug
-Most tutorials show the configuration that works. This example is more valuable for the configuration that *didn't*, because the failure was overdetermined — gradient explosion, FP16 overflow, and an unnormalized architecture reinforcing each other — and untangling it exercises exactly the diagnostic skills that transfer to larger runs. The full engineering log is in `02_basic_convnet_cifar10_examples/MODEL_IMPROVEMENT_STRATEGY.md`.
+Most tutorials show the configuration that works. This example is more valuable for the configuration that *didn't*, because the failure was overdetermined — gradient explosion, FP16 overflow, and an unnormalized architecture reinforcing each other — and untangling it exercises exactly the diagnostic skills that transfer to larger runs. The full engineering log is in `01_basics/03_convnet_cifar10/MODEL_IMPROVEMENT_STRATEGY.md`.
 
 This page assumes [Basic ConvNet](/docs/tutorials/basic/convnet) for the convolution and BatchNorm mechanics.
 :::
@@ -29,7 +29,7 @@ It is a deceptively hard benchmark for its size. At 32×32 the images are small 
 ## 2. Quick Start
 
 ```bash
-cd 02_basic_convnet_cifar10_examples
+cd 01_basics/03_convnet_cifar10
 
 # SLURM (CoreWeave / HPC) — the batch script requests 2 GPUs
 sbatch run_deepspeed.sh
@@ -183,7 +183,7 @@ The extra $0.5$ on FC weights is a belt-and-braces measure that lowers the start
 
 ## 5. The Working Configuration
 
-This is the configuration in the repository — `02_basic_convnet_cifar10_examples/ds_config.json`, verbatim:
+This is the configuration in the repository — `01_basics/03_convnet_cifar10/ds_config.json`, verbatim:
 
 ```json
 {
@@ -367,12 +367,12 @@ One caveat worth knowing: weight decay applied to BatchNorm's $\gamma$ and $\bet
 The table above is a list of *expected* gains. This section is what the
 repository actually observed when those changes were implemented and run.
 
-`02_basic_convnet_cifar10_examples/train_modern_cifar10.py` trains three
+`01_basics/03_convnet_cifar10/train_modern_cifar10.py` trains three
 architectures on the same DeepSpeed setup, changing only the model and the
 recipe:
 
 ```bash
-cd 02_basic_convnet_cifar10_examples
+cd 01_basics/03_convnet_cifar10
 uv sync
 uv run train_modern_cifar10.py --list-models          # no GPU needed
 deepspeed --num_gpus=2 train_modern_cifar10.py --model cifarnet --epochs 64

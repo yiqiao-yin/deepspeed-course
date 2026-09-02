@@ -10,7 +10,7 @@ Compression is lossy by construction, and the loss curve will not warn you. A mo
 
 > Training loss measures fit to your data. It cannot measure whether you deleted the evidence.
 
-**Example:** `08_vtt/04_video_eval`
+**Example:** `04_video_text/05_video_eval`
 
 ## 1. The Failure Mode That Shapes Everything Here
 
@@ -146,7 +146,7 @@ Mis-bucketing a temporal question as single-frame **inflates** the single-frame 
 ## 5. Runs on CPU
 
 ```bash
-uv run 08_vtt/04_video_eval/video_mme_eval.py --dry-run   # the chance baseline
+uv run 04_video_text/05_video_eval/video_mme_eval.py --dry-run   # the chance baseline
 uv run tests/test_video_eval.py                           # 39 checks
 ```
 
@@ -163,7 +163,7 @@ uv pip install deepspeed transformers accelerate opencv-python-headless
 **CoreWeave / any SLURM cluster:**
 
 ```bash
-cd 08_vtt/04_video_eval
+cd 04_video_text/05_video_eval
 sbatch run_deepspeed.sh
 MODEL=Qwen/Qwen2.5-VL-7B-Instruct DATASET=videomme.json sbatch run_deepspeed.sh
 ```
@@ -174,7 +174,7 @@ The script runs the chance baseline **first**, then sweeps frame budgets (8, 16,
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 08_vtt/04_video_eval \
+uv run runpod/runpod_ctl.py run 04_video_text/05_video_eval \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```

@@ -8,7 +8,7 @@ Everything in the next four pages is defined by **what it deletes from this
 pipeline**. So it is worth building the pipeline first, even though almost
 nobody runs it in full any more.
 
-**Example folder:** [`05_huggingface_reward_model/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/05_huggingface_reward_model) — `RewardTrainer` + DeepSpeed, plus `reward_modeling.py` (the Bradley-Terry objective on plain tensors, no GPU).
+**Example folder:** [`03_huggingface/04_reward_model/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/03_huggingface/04_reward_model) — `RewardTrainer` + DeepSpeed, plus `reward_modeling.py` (the Bradley-Terry objective on plain tensors, no GPU).
 
 **TRL trainers:** `RewardTrainer`, `PPOTrainer`
 
@@ -194,7 +194,7 @@ trainer.train()
 ```
 
 For the DeepSpeed side, the same ZeRO reasoning as
-[`06_huggingface_grpo/ds_config.json`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/06_huggingface_grpo/ds_config.json)
+[`03_huggingface/06_grpo/ds_config.json`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/03_huggingface/06_grpo/ds_config.json)
 applies — with the caveat that only the policy and critic are *trainable*, so
 sharding the frozen models buys you nothing beyond their fp16 weights.
 

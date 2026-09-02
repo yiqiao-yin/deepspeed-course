@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "09_vss" / "03_duplex_streaming"))
+sys.path.insert(0, str(REPO_ROOT / "05_video_speech" / "03_duplex_streaming"))
 
 from duplex import (  # noqa: E402
     DEFAULT_BARGE_IN_SLICES,

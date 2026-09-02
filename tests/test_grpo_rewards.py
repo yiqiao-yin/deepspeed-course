@@ -9,7 +9,7 @@ Run:
 
 Background
 ----------
-`07_huggingface_trl_multi_agency` had three related problems.
+`03_huggingface/09_multi_agency` had three related problems.
 
 1. It loaded AutoModelForCausalLMWithValueHead. The value head is a CRITIC —
    a PPO construct. GRPO exists precisely to remove the critic, replacing the
@@ -33,8 +33,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results, load_function, source_code_contains, source_contains  # noqa: E402
 
-MAIN = "07_huggingface_trl_multi_agency/main.py"
-MATH = "07_huggingface_trl_multi_agency/train_grpo_math.py"
+MAIN = "03_huggingface/09_multi_agency/main.py"
+MATH = "03_huggingface/09_multi_agency/train_grpo_math.py"
 
 
 def main() -> int:

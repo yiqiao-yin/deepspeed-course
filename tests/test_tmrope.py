@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "09_vss" / "02_thinker_talker"))
+sys.path.insert(0, str(REPO_ROOT / "05_video_speech" / "02_thinker_talker"))
 
 from tmrope import (  # noqa: E402
     CHUNK_SECONDS,

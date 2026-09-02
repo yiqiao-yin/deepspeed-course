@@ -6,7 +6,7 @@ sidebar_position: 3
 
 Supervised fine-tuning of Qwen3-0.6B for tool use with TRL's `SFTTrainer` and DeepSpeed ZeRO-2 — and the two details that decide whether SFT works: **chat templates** and **completion-only loss masking**.
 
-**Model:** `Qwen/Qwen3-0.6B` · **Task:** emit well-formed tool calls · **Example:** `05_huggingface_trl`
+**Model:** `Qwen/Qwen3-0.6B` · **Task:** emit well-formed tool calls · **Example:** `03_huggingface/02_trl_sft`
 
 ## 1. What Function Calling Is
 
@@ -42,7 +42,7 @@ The learning problem is narrower than it looks. A base model already knows what 
 ## 2. Quick Start
 
 ```bash
-cd 05_huggingface_trl
+cd 03_huggingface/02_trl_sft
 
 # Training (2 GPUs)
 deepspeed --num_gpus=2 train_trl_deepspeed.py

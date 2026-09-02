@@ -6,8 +6,8 @@ Rent a GPU, run a course example on it, and shut it down — from the command li
 export RUNPOD_API_KEY=...          # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24      # what's available, live prices
-uv run runpod/runpod_ctl.py recommend 06_huggingface_grpo
-uv run runpod/runpod_ctl.py run 06_huggingface_grpo --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
+uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                    # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>       # stop paying
 ```
@@ -38,7 +38,7 @@ Stdlib only — no dependencies. `uv run` handles the interpreter.
 in a `finally` block, so a crash, a network failure or Ctrl-C still terminates it:
 
 ```bash
-uv run runpod/runpod_ctl.py run 01_basic_neuralnet \
+uv run runpod/runpod_ctl.py run 01_basics/01_neuralnet \
     --dry-run --collect --wait --terminate --yes
 ```
 
@@ -82,7 +82,7 @@ introspection (no log/output/console field on any type). The pod cannot be read
 from, so it has to **push**.
 
 ```bash
-uv run runpod/runpod_ctl.py run 01_basic_neuralnet --dry-run --collect --yes
+uv run runpod/runpod_ctl.py run 01_basics/01_neuralnet --dry-run --collect --yes
 # ... prints:  Results topic: dsc-c1b3231b898f4856af25
 
 uv run runpod/runpod_ctl.py fetch dsc-c1b3231b898f4856af25 --wait
@@ -96,7 +96,7 @@ uv run runpod/runpod_ctl.py fetch dsc-c1b3231b898f4856af25 --wait
   [5/6] env captured
   [6/6] DONE rc=0 — log attached
 
-  saved runpod/results/dsc-.../01_basic_neuralnet.log  (21830 bytes)
+  saved runpod/results/dsc-.../01_basics/01_neuralnet.log  (21830 bytes)
 ```
 
 **How it avoids the chicken-and-egg.** The topic is generated *locally* before
@@ -122,7 +122,7 @@ Transport is [ntfy.sh](https://ntfy.sh), a no-auth pub/sub. Override with
 
 Caps the training step at 300 seconds. The pod still clones, installs and
 launches the real script, so a genuine failure still surfaces — you just do not
-pay for a full run. `01_basic_neuralnet` finishes well inside the cap.
+pay for a full run. `01_basics/01_neuralnet` finishes well inside the cap.
 
 **Verified end to end** on an RTX 3090: the run converged to
 `Learned Weight: 2.000000 / Learned Bias: 1.000000` against the true `y = 2x + 1`.
@@ -135,11 +135,11 @@ real hardware. `smoke` starts one pod per example, each with `--dry-run` and
 `--collect`:
 
 ```bash
-uv run runpod/runpod_ctl.py smoke 01_basic_neuralnet 03_basic_rnn 06_huggingface_grpo
+uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_huggingface/06_grpo
 #   Will start 3 pod(s), one per example:
-#     01_basic_neuralnet    1x  6G  ~$0.13/hr
-#     03_basic_rnn          1x  8G  ~$0.13/hr
-#     06_huggingface_grpo   1x 24G  ~$0.22/hr
+#     01_basics/01_neuralnet    1x  6G  ~$0.13/hr
+#     01_basics/04_rnn          1x  8G  ~$0.13/hr
+#     03_huggingface/06_grpo   1x 24G  ~$0.22/hr
 #   Combined burn rate: ~$0.48/hour
 #   Refusing without --yes.
 ```
@@ -162,8 +162,8 @@ spend on the expensive ones:
 |---|---|---|
 | Cheap — verify the harness | `01`, `02`, `02_cifar10`, `03`, `04*` | 0.12–0.22 |
 | Mid — real models, real downloads | `05_trl`, `05_ocr`, `06_grpo`, `07_multi_agency` | 0.22–0.35 |
-| Expensive — only once the above pass | `07_gpt_oss` (4×80G), `08_vtt` (2×48G) | 3–8 |
-| Not viable on RunPod | `09_vss` — needs ~3 TB host RAM | — |
+| Expensive — only once the above pass | `07_gpt_oss` (4×80G), `04_video_text` (2×48G) | 3–8 |
+| Not viable on RunPod | `05_video_speech` — needs ~3 TB host RAM | — |
 
 ## Other limitations
 
@@ -172,7 +172,7 @@ returns HTTP 500 *"no instances currently available"*. The tool reports that
 plainly and suggests alternatives — nothing is created and nothing is billed.
 Try another GPU or `--cloud COMMUNITY`.
 
-**`09_vss` will not work here.** It needs roughly **3 TB of host RAM**, which
+**`05_video_speech` will not work here.** It needs roughly **3 TB of host RAM**, which
 RunPod pods do not provide. GPU VRAM is not the binding constraint for that
 example. `recommend` warns about this explicitly.
 
@@ -182,18 +182,18 @@ example. `recommend` warns about this explicitly.
 
 | Example | Min VRAM | GPUs | Disk |
 |---|---|---|---|
-| `01_basic_neuralnet` | 6 GB | 1 | 20 GB |
-| `02_basic_convnet` | 6 GB | 1 | 20 GB |
-| `02_basic_convnet_cifar10_examples` | 8 GB | 1 | 30 GB |
-| `03_basic_rnn` | 8 GB | 1 | 20 GB |
-| `04_bayesian_neuralnet` | 8 GB | 2 | 20 GB |
-| `04_intermediate_rnn_stock_data` | 8 GB | 1 | 20 GB |
-| `05_huggingface_trl` | 24 GB | 1 | 60 GB |
-| `05_huggingface_ocr` | 24 GB | 1 | 60 GB |
-| `06_huggingface_grpo` | 24 GB | 1 | 80 GB |
+| `01_basics/01_neuralnet` | 6 GB | 1 | 20 GB |
+| `01_basics/02_convnet` | 6 GB | 1 | 20 GB |
+| `01_basics/03_convnet_cifar10` | 8 GB | 1 | 30 GB |
+| `01_basics/04_rnn` | 8 GB | 1 | 20 GB |
+| `02_intermediate/01_bayesian_neuralnet` | 8 GB | 2 | 20 GB |
+| `02_intermediate/02_rnn_stock_data` | 8 GB | 1 | 20 GB |
+| `03_huggingface/02_trl_sft` | 24 GB | 1 | 60 GB |
+| `03_huggingface/03_ocr` | 24 GB | 1 | 60 GB |
+| `03_huggingface/06_grpo` | 24 GB | 1 | 80 GB |
 | `07_..._gpt_oss_finetune_sft` | 80 GB | 4 | 200 GB |
-| `08_vtt` | 48 GB | 2 | 120 GB |
-| `09_vss` | 180 GB | 2 | 2 TB (plus ~3 TB host RAM — see above) |
+| `04_video_text` | 48 GB | 2 | 120 GB |
+| `05_video_speech` | 180 GB | 2 | 2 TB (plus ~3 TB host RAM — see above) |
 
 ## Image choice
 

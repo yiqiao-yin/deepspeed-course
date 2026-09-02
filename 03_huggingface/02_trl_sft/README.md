@@ -1,0 +1,1018 @@
+# TRL Function Calling Training with DeepSpeed 🤖🔧
+
+Fine-tune Qwen/Qwen3-0.6B for function calling capabilities using TRL's SFTTrainer with DeepSpeed distributed training.
+
+## Environment & Local Testing
+
+### Setup with `uv`
+
+This folder is a **self-contained `uv` project** — it ships a
+`pyproject.toml` and a committed `uv.lock`, so after cloning:
+
+```bash
+cd 03_huggingface/02_trl_sft
+uv sync                    # creates .venv, installs the LOCKED versions
+uv run deepspeed --num_gpus=1 train_trl_deepspeed.py
+```
+
+`uv run` uses the project environment directly, so there is no
+`activate` step. `uv sync --extra tracking` adds Weights & Biases,
+which stays optional.
+
+The lock is the point: everyone who clones resolves to identical
+versions, instead of whatever `uv pip install` finds that day.
+Regenerate deliberately with `uv lock --upgrade`.
+
+<details>
+<summary>Manual route, without the project</summary>
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch --index-url https://download.pytorch.org/whl/cu128
+uv pip install deepspeed
+uv pip install transformers datasets accelerate trl peft
+```
+
+The `--index-url` is **required** and matches what `uv.lock` pins.
+PyPI's *default* `torch` is a CUDA 13 wheel: on a driver older than
+CUDA 13 — the 550/570 series, common on rented hardware — it installs
+cleanly and then reports `cuda.is_available() == False` while
+`nvidia-smi` shows the card. Verified on a driver 550.127 box.
+</details>
+
+### Running
+
+| | |
+|---|---|
+| Runs end to end on one machine | **No** — needs real GPU capacity |
+| GPUs requested by the launcher | 2 |
+| Downloads | Qwen3-0.6B (~1.2 GB) |
+
+The smallest HuggingFace example here — a single 24 GB card is usually enough.
+
+```bash
+cd 03_huggingface/02_trl_sft
+deepspeed --num_gpus=2 train_trl_deepspeed.py
+```
+
+Because a full run is not feasible on a laptop, validate changes with the logic
+tests below before submitting to a cluster.
+
+
+### Doing less work: `--max-steps`
+
+Every training script here accepts `--max-steps N`, which stops after `N`
+optimizer steps instead of running the full schedule. `-1` (the default) means
+"train normally".
+
+Cheapest of the HuggingFace examples, but a full SFT run still costs GPU-hours.
+Cap it while you are still iterating on the dataset formatting.
+
+```bash
+# directly
+deepspeed --num_gpus=2 train_trl_deepspeed.py --max-steps 5
+
+# through the launcher — it forwards its arguments, so this works on SLURM too
+sbatch run_deepspeed.sh --max-steps 5
+```
+
+Two things worth knowing. The flag caps **optimizer steps, not epochs**, so with
+gradient accumulation of 4 a `--max-steps 5` run consumes 20 micro-batches. And
+the launcher only sees the flag because its last line ends in `"$@"` — drop that
+and the argument is silently swallowed, the script runs to completion, and
+nothing warns you.
+
+This is also what `runpod_ctl.py run <example> --dry-run` relies on to keep a
+rented pod's bill small.
+
+### Verifying logic without a full run
+
+The repository ships regression tests that check the **logic** of these examples —
+config validity, data handling, reward correctness — with no GPU and no model
+download required:
+
+```bash
+../../tests/run_all.sh
+```
+
+See [`tests/README.md`](../../tests/README.md) for what each suite covers.
+
+## 🆕 New: Production-Ready DeepSpeed Scripts
+
+This directory now includes production-ready Python scripts for DeepSpeed distributed training:
+
+### Quick Start with DeepSpeed
+
+```bash
+cd 03_huggingface/02_trl_sft
+
+# Setup (first time only)
+pip install uv
+uv init .
+uv add torch transformers trl datasets deepspeed wandb hf_transfer
+
+# Option 1: Direct training (2 GPUs)
+uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
+
+# Option 2: SLURM batch job
+sbatch run_deepspeed.sh
+
+# Option 3: Inference
+uv run inference_trl_model.py --model_path ./sft_qwen_model
+```
+
+### New Files
+
+| File | Description |
+|------|-------------|
+| `train_trl_deepspeed.py` | Training script with DeepSpeed + ZeRO-2, optional W&B |
+| `ds_config.json` | DeepSpeed configuration (AdamW, ZeRO Stage 2) |
+| `run_deepspeed.sh` | SLURM batch script for HPC clusters |
+| `inference_trl_model.py` | Inference script with interactive mode |
+
+**Features:**
+- ✅ **DeepSpeed Integration**: ZeRO Stage 2 optimization for multi-GPU training
+- ✅ **Optional W&B Tracking**: Set `WANDB_API_KEY` to enable experiment logging
+- ✅ **Pylint Compliant**: Clean, production-ready code
+- ✅ **SLURM Support**: Ready for HPC cluster deployment
+- ✅ **Interactive Inference**: Test your model with sample prompts or custom queries
+
+### Training with DeepSpeed
+
+```bash
+# Install uv (if not already installed)
+pip install uv
+
+# Initialize project and add dependencies
+uv init .
+uv add torch transformers trl datasets deepspeed wandb hf_transfer
+
+# Optional: Enable W&B tracking
+export WANDB_API_KEY=your_api_key
+
+# Train with 2 GPUs
+uv run deepspeed --num_gpus=2 train_trl_deepspeed.py
+```
+
+**Training Configuration:**
+- Epochs: 3
+- Batch size: 4 per GPU (effective: 16 with 2 GPUs and gradient accumulation)
+  - `train_micro_batch_size_per_gpu`: 4
+  - `gradient_accumulation_steps`: 2
+  - `train_batch_size`: 16 (4 × 2 GPUs × 2 accumulation)
+- Learning rate: 2e-5 with 100 warmup steps
+- Optimizer: AdamW (weight_decay: auto-synced with TrainingArguments)
+- Precision: FP32 (for stability)
+- Training time: ~10 minutes on 2 GPUs
+
+**Expected Output:**
+```
+✅ Training Completed Successfully!
+   - Training loss: ~0.105
+   - Samples per second: ~30
+   - Model saved to: ./sft_qwen_model
+```
+
+### DeepSpeed Configuration (`ds_config.json`)
+
+The training uses the following DeepSpeed configuration optimized for 2 GPUs:
+
+```json
+{
+  "train_batch_size": 16,
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 2,
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": 2e-5,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8,
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupLR",
+    "params": {
+      "warmup_min_lr": 0,
+      "warmup_max_lr": 2e-5,
+      "warmup_num_steps": 100
+    }
+  },
+  "gradient_clipping": 1.0,
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {"device": "none"},
+    "allgather_partitions": true,
+    "overlap_comm": true,
+    "reduce_scatter": true
+  }
+}
+```
+
+**Key Settings:**
+- **ZeRO Stage 2**: Optimizer state partitioning for memory efficiency
+- **Batch Size Calculation**: 4 (per GPU) × 2 (GPUs) × 2 (grad accum) = 16 total
+- **Weight Decay**: `"auto"` syncs with TrainingArguments for consistency
+- **Gradient Clipping**: 1.0 prevents gradient explosion
+- **FP32 Precision**: Disabled fp16/bf16 for numerical stability
+
+### Inference Examples
+
+**Sample prompts mode:**
+```bash
+uv run inference_trl_model.py
+```
+
+**Single prompt:**
+```bash
+uv run inference_trl_model.py --prompt "Set a timer for 10 minutes"
+```
+
+**Interactive mode:**
+```bash
+uv run inference_trl_model.py --interactive
+```
+
+---
+
+## Original Notebook-Based Workflow
+
+The sections below document the original Jupyter notebook workflow for interactive development and experimentation.
+
+## Features
+
+- 🛠️ **Tool Calling**: Train models to invoke functions with proper arguments
+- 🤗 **TRL Integration**: Uses SFTTrainer for supervised fine-tuning
+- 📓 **Notebook-Based Workflow**: Interactive development with Jupyter notebooks
+- 🎯 **Small Model**: Fine-tune Qwen3-0.6B (600M parameters) - runs on single GPU
+- 📊 **Dual Datasets**: Separate datasets for training and customer-specific inference
+- ⚡ **Fast Training**: Complete fine-tuning in ~20 seconds on modern GPU
+- 🔄 **Two Use Cases**: General tools (timer, reminders) and customer service tools
+
+## Quick Start on RunPod
+
+### 1. Initial Setup
+
+Start with a fresh RunPod instance (recommend >= 1x RTX 4090 or A100):
+
+```bash
+# Install uv package manager
+pip install uv
+
+# Initialize new project
+uv init trl-tool-calling
+cd trl-tool-calling
+
+# Add core dependencies
+uv add "torch>=2.0.0"
+uv add "transformers>=4.55.0"
+uv add "trl>=0.20.0"
+uv add "datasets>=2.14.0"
+uv add "accelerate>=0.24.0"
+uv add "jupyter"
+uv add "ipywidgets"
+
+# Development dependencies
+uv add --dev "black" "isort" "flake8"
+```
+
+### 2. Project Structure
+
+Create the following directory structure:
+
+```
+trl-tool-calling/
+├── train_with_new_trl_release.ipynb          # Training notebook
+├── inference_of_existing_fm.ipynb            # Inference notebook (base model)
+├── tool_augmented_dataset.json               # Training data (timer, reminders)
+├── customer_tool_augmented_dataset.json      # Customer service data (payments, agents)
+├── sft_qwen_model/                           # Output: fine-tuned model checkpoint
+├── requirements.txt                          # Generated by uv
+└── README.md                                 # This file
+```
+
+### 3. Dataset Overview
+
+This project includes **two distinct datasets** for different use cases:
+
+#### Training Dataset: `tool_augmented_dataset.json`
+
+**Purpose**: General assistant tools for everyday tasks
+**Tool Functions**:
+- `start_timer`: Start a timer for specified duration (in seconds)
+- `create_reminder`: Create a reminder with time and note
+
+**Sample Conversation**:
+```json
+{
+  "role": "user",
+  "content": "Set a timer for 22 minutes."
+},
+{
+  "role": "assistant",
+  "tool_calls": [{
+    "type": "function",
+    "function": {
+      "name": "start_timer",
+      "arguments": {"duration": 1320}
+    }
+  }]
+}
+```
+
+**Dataset Size**: ~200 training examples
+
+#### Inference Dataset: `customer_tool_augmented_dataset.json`
+
+**Purpose**: Customer service and payment management
+**Tool Functions**:
+- `Speak_With_An_Agent`: Connect customer to human agent
+- `Pay_Now`: Process immediate payment with amount and method
+- `Promise_Payment`: Schedule future payment with amount and date
+- `Already_Paid`: Record customer's claim of prior payment
+- `Hardship`: Handle financial difficulty cases
+
+**Sample Conversation**:
+```json
+{
+  "role": "user",
+  "content": "I can pay $42 today using my card."
+},
+{
+  "role": "assistant",
+  "tool_calls": [{
+    "type": "function",
+    "function": {
+      "name": "Pay_Now",
+      "arguments": {
+        "payNowAmount": 42,
+        "paymentMethod": "voice_call"
+      }
+    }
+  }]
+}
+```
+
+### 4. Launch Jupyter Environment
+
+```bash
+# Start Jupyter Lab
+uv run jupyter lab
+
+# Or Jupyter Notebook
+uv run jupyter notebook
+```
+
+Access at: http://localhost:8888
+
+## Training Workflow
+
+### Notebook 1: `train_with_new_trl_release.ipynb`
+
+This notebook demonstrates the complete fine-tuning pipeline using TRL.
+
+#### Step 1: Install Dependencies (Cell 1-2)
+
+```python
+! pip install --upgrade pip
+! pip install transformers trl
+```
+
+#### Step 2: Define Tool Schemas (Cell 3)
+
+Define your tool functions with docstrings - TRL automatically converts them to JSON schemas:
+
+```python
+from transformers.utils import get_json_schema
+
+def start_timer(duration: int) -> int:
+    """
+    Starts a timer for the specified duration in seconds.
+
+    Args:
+        duration: Duration in seconds to set the timer for.
+
+    Returns:
+        The duration set for the timer.
+    """
+    return duration
+
+def create_reminder(time: str, note: str) -> str:
+    """
+    Creates a reminder for the specified time and note.
+
+    Args:
+        time: The time for the reminder.
+        note: The note for the reminder.
+
+    Returns:
+        A confirmation message indicating that the reminder has been set.
+    """
+    return "I'll remind you to call mom at 7 PM."
+
+# Convert to JSON schemas
+start_timer_schema = get_json_schema(start_timer)
+create_reminder_schema = get_json_schema(create_reminder)
+```
+
+#### Step 3: Load Training Dataset (Cell 4)
+
+```python
+import json
+from datasets import Dataset
+
+with open("tool_augmented_dataset.json", "r") as f:
+    data = json.load(f)
+
+dataset = Dataset.from_dict(data)
+```
+
+#### Step 4: Initialize Trainer (Cell 5)
+
+```python
+from trl import SFTTrainer
+
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",
+    train_dataset=dataset
+)
+```
+
+The SFTTrainer automatically:
+- Downloads the base model (Qwen3-0.6B, ~1.5GB)
+- Tokenizes the dataset
+- Configures training parameters
+- Sets up the training loop
+
+#### Step 5: Train the Model (Cell 6)
+
+```python
+trainer.train()
+```
+
+**Expected Output**:
+```
+Training Progress: 100%
+TrainOutput(
+    global_step=75,
+    training_loss=0.1057,
+    train_runtime: 19.3s,
+    train_samples_per_second: 31.03
+)
+```
+
+**Training Metrics**:
+- Total steps: 75
+- Training loss: ~0.106 (excellent convergence)
+- Speed: ~31 samples/second
+- Time: ~19 seconds on RTX 4090
+
+#### Step 6: Save Fine-tuned Model (Cell 7)
+
+```python
+trainer.save_model("sft_qwen_model")
+```
+
+Creates checkpoint directory with:
+- `config.json` - Model configuration
+- `model.safetensors` - Fine-tuned weights
+- `tokenizer.json` - Tokenizer files
+- `generation_config.json` - Generation settings
+
+#### Step 7: Load and Test Model (Cell 8-9)
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tokenizer = AutoTokenizer.from_pretrained("sft_qwen_model")
+model = AutoModelForCausalLM.from_pretrained("sft_qwen_model")
+
+# Test inference
+sample_messages = [
+    {"role": "user", "content": "Set a timer for 5 minutes."}
+]
+
+formatted_prompt = format_messages(sample_messages)
+inputs = tokenizer(formatted_prompt, return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=100)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+```
+
+## Inference Workflow
+
+### Notebook 2: `inference_of_existing_fm.ipynb`
+
+This notebook demonstrates inference on the **base model** (not fine-tuned) to compare behavior.
+
+#### Load Base Model
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+
+model_name = "Qwen/Qwen3-0.6B"
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
+```
+
+#### Test Customer Service Scenarios
+
+Use the `customer_tool_augmented_dataset.json` samples:
+
+**Scenario 1: Speak with Agent**
+```python
+sample_messages = [
+    {"role": "user", "content": "I want to talk to someone."}
+]
+```
+
+**Scenario 2: Make Payment**
+```python
+sample_messages = [
+    {"role": "user", "content": "I can pay $42 today using my card."}
+]
+```
+
+**Scenario 3: Promise Payment**
+```python
+sample_messages = [
+    {"role": "user", "content": "I can promise to pay $25 next Monday."}
+]
+```
+
+**Scenario 4: Financial Hardship**
+```python
+sample_messages = [
+    {"role": "user", "content": "I can't pay anything right now. I just lost my job."}
+]
+```
+
+**Scenario 5: Already Paid**
+```python
+sample_messages = [
+    {"role": "user", "content": "I already paid $50 last Friday."}
+]
+```
+
+#### Compare Results
+
+**Base Model** (untrained): Generates conversational text, may not use tools correctly
+**Fine-tuned Model**: Produces structured tool calls with correct arguments
+
+## Understanding the Format
+
+### Message Format Helper Function
+
+Both notebooks use a helper function to convert messages to model-compatible prompts:
+
+```python
+def format_messages(messages):
+    prompt = ""
+    for msg in messages:
+        role = msg["role"]
+        content = msg.get("content", "")
+        if role == "user":
+            prompt += f"<|user|>\n{content}\n"
+        elif role == "assistant":
+            prompt += f"<|assistant|>\n{content}\n"
+        elif role == "tool":
+            prompt += f"<|tool|>\n{msg['name']}: {content}\n"
+    prompt += "<|assistant|>\n"  # Prompt model to respond
+    return prompt
+```
+
+### Tool Call Structure
+
+The model learns to output tool calls in this format:
+
+```json
+{
+  "tool_calls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "start_timer",
+        "arguments": {
+          "duration": 300
+        }
+      }
+    }
+  ]
+}
+```
+
+## Configuration Options
+
+### Model Settings
+
+- **Base Model**: Qwen/Qwen3-0.6B (600M parameters)
+- **Model Type**: Causal Language Model
+- **Context Length**: Configurable (default: model's max)
+- **Generation Max Tokens**: 100 (configurable in inference)
+
+### Training Settings (Default SFTTrainer)
+
+- **Epochs**: Auto-determined by dataset size
+- **Batch Size**: Auto-configured
+- **Learning Rate**: Default TRL settings
+- **Optimizer**: AdamW
+- **Training Steps**: 75 (for 200 samples)
+
+### Inference Settings
+
+- **Max New Tokens**: 100
+- **Temperature**: Default (1.0)
+- **Top-p**: Default (1.0)
+- **Device**: Auto-detect (CUDA if available)
+
+## Advanced Customization
+
+### Custom Training Arguments
+
+Modify the SFTTrainer initialization:
+
+```python
+from transformers import TrainingArguments
+
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    learning_rate=2e-5,
+    warmup_steps=100,
+    logging_steps=10,
+    save_strategy="epoch",
+    fp16=True,  # Enable mixed precision
+)
+
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",
+    train_dataset=dataset,
+    args=training_args
+)
+```
+
+### Using Your Own Dataset
+
+Create a JSON file with the same structure:
+
+```json
+{
+  "messages": [
+    [
+      {"role": "user", "content": "Your user query"},
+      {
+        "role": "assistant",
+        "tool_calls": [{
+          "type": "function",
+          "function": {
+            "name": "your_function",
+            "arguments": {"param": "value"}
+          }
+        }]
+      },
+      {
+        "role": "tool",
+        "name": "your_function",
+        "content": "Tool response"
+      },
+      {
+        "role": "assistant",
+        "content": "Final assistant response"
+      }
+    ]
+  ]
+}
+```
+
+### Adding More Tools
+
+Define new functions with proper docstrings:
+
+```python
+def send_email(recipient: str, subject: str, body: str) -> str:
+    """
+    Sends an email to the specified recipient.
+
+    Args:
+        recipient: Email address of the recipient.
+        subject: Subject line of the email.
+        body: Body content of the email.
+
+    Returns:
+        Confirmation message.
+    """
+    return f"Email sent to {recipient}"
+
+send_email_schema = get_json_schema(send_email)
+```
+
+Add corresponding examples to your training dataset.
+
+## Monitoring and Evaluation
+
+### Training Metrics
+
+Monitor during training:
+- **Training Loss**: Should decrease consistently
+- **Samples per Second**: Throughput metric
+- **Global Steps**: Total optimization steps
+
+### Evaluation Metrics
+
+For tool calling models, evaluate:
+
+1. **Tool Selection Accuracy**: Does model choose correct tool?
+2. **Argument Extraction**: Are arguments parsed correctly?
+3. **Format Compliance**: Does output follow expected structure?
+4. **Conversation Flow**: Natural multi-turn interactions?
+
+### Manual Testing
+
+Test various edge cases:
+```python
+test_cases = [
+    "Set a timer for 0 minutes",  # Edge case: zero duration
+    "Remind me tomorrow",  # Incomplete: missing time
+    "Can you help me?",  # Ambiguous: no clear tool
+    "Set 3 timers",  # Multiple: parallel tool calls
+]
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### CUDA Out of Memory
+```python
+# Use smaller batch size
+training_args = TrainingArguments(
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=4,
+)
+```
+
+Or use CPU:
+```python
+device = "cpu"
+model.to(device)
+```
+
+#### Model Not Loading
+```bash
+# Clear cache and re-download
+rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen3-0.6B
+
+# Or specify cache directory
+export HF_HOME=/path/to/cache
+```
+
+#### Tokenizer Warnings
+```python
+# Set padding token explicitly
+tokenizer.pad_token = tokenizer.eos_token
+```
+
+#### Dataset Format Errors
+```python
+# Validate dataset structure
+print(dataset[0])
+print(dataset.column_names)
+
+# Check for required fields
+assert "messages" in data, "Dataset must have 'messages' key"
+```
+
+#### Poor Tool Calling Performance
+
+**Increase Training Data**: 200 samples may not be enough for complex tools
+```python
+# Augment dataset with variations
+# Add more diverse examples per tool
+# Include edge cases and error scenarios
+```
+
+**Adjust Training Duration**:
+```python
+training_args = TrainingArguments(
+    num_train_epochs=5,  # Train longer
+    learning_rate=1e-5,  # Lower learning rate
+)
+```
+
+**Validate Tool Schemas**:
+```python
+# Ensure schemas are correctly formatted
+print(json.dumps(start_timer_schema, indent=2))
+```
+
+### Performance Optimization
+
+#### For Faster Training
+- Enable FP16: `fp16=True`
+- Increase batch size: `per_device_train_batch_size=8`
+- Use gradient accumulation: `gradient_accumulation_steps=2`
+- Reduce logging: `logging_steps=50`
+
+#### For Better Model Quality
+- More training data (500+ examples recommended)
+- Longer training (5-10 epochs)
+- Data augmentation (paraphrase user queries)
+- Validation set for early stopping
+
+#### For Smaller Model Size
+- Use model quantization:
+  ```python
+  from transformers import BitsAndBytesConfig
+
+  quantization_config = BitsAndBytesConfig(
+      load_in_4bit=True,
+      bnb_4bit_compute_dtype=torch.float16
+  )
+
+  model = AutoModelForCausalLM.from_pretrained(
+      model_name,
+      quantization_config=quantization_config
+  )
+  ```
+
+## System Requirements
+
+### Minimum Requirements
+- **GPU**: 1x RTX 3060 (12GB VRAM) or equivalent
+- **RAM**: 16GB system RAM
+- **Storage**: 10GB free space (model + checkpoints)
+- **CUDA**: 11.8+
+- **Internet**: Required for model and dataset downloads
+
+### Recommended Setup
+- **GPU**: 1x RTX 4090 (24GB) or A100 (40GB)
+- **RAM**: 32GB system RAM
+- **Storage**: 50GB SSD
+- **Browser**: Chrome/Firefox for Jupyter Lab
+
+## Use Cases and Extensions
+
+### Current Examples
+
+1. **Personal Assistant Tools**: Timer, reminders, calendar
+2. **Customer Service**: Payments, agent routing, hardship handling
+
+### Potential Extensions
+
+#### 1. Multi-Domain Agent
+```python
+# Combine multiple tool sets
+tools = [
+    *personal_assistant_tools,
+    *customer_service_tools,
+    *email_tools,
+    *calendar_tools
+]
+```
+
+#### 2. Tool Chaining
+```python
+# Teach model to use multiple tools in sequence
+# Example: Check calendar → Create reminder → Send email
+```
+
+#### 3. Error Handling
+```python
+# Add error recovery examples to dataset
+{
+  "role": "assistant",
+  "content": "I couldn't set the timer because the duration must be positive."
+}
+```
+
+#### 4. Confirmation Flows
+```python
+# Add confirmation examples
+{
+  "role": "assistant",
+  "content": "You want to pay $42 today. Is that correct?"
+}
+```
+
+## Deployment
+
+### Save for Production
+
+```python
+# Save model with all components
+trainer.save_model("production_model")
+
+# Push to Hugging Face Hub
+trainer.push_to_hub("your-username/tool-calling-model")
+```
+
+### Load in Production
+
+```python
+from transformers import pipeline
+
+# Load as pipeline
+tool_caller = pipeline(
+    "text-generation",
+    model="your-username/tool-calling-model",
+    device=0  # GPU
+)
+
+# Use in production
+result = tool_caller(
+    "Set a timer for 10 minutes",
+    max_new_tokens=100
+)
+```
+
+### API Deployment
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Query(BaseModel):
+    text: str
+
+@app.post("/predict")
+def predict(query: Query):
+    messages = [{"role": "user", "content": query.text}]
+    prompt = format_messages(messages)
+    # Generate and return tool call
+    ...
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make changes and test in notebooks
+4. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+- Hugging Face for the TRL library and transformers
+- Alibaba for the Qwen model series
+- The open-source ML community
+
+## References
+
+- [TRL Documentation](https://huggingface.co/docs/trl/)
+- [Qwen Model Series](https://huggingface.co/Qwen)
+- [Tool/Function Calling Guide](https://huggingface.co/docs/transformers/main/en/chat_templating#advanced-tool-use--function-calling)
+- [SFTTrainer API](https://huggingface.co/docs/trl/main/en/sft_trainer)
+
+---
+
+**Note**: This notebook-based workflow is ideal for rapid experimentation with tool-calling capabilities. The dual-dataset approach allows you to train on one domain (general assistant) and test transfer learning to another (customer service). Perfect for learning how to build function-calling AI agents with minimal infrastructure.
+
+---
+
+## Renting a GPU on RunPod (with auto-shutdown)
+
+There is no SLURM on RunPod, so the pod lifecycle is driven by API instead —
+including shutting it down.
+
+```bash
+export RUNPOD_API_KEY=...     # https://console.runpod.io/user/settings
+
+uv run runpod/runpod_ctl.py recommend 03_huggingface/02_trl_sft
+uv run runpod/runpod_ctl.py run 03_huggingface/02_trl_sft \
+    --dry-run --collect --wait --terminate --yes
+
+uv run runpod/runpod_ctl.py pods      # must say: "Nothing is billing."
+```
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Caps the training step at 300s. The pod still clones, installs and launches the **real** script, so a genuine failure still surfaces — you just do not pay for a full run. |
+| `--collect` | The pod pushes its log to a private-ish ntfy topic. **No SSH needed** — RunPod exposes no log endpoint, so the pod pushes. |
+| `--wait` | Blocks locally until the pod reports DONE. |
+| `--terminate` | Deletes the pod in a `finally` block, so a crash, a network failure or Ctrl-C **still** stops the billing. Retries five times with backoff. |
+| `--yes` | Skips the confirmation. `run` and `create` both refuse without it and print the hourly rate first. |
+
+> ### 💸 An abandoned pod bills until terminated
+> *Stopping* is not enough. Always finish with `runpod_ctl.py pods` and confirm
+> it says **"Nothing is billing."**
+>
+> Two safety nets you get for free: an **in-pod watchdog** (`--max-hours`,
+> default 6) that kills the container from the inside and needs no API
+> key, and `terminate --all` as the blunt instrument.
+
+This example is sized in `runpod/runpod_ctl.py` as **24 GB VRAM, 1 GPU(s),
+60 GB disk**.
+
+The pod is **never given `RUNPOD_API_KEY`** — putting a spending credential on
+rented hardware would be the wrong trade, so termination is driven from your
+machine. See [SECURITY.md](../../SECURITY.md).

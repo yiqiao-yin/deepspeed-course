@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "08_vtt" / "03_streaming_memory"))
+sys.path.insert(0, str(REPO_ROOT / "04_video_text" / "04_streaming_memory"))
 
 from star_memory import StarConfig, StarMemory, weighted_kmeans  # noqa: E402
 

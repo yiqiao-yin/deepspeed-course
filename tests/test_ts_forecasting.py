@@ -10,7 +10,7 @@ Run:
 
 Why this suite exists
 ---------------------
-Covers `04_intermediate_rnn_stock_data/modern_ts_layers.py` (N-BEATS bases,
+Covers `02_intermediate/02_rnn_stock_data/modern_ts_layers.py` (N-BEATS bases,
 PatchTST patching, TCN dilation arithmetic) and `tokenize_series.py` (treating
 the mean-reversion signal as a vocabulary).
 
@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "04_intermediate_rnn_stock_data"))
+sys.path.insert(0, str(REPO_ROOT / "02_intermediate/02_rnn_stock_data"))
 
 from modern_ts_layers import (  # noqa: E402
     causal_conv1d,

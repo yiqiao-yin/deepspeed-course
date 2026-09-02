@@ -593,7 +593,7 @@ Output: Samples from posterior P(θ|D)
 ## Quick Start
 
 ```bash
-cd 04_bayesian_neuralnet
+cd 02_intermediate/01_bayesian_neuralnet
 
 # SLURM submission (2 GPUs)
 sbatch run_deepspeed.sh

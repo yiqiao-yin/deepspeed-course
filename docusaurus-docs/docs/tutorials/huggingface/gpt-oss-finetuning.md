@@ -6,7 +6,7 @@ sidebar_position: 11
 
 LoRA fine-tuning of `openai/gpt-oss-20b` — a **Mixture-of-Experts** model — with DeepSpeed. MoE changes the memory arithmetic, the LoRA targeting strategy, and what "20B parameters" means.
 
-**Model:** `openai/gpt-oss-20b` · **Dataset:** `HuggingFaceH4/Multilingual-Thinking` · **Example:** `07_huggingface_openai_gpt_oss_finetune_sft/lora`
+**Model:** `openai/gpt-oss-20b` · **Dataset:** `HuggingFaceH4/Multilingual-Thinking` · **Example:** `03_huggingface/08_gpt_oss_lora/lora`
 
 ## 1. Mixture-of-Experts Changes the Arithmetic
 
@@ -69,7 +69,7 @@ MoE also makes the model unusually **memory-bandwidth bound**: the arithmetic in
 ## 2. Quick Start
 
 ```bash
-cd 07_huggingface_openai_gpt_oss_finetune_sft/lora
+cd 03_huggingface/08_gpt_oss_lora/lora
 
 # SLURM
 sbatch run_deepspeed.sh

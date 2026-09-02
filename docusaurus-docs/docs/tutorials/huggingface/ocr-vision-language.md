@@ -6,7 +6,7 @@ sidebar_position: 4
 
 Fine-tuning Qwen2-VL-2B with LoRA and DeepSpeed — and why vision-language models break the memory assumptions that hold for text-only LLMs.
 
-**Model:** `Qwen/Qwen2-VL-2B-Instruct` · **Example:** `05_huggingface_ocr`
+**Model:** `Qwen/Qwen2-VL-2B-Instruct` · **Example:** `03_huggingface/03_ocr`
 
 :::warning The bundled dataset is synthetic
 `prepare_dataset()` in `train_ds.py` generates **10 synthetic samples** with the fixed instruction `"Describe this image."` (`--max-samples 10`). It is a **plumbing test**: it verifies that the processor, the DeepSpeed engine, LoRA injection, and the training loop all work end to end on your hardware.
@@ -54,7 +54,7 @@ That single fact drives everything else on this page.
 ## 2. Quick Start
 
 ```bash
-cd 05_huggingface_ocr
+cd 03_huggingface/03_ocr
 
 # SLURM
 sbatch submit_job.sh
@@ -215,7 +215,7 @@ nothing about *which* model to fine-tune, and the field moved: purpose-built OCR
 models now compete with general VLMs several times their size, and they differ
 by more than an order of magnitude in what a page costs them.
 
-`05_huggingface_ocr/run_modern_ocr.py` measures five on the same pages.
+`03_huggingface/03_ocr/run_modern_ocr.py` measures five on the same pages.
 
 ### Results
 
@@ -352,7 +352,7 @@ number and a wrong ranking:
 DeepSeek-OCR ([arXiv:2510.18234](https://arxiv.org/abs/2510.18234)) makes the
 argument explicitly: a page compressed into ~100 vision tokens decodes at ~97%
 precision, falling to ~60% at 20× compression. That is the same bargain as
-[token compression in `08_vtt`](/docs/tutorials/multimodal/token-compression) —
+[token compression in `04_video_text`](/docs/tutorials/multimodal/token-compression) —
 shrink what the model looks at, pay in accuracy. Ranking on accuracy alone
 recommends a model half a point better and sixty times more expensive.
 

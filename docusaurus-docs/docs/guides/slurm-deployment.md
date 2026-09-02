@@ -87,31 +87,31 @@ entire course:
 
 | Example | Script | GPUs |
 |---|---|---|
-| `01_basic_neuralnet` | `run_deepspeed.sh` | 1 |
-| `02_basic_convnet` | `run_deepspeed.sh` | 1 |
-| `02_basic_convnet_cifar10_examples` | `run_deepspeed.sh` | 2 |
-| `03_basic_rnn` | `run_deepspeed.sh` | 2 |
-| `04_bayesian_neuralnet` | `run_deepspeed.sh` | 2 |
-| `04_intermediate_rnn_stock_data` | `run_deepspeed.sh` | 2 |
-| `05_huggingface` | `run_deepspeed.sh` | 2 |
-| `05_huggingface_trl` | `run_deepspeed.sh` | 2 |
-| `05_huggingface_ocr` | `submit_job.sh` | 2 |
-| `05_huggingface_dpo` | `run_deepspeed.sh` | 1 |
-| `05_huggingface_reward_model` | `run_deepspeed.sh` | 1 |
-| `06_huggingface_grpo` | `run_deepspeed.sh` | 2 |
-| `06_huggingface_online_dpo` | `run_deepspeed.sh` | 2 |
+| `01_basics/01_neuralnet` | `run_deepspeed.sh` | 1 |
+| `01_basics/02_convnet` | `run_deepspeed.sh` | 1 |
+| `01_basics/03_convnet_cifar10` | `run_deepspeed.sh` | 2 |
+| `01_basics/04_rnn` | `run_deepspeed.sh` | 2 |
+| `02_intermediate/01_bayesian_neuralnet` | `run_deepspeed.sh` | 2 |
+| `02_intermediate/02_rnn_stock_data` | `run_deepspeed.sh` | 2 |
+| `03_huggingface/01_llm_finetuning` | `run_deepspeed.sh` | 2 |
+| `03_huggingface/02_trl_sft` | `run_deepspeed.sh` | 2 |
+| `03_huggingface/03_ocr` | `submit_job.sh` | 2 |
+| `03_huggingface/05_dpo` | `run_deepspeed.sh` | 1 |
+| `03_huggingface/04_reward_model` | `run_deepspeed.sh` | 1 |
+| `03_huggingface/06_grpo` | `run_deepspeed.sh` | 2 |
+| `03_huggingface/07_online_dpo` | `run_deepspeed.sh` | 2 |
 | `07_..._gpt_oss_finetune_sft` | `lora/run_deepspeed.sh` | 4 |
-| `07_huggingface_trl_multi_agency` | `run_slurm.sh` | 1 |
-| `08_vtt/01_qwen25vl_baseline` | `run_deepspeed.sh` | 2 |
-| `08_vtt/02_token_compression` | `run_deepspeed.sh` | 1 |
-| `08_vtt/03_streaming_memory` | `run_deepspeed.sh` | 1 |
-| `08_vtt/04_video_eval` | `run_deepspeed.sh` | 1 |
-| `09_vss/01_longcat_flash_omni` | `run_deepspeed.sh` | 2 |
-| `09_vss/02_thinker_talker` | `run_deepspeed.sh` | 2 |
-| `09_vss/03_duplex_streaming` | `run_deepspeed.sh` | 1 |
-| `09_vss/04_omni_eval` | `run_deepspeed.sh` | 1 |
+| `03_huggingface/09_multi_agency` | `run_slurm.sh` | 1 |
+| `04_video_text/02_qwen25vl` | `run_deepspeed.sh` | 2 |
+| `04_video_text/03_token_compression` | `run_deepspeed.sh` | 1 |
+| `04_video_text/04_streaming_memory` | `run_deepspeed.sh` | 1 |
+| `04_video_text/05_video_eval` | `run_deepspeed.sh` | 1 |
+| `05_video_speech/01_longcat_omni` | `run_deepspeed.sh` | 2 |
+| `05_video_speech/02_thinker_talker` | `run_deepspeed.sh` | 2 |
+| `05_video_speech/03_duplex_streaming` | `run_deepspeed.sh` | 1 |
+| `05_video_speech/04_omni_eval` | `run_deepspeed.sh` | 1 |
 
-`08_vtt` and `09_vss` are also registered as bare top-level names for backward
+`04_video_text` and `05_video_speech` are also registered as bare top-level names for backward
 compatibility; each resolves to the subtopic shown above.
 
 A regression test asserts this coverage, so an example cannot be added without
@@ -122,15 +122,15 @@ uv run tests/test_runpod_ctl.py     # includes the SLURM-coverage checks
 ```
 
 :::note Two that differ from the pattern
-`07_huggingface_trl_multi_agency` uses `run_slurm.sh` and launches with plain
+`03_huggingface/09_multi_agency` uses `run_slurm.sh` and launches with plain
 `python`, because it drives TRL's `GRPOTrainer` directly rather than using the
 DeepSpeed launcher.
 
-`08_vtt` has one script covering both trainers — set `TRAINER=llava` or
+`04_video_text` has one script covering both trainers — set `TRAINER=llava` or
 `TRAINER=seq2seq` (default) before submitting.
 :::
 
-:::danger `09_vss` is gated on host RAM
+:::danger `05_video_speech` is gated on host RAM
 Its script requests `--mem=3000G`. That is not padding: 1.1 TB of BF16 weights
 live in host memory under ZeRO-3 offload. Submitting it to a partition without
 that much RAM will fail or thrash. See

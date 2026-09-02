@@ -30,7 +30,7 @@ the bug below was hiding.
 ## `validate_llava_vision_path.py`
 
 Drives the real `preprocess_function` and `LlavaVideoCollator` from
-`08_vtt/hf_ds_vtt_test2/llava_video_trainer/video_training_script.py` end to end:
+`04_video_text/01_hf_baseline/llava_video_trainer/video_training_script.py` end to end:
 
 ```
 video file -> extract_frames_from_file -> processor -> preprocess_function

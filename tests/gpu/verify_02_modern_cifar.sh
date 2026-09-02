@@ -14,7 +14,7 @@ set -uo pipefail
 GPUS="${1:-2}"
 EPOCHS="${2:-30}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$HERE/02_basic_convnet_cifar10_examples"
+DIR="$HERE/01_basics/03_convnet_cifar10"
 LOG="${VERIFY_LOG:-/tmp/verify_02_modern.log}"
 exec > >(tee "$LOG") 2>&1
 

@@ -10,7 +10,7 @@ sidebar_position: 5
 
 A security camera does not have a length. A livestream does not have a length. A meeting recording has one, but you do not know it in advance.
 
-**Example:** `08_vtt/03_streaming_memory`
+**Example:** `04_video_text/04_streaming_memory`
 
 ## 1. A Strictly Harder Constraint
 
@@ -125,7 +125,7 @@ Salience is approximated by cluster weight: the thing on screen longest is usual
 ## 6. It Actually Works
 
 ```
-$ uv run 08_vtt/03_streaming_memory/stream_infer.py --frames 4000 --query-every 1000
+$ uv run 04_video_text/04_streaming_memory/stream_infer.py --frames 4000 --query-every 1000
 
   frame    1,000  |  write 1.664 ms (first 100 frames: 1.659 ms)
   frame    2,000  |  write 1.568 ms (first 100 frames: 1.659 ms)
@@ -160,8 +160,8 @@ The synthetic stream has *real temporal structure* — slow drift within scenes,
 The memory mechanics need **no GPU and no download**:
 
 ```bash
-uv run 08_vtt/03_streaming_memory/stream_infer.py --frames 20000
-uv run 08_vtt/03_streaming_memory/star_memory.py
+uv run 04_video_text/04_streaming_memory/stream_infer.py --frames 20000
+uv run 04_video_text/04_streaming_memory/star_memory.py
 ```
 
 With a real model, packages via **`uv`**:
@@ -175,7 +175,7 @@ uv pip install deepspeed transformers accelerate opencv-python-headless
 **CoreWeave / any SLURM cluster:**
 
 ```bash
-cd 08_vtt/03_streaming_memory
+cd 04_video_text/04_streaming_memory
 sbatch run_deepspeed.sh
 FRAMES=50000 sbatch run_deepspeed.sh
 ```
@@ -186,7 +186,7 @@ The job requests only 32 GB of host RAM, and that is part of the demonstration: 
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 08_vtt/03_streaming_memory \
+uv run runpod/runpod_ctl.py run 04_video_text/04_streaming_memory \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```

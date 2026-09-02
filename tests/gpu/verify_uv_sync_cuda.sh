@@ -22,7 +22,7 @@ echo "==========================================================================
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | sed 's/^/  gpu: /'
 echo "  nvidia-smi CUDA: $(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9.]+' | head -1)"
 echo "=============================================================================="
-cd "$HERE/01_basic_neuralnet" || exit 1
+cd "$HERE/01_basics/01_neuralnet" || exit 1
 echo "--- uv sync (the locked versions) ---"
 uv sync --frozen 2>&1 | tail -2
 echo "--- what the lock gave us, and can it see the GPU? ---"

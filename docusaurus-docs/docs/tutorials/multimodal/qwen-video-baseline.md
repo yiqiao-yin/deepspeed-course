@@ -6,7 +6,7 @@ sidebar_position: 3
 
 The LLaVA trainer in [Video-Text Training](./video-text-training.md) is the right thing to read first — nothing is hidden. It is also 2024's architecture, and it carries a limitation that no amount of training can fix.
 
-**Example:** `08_vtt/01_qwen25vl_baseline`
+**Example:** `04_video_text/02_qwen25vl`
 
 ## 1. The Limitation That Cannot Be Trained Away
 
@@ -159,7 +159,7 @@ uv pip install deepspeed transformers accelerate peft datasets \
 **CoreWeave / any SLURM cluster:**
 
 ```bash
-cd 08_vtt/01_qwen25vl_baseline
+cd 04_video_text/02_qwen25vl
 sbatch run_deepspeed.sh
 MAX_FRAMES=32 NUM_GPUS=4 sbatch run_deepspeed.sh
 ```
@@ -170,7 +170,7 @@ Build the venv on a **login** node — compute nodes usually have no egress.
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 08_vtt/01_qwen25vl_baseline \
+uv run runpod/runpod_ctl.py run 04_video_text/02_qwen25vl \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```

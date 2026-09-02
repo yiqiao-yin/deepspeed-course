@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "08_vtt" / "02_token_compression"))
+sys.path.insert(0, str(REPO_ROOT / "04_video_text" / "03_token_compression"))
 
 from token_compression import (  # noqa: E402
     TokenBudget,

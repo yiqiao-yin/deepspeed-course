@@ -90,7 +90,7 @@ flowchart TB
 
 ```bash
 git clone https://github.com/yiqiao-yin/deepspeed-course.git
-cd deepspeed-course/01_basic_neuralnet
+cd deepspeed-course/01_basics/01_neuralnet
 
 sbatch run_deepspeed.sh
 squeue -u $USER
@@ -108,7 +108,7 @@ cd deepspeed-course
 uv venv myenv && source myenv/bin/activate
 uv pip install torch deepspeed wandb
 
-cd 01_basic_neuralnet
+cd 01_basics/01_neuralnet
 deepspeed --num_gpus=1 train_ds.py
 ```
 
@@ -122,20 +122,20 @@ Each directory is self-contained — a training script, a `ds_config.json`, a la
 
 ```
 deepspeed-course/
-├── 01_basic_neuralnet/                       # Linear regression — the mechanics
-├── 02_basic_convnet/                         # CNN on synthetic MNIST
-├── 02_basic_convnet_cifar10_examples/        # CIFAR-10 — the 10% -> 81% case study
-├── 03_basic_rnn/                             # LSTM time series
-├── 04_bayesian_neuralnet/                    # Parallel tempering MCMC
-├── 04_intermediate_rnn_stock_data/           # Real market data with yfinance
-├── 05_huggingface/                           # LLM fine-tuning
-├── 05_huggingface_trl/                       # TRL SFT for function calling
-├── 05_huggingface_ocr/                       # Qwen2-VL vision-language
-├── 06_huggingface_grpo/                      # GRPO on GSM8K
-├── 07_huggingface_openai_gpt_oss_finetune_sft/  # gpt-oss-20b MoE LoRA
-├── 07_huggingface_trl_multi_agency/          # Multi-agent GRPO (exploratory)
-├── 08_vtt/                                   # Video-text training
-└── 09_vss/                                   # LongCat-Flash-Omni 560B
+├── 01_basics/01_neuralnet/                       # Linear regression — the mechanics
+├── 01_basics/02_convnet/                         # CNN on synthetic MNIST
+├── 01_basics/03_convnet_cifar10/        # CIFAR-10 — the 10% -> 81% case study
+├── 01_basics/04_rnn/                             # LSTM time series
+├── 02_intermediate/01_bayesian_neuralnet/                    # Parallel tempering MCMC
+├── 02_intermediate/02_rnn_stock_data/           # Real market data with yfinance
+├── 03_huggingface/01_llm_finetuning/                           # LLM fine-tuning
+├── 03_huggingface/02_trl_sft/                       # TRL SFT for function calling
+├── 03_huggingface/03_ocr/                       # Qwen2-VL vision-language
+├── 03_huggingface/06_grpo/                      # GRPO on GSM8K
+├── 03_huggingface/08_gpt_oss_lora/  # gpt-oss-20b MoE LoRA
+├── 03_huggingface/09_multi_agency/          # Multi-agent GRPO (exploratory)
+├── 04_video_text/                                   # Video-text training
+└── 05_video_speech/                                   # LongCat-Flash-Omni 560B
 ```
 
 ## A Note on Honesty

@@ -1,0 +1,68 @@
+# =============================================================================
+# 01_basics/01_neuralnet as a self-contained uv project.
+#
+#     cd 01_basics/01_neuralnet
+#     uv sync                       # creates .venv and installs the LOCKED set
+#     uv run train_ds_enhanced.py   # no activate step needed
+#
+# Why a project here rather than the `uv venv` + `uv pip install` recipe the
+# rest of the course uses: with a committed uv.lock, everyone who clones this
+# repository resolves to byte-identical dependency versions. `uv pip install
+# torch deepspeed` resolves to whatever is newest on the day you run it, which
+# is how a tutorial that worked in March stops working in September without
+# anyone touching it.
+#
+# The lock is the artefact that matters. Regenerate it deliberately with
+# `uv lock --upgrade`, not by accident.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-01-basic-neuralnet"
+version = "0.1.0"
+description = "Smallest possible DeepSpeed example: fitting y = 2x + 1"
+readme = "README.md"
+
+# torch 2.13 wheels start at 3.10, and DeepSpeed's own floor is 3.9. 3.10 is
+# the lower bound that actually resolves; anything looser produces a lockfile
+# that cannot be installed on the Python it claims to support.
+requires-python = ">=3.10"
+
+dependencies = [
+    # The CUDA build is pinned via [[tool.uv.index]] at the bottom of this
+    # file rather than inherited from PyPI -- see the note there.
+    "torch>=2.2",
+    "deepspeed>=0.14",
+]
+
+[project.optional-dependencies]
+# Weights & Biases stays optional, and the training scripts import it inside a
+# try/except. Install with `uv sync --extra tracking` if you want it.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Nothing exotic is needed here: DeepSpeed publishes wheels, so it does not
+# have to compile against an already-installed torch at build time. If a future
+# release goes back to an sdist-only build, this is where
+# `no-build-isolation-package = ["deepspeed"]` would go.
+package = false
+
+# torch is pinned to an explicit CUDA 12.8 build. This is NOT cosmetic:
+# PyPI's default torch is now a CUDA 13.0 wheel, and on a host whose driver
+# predates CUDA 13 -- 550 and 570 series, which is what much rented hardware
+# runs -- it installs fine and then reports cuda.is_available() == False with
+# "The NVIDIA driver on your system is too old". Verified on a driver 550.127
+# box: uv sync succeeded, torch could not see the GPU at all.
+#
+# That failure is silent in the worst way: require_gpu() then tells the reader
+# they have no GPU while nvidia-smi shows one.
+#
+# cu128 runs on both sides -- driver 550/570 (CUDA 12.x) and 580+ (CUDA 13.x,
+# backward compatible with cu12 wheels). If you are on a newer driver and want
+# the newest CUDA, change the URL below to cu130 and re-run `uv lock`.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

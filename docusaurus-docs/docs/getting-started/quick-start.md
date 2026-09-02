@@ -62,7 +62,7 @@ tail -f logs/hello_*.out
 ## 2. Your First DeepSpeed Run
 
 ```bash
-cd 01_basic_neuralnet
+cd 01_basics/01_neuralnet
 
 # Single GPU
 deepspeed --num_gpus=1 train_ds.py
@@ -89,7 +89,7 @@ This trains a two-parameter linear model to recover $y = 2x + 1$ over 30 epochs.
 }
 ```
 
-Note there is **no `zero_optimization` block** — at two parameters there is nothing worth partitioning, so the example omits it. ZeRO appears from `03_basic_rnn` onward.
+Note there is **no `zero_optimization` block** — at two parameters there is nothing worth partitioning, so the example omits it. ZeRO appears from `01_basics/04_rnn` onward.
 
 :::warning This config is valid for exactly one GPU
 $32 = 32 \times 1 \times 1$. Run `deepspeed --num_gpus=2 train_ds.py` and the [batch invariant](/docs/reference/deepspeed-config#2-batch-size) fails:

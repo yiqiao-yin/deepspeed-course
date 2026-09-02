@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Multi-GPU smoke test for 06_huggingface_online_dpo.
+# Multi-GPU smoke test for 03_huggingface/07_online_dpo.
 #
 #     bash tests/gpu/verify_06_online_dpo.sh [num_gpus]      # default 2
 #
@@ -24,7 +24,7 @@
 # is exactly where a shared code path breaks for two of them and not the third.
 #
 # It also exercises the 05 -> 06 handoff the READMEs describe: a reward model
-# trained here by 05_huggingface_reward_model becomes the preference source.
+# trained here by 03_huggingface/04_reward_model becomes the preference source.
 # That is the documented pipeline, and it had never been run end to end.
 #
 # COVERAGE, NOT CONVERGENCE. Two optimizer steps on a handful of prompts.
@@ -33,8 +33,8 @@ set -uo pipefail
 
 GPUS="${1:-2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$HERE/06_huggingface_online_dpo"
-RM_DIR="$HERE/05_huggingface_reward_model"
+DIR="$HERE/03_huggingface/07_online_dpo"
+RM_DIR="$HERE/03_huggingface/04_reward_model"
 LOG="${VERIFY_LOG:-/tmp/verify_06.log}"
 RM_OUT=/tmp/rm-for-06
 
@@ -54,7 +54,7 @@ fi
 VISIBLE=$("$PY_BIN" -c "import torch;print(torch.cuda.device_count())")
 
 echo "=============================================================================="
-echo "  06_huggingface_online_dpo — multi-GPU smoke test"
+echo "  03_huggingface/07_online_dpo — multi-GPU smoke test"
 echo "=============================================================================="
 "$PY_BIN" - <<'PY'
 import torch

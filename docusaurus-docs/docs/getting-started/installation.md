@@ -236,8 +236,8 @@ download, and runs in CI on every push. See
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py recommend 01_basic_neuralnet
-uv run runpod/runpod_ctl.py run 01_basic_neuralnet --yes
+uv run runpod/runpod_ctl.py recommend 01_basics/01_neuralnet
+uv run runpod/runpod_ctl.py run 01_basics/01_neuralnet --yes
 ```
 
 See [RunPod Setup](/docs/guides/runpod-setup#2a-provisioning-from-the-command-line).

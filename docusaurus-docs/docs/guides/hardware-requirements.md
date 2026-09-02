@@ -51,7 +51,7 @@ Since [ZeRO Stage 3 costs $3\Psi$ of communication on the critical path](/docs/g
 | A100 80 GB | 80 GB HBM2e | 2039 GB/s | The long-standing workhorse |
 | H100 SXM | 80 GB HBM3 | 3350 GB/s | Adds FP8 |
 | H200 SXM | 141 GB HBM3e | 4800 GB/s | Same compute as H100, much more memory and bandwidth |
-| B200 | 192 GB HBM3e | ~8000 GB/s | What `09_vss` targets |
+| B200 | 192 GB HBM3e | ~8000 GB/s | What `05_video_speech` targets |
 
 Note H200 versus H100: **identical compute, 1.76× the memory and 1.43× the bandwidth.** For memory-bound training that is a large real-world gain even though the FLOPS figure is unchanged — a good illustration of why the compute number is the wrong headline.
 
@@ -111,7 +111,7 @@ The totals coincide; the **breakdowns do not**. Mixed precision moves memory fro
 | 13–30B | LoRA + ZeRO-2/3 | 4× A100 80 GB |
 | 30–70B | LoRA + ZeRO-3, offload | 8× A100 / 4× H100 |
 | 70B+ | LoRA + ZeRO-3 + CPU/NVMe offload | 8× H100/H200, large host RAM |
-| 500B+ | LoRA + ZeRO-3 + aggressive offload | See `09_vss` — 2× B200 **and 3 TB RAM** |
+| 500B+ | LoRA + ZeRO-3 + aggressive offload | See `05_video_speech` — 2× B200 **and 3 TB RAM** |
 
 ```mermaid
 flowchart TB
@@ -151,17 +151,17 @@ flowchart TB
 | Example | Model | Minimum | Recommended |
 |---|---|---|---|
 | `01`–`04` basics | < 1M params | 1× RTX 3060 | Any CUDA GPU |
-| `04_intermediate_rnn_stock_data` | ~5K params | 1× any GPU | 2× for the demo |
-| `05_huggingface_trl` | Qwen3-0.6B | 1× RTX 3070 (8 GB) | 2× RTX 4090 |
-| `05_huggingface_ocr` | Qwen2-VL-2B | 2× 16 GB with LoRA | 2× RTX 4090 |
-| `06_huggingface_grpo` | Qwen-1.5B | 1× 8 GB + 64 GB RAM | 1× RTX 4090 |
+| `02_intermediate/02_rnn_stock_data` | ~5K params | 1× any GPU | 2× for the demo |
+| `03_huggingface/02_trl_sft` | Qwen3-0.6B | 1× RTX 3070 (8 GB) | 2× RTX 4090 |
+| `03_huggingface/03_ocr` | Qwen2-VL-2B | 2× 16 GB with LoRA | 2× RTX 4090 |
+| `03_huggingface/06_grpo` | Qwen-1.5B | 1× 8 GB + 64 GB RAM | 1× RTX 4090 |
 | `07_..._gpt_oss` | gpt-oss-20b | 4× A100 80 GB | 4× H100 |
 | `07_..._multi_agency` | Qwen-1.5B | 1× RTX 4090 | — |
-| `08_vtt` LLaVA | LLaVA 7B | 2× A100 40 GB | 2× A100 80 GB |
-| `08_vtt` seq2seq | NLLB-600M | 1× RTX 3090 | 1× A100 |
-| `09_vss` | LongCat 560B | **2× B200 + 3 TB RAM + 2 TB disk** | 8× B200 |
+| `04_video_text` LLaVA | LLaVA 7B | 2× A100 40 GB | 2× A100 80 GB |
+| `04_video_text` seq2seq | NLLB-600M | 1× RTX 3090 | 1× A100 |
+| `05_video_speech` | LongCat 560B | **2× B200 + 3 TB RAM + 2 TB disk** | 8× B200 |
 
-:::danger `09_vss` is gated on host RAM, not GPUs
+:::danger `05_video_speech` is gated on host RAM, not GPUs
 The example's `run_2xB200.sh` preflights GPU count, free disk, and total RAM, and it is the **3 TB of system RAM** that makes the run possible — 1.12 TB of BF16 weights live in host memory and stream to the GPUs. Two B200s alone are not sufficient. Under-provisioned RAM does not degrade gracefully; the host swaps and throughput effectively stops. See [Video-Speech Training](/docs/tutorials/multimodal/video-speech-training#2-the-memory-problem).
 :::
 
@@ -177,7 +177,7 @@ CPU offload needs $\approx 12\Psi$ bytes for Adam states, plus room for the data
 | HuggingFace, no offload | 32 GB |
 | 7B with optimizer offload | 128 GB |
 | 70B with offload | 1 TB+ |
-| `09_vss` (560B) | **3 TB** |
+| `05_video_speech` (560B) | **3 TB** |
 
 A useful rule: with offload enabled, provision host RAM at **1.5–2× the theoretical requirement**. Pinned memory is non-swappable and fragments, so the practical ceiling is below the nominal total.
 

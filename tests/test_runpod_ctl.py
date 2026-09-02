@@ -51,8 +51,20 @@ def main() -> int:
                 f"{name}: requirements are sane")
 
     # Every example folder in the repo should be represented.
-    on_disk = {p.name for p in REPO_ROOT.iterdir()
-               if p.is_dir() and p.name[:2].isdigit()}
+    #
+    # The taxonomy is two levels: NN_section/NN_topic. The top-level numbered
+    # directories are SECTIONS (01_basics, 03_huggingface, ...) and are pure
+    # containers -- they hold no training script and are not registered. The
+    # examples are their numbered children. Checking the top level instead, as
+    # this did before the reorganisation, would demand that every section be
+    # registered as an example.
+    on_disk = {
+        f"{section.name}/{topic.name}"
+        for section in REPO_ROOT.iterdir()
+        if section.is_dir() and section.name[:2].isdigit()
+        for topic in section.iterdir()
+        if topic.is_dir() and topic.name[:2].isdigit()
+    }
     missing = on_disk - set(ctl.EXAMPLES)
     r.check(not missing, "every numbered example is in the requirements table",
             f"missing: {sorted(missing)}")
@@ -64,8 +76,8 @@ def main() -> int:
             "and every example fails with CUDA_HOME errors.")
 
     # ---- 3. Bootstrap command --------------------------------------------
-    spec = ctl.EXAMPLES["06_huggingface_grpo"]
-    boot = ctl.bootstrap("06_huggingface_grpo", spec, "main")
+    spec = ctl.EXAMPLES["03_huggingface/06_grpo"]
+    boot = ctl.bootstrap("03_huggingface/06_grpo", spec, "main")
     for needle, label in [
         ("git clone", "clones the repository"),
         ("astral.sh/uv/install.sh", "installs uv"),
@@ -79,7 +91,7 @@ def main() -> int:
 
     r.check("pip install " not in boot.replace("uv pip install ", ""),
             "bootstrap never calls bare pip")
-    r.check(ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+    r.check(ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                           "feature-x").count("-b feature-x") == 1,
             "bootstrap honours --branch")
 
@@ -97,10 +109,10 @@ def main() -> int:
         tok in text for tok in ("rpa_", "sk-", "Bearer rp")),
         "reads the key from the environment; none hard-coded")
 
-    # ---- 6. 09_vss carries its host-RAM warning ---------------------------
+    # ---- 6. 05_video_speech carries its host-RAM warning ---------------------------
     r.check(source_contains("runpod/runpod_ctl.py", "3 TB of HOST RAM")
             or source_contains("runpod/runpod_ctl.py", "HOST RAM"),
-            "09_vss warns that host RAM, not VRAM, is the constraint")
+            "05_video_speech warns that host RAM, not VRAM, is the constraint")
 
     # ---- 7. Every example is sbatch-able (the CoreWeave promise) ---------
     for name in sorted(on_disk):
@@ -111,7 +123,7 @@ def main() -> int:
                 "A CoreWeave user must be able to sbatch every topic.")
 
     # ---- 7b. Result collection (the no-SSH path) --------------------------
-    boot_c = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+    boot_c = ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                            "main", topic="tpc123", dry_run=True)
     r.check("tpc123" in boot_c, "bootstrap embeds the results topic")
     r.check("report()" in boot_c, "bootstrap defines a progress reporter")
@@ -120,7 +132,7 @@ def main() -> int:
     r.check(f"timeout {ctl.DRY_RUN_SECONDS}" in boot_c,
             f"--dry-run caps the run at {ctl.DRY_RUN_SECONDS}s")
 
-    boot_plain = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+    boot_plain = ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                                "main")
     r.check("timeout" not in boot_plain, "without --dry-run there is no timeout cap")
     r.check("ntfy" not in boot_plain.lower() or "report(){ :; }" in boot_plain,
@@ -217,7 +229,7 @@ def main() -> int:
         if not folder.is_dir():
             continue
         # The project lives beside the registered training script, which is not
-        # always the topic root: `08_vtt` and `09_vss` are legacy aggregate
+        # always the topic root: `04_video_text` and `05_video_speech` are legacy aggregate
         # entries whose script sits inside a subtopic that carries its own
         # project. Walk up from the script to the topic root and take the first
         # pyproject found.
@@ -288,7 +300,7 @@ def main() -> int:
         # passes on a file whose only mention is the comment above the call.
         code = "\n".join(_re.sub(r"#.*$", "", ln) for ln in src.splitlines())
         # Match --local_rank ANYWHERE in the add_argument call, not just as
-        # the first option string: 05_huggingface_ocr declares it as
+        # the first option string: 03_huggingface/03_ocr declares it as
         # add_argument("--local-rank", "--local_rank", ...), which an anchored
         # pattern reads as missing. That was a checker bug, not a code bug.
         tolerant = (_re.search(r"\.parse_known_args\s*\(", code) is not None
@@ -326,7 +338,7 @@ def main() -> int:
 
     # The watchdog must survive being joined with "; " -- assert the shape
     # directly, so the reason is documented at the point of failure.
-    one = ctl.bootstrap("01_basic_neuralnet", ctl.EXAMPLES["01_basic_neuralnet"],
+    one = ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                         "main", topic="t")
     r.check(") &;" not in one,
             "the watchdog does not leave a bare `&` before a `;`",

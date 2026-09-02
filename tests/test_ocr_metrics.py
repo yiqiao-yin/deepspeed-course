@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "05_huggingface_ocr"))
+sys.path.insert(0, str(REPO_ROOT / "03_huggingface/03_ocr"))
 
 from ocr_metrics import (  # noqa: E402
     OCR_MODELS, accuracy_per_token, char_error_rate, compression_ratio,

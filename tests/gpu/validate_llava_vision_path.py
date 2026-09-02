@@ -50,7 +50,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "tests"))
 from _srcload import load_function  # noqa: E402
 
-SCRIPT = REPO / "08_vtt/hf_ds_vtt_test2/llava_video_trainer/video_training_script.py"
+SCRIPT = REPO / "04_video_text/01_hf_baseline/llava_video_trainer/video_training_script.py"
 MODEL_ID = "llava-hf/llava-interleave-qwen-0.5b-hf"
 NUM_FRAMES = 4
 

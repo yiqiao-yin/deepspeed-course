@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "05_huggingface_dpo"))
+sys.path.insert(0, str(REPO_ROOT / "03_huggingface/05_dpo"))
 
 from preference_losses import (  # noqa: E402
     PreferenceBatch,

@@ -7,7 +7,7 @@ sidebar_position: 7
 The final family in this course, and the only one that takes **video and speech
 in** and **speaks back**.
 
-**Example:** `09_vss/02_thinker_talker`
+**Example:** `05_video_speech/02_thinker_talker`
 
 :::info Scope
 This topic is specifically **video + audio in → speech out**. The neighbouring
@@ -38,7 +38,7 @@ which frame goes with which sound. Ask:
 and it cannot answer. Not because it is undertrained — because the information
 that **pointing and saying happened at the same moment** was never in the input.
 
-:::note This is a strictly harder problem than 08_vtt
+:::note This is a strictly harder problem than 04_video_text
 [Token Compression](./token-compression.md) and [Streaming Memory](./streaming-video.md)
 only ever had to represent time *within* one stream. Here, **two streams have to
 agree.**
@@ -275,7 +275,7 @@ uv pip install librosa soundfile opencv-python-headless
 **CoreWeave / any SLURM cluster:**
 
 ```bash
-cd 09_vss/02_thinker_talker
+cd 05_video_speech/02_thinker_talker
 sbatch run_deepspeed.sh
 sbatch run_deepspeed.sh --max-steps 20        # cheap dry run
 ```
@@ -284,7 +284,7 @@ sbatch run_deepspeed.sh --max-steps 20        # cheap dry run
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 09_vss/02_thinker_talker \
+uv run runpod/runpod_ctl.py run 05_video_speech/02_thinker_talker \
     --dry-run --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```
@@ -294,7 +294,7 @@ uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 TMRoPE is integer arithmetic:
 
 ```bash
-uv run 09_vss/02_thinker_talker/tmrope.py
+uv run 05_video_speech/02_thinker_talker/tmrope.py
 uv run tests/test_tmrope.py       # 58 checks, no GPU, no download
 ```
 

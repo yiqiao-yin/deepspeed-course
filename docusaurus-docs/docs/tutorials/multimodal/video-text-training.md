@@ -6,7 +6,7 @@ sidebar_position: 1
 
 Two contrasting approaches to video understanding, in the same example directory: a **vision-language model** that actually looks at frames, and a **sequence-to-sequence model** that only reads metadata. The comparison is the lesson.
 
-**Example:** `08_vtt/hf_ds_vtt_test2`
+**Example:** `04_video_text/01_hf_baseline`
 
 ## 1. Two Architectures, Two Problems
 
@@ -65,7 +65,7 @@ The seq2seq model never sees the video. It cannot answer any question about visu
 ## 2. Quick Start
 
 ```bash
-cd 08_vtt/hf_ds_vtt_test2
+cd 04_video_text/01_hf_baseline
 
 # Vision-language
 cd llava_video_trainer && ./run_training.sh

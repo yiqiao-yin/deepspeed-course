@@ -20,7 +20,7 @@ succeed while doing something other than intended:
 
 The batch check is the one that matters most in practice: it is the single most
 common first-run failure in this course, and it is trivially detectable
-statically. `02_basic_convnet_cifar10_examples` shipped a config hard-coded to
+statically. `01_basics/03_convnet_cifar10` shipped a config hard-coded to
 1 GPU alongside a launcher requesting 2.
 
 Pure stdlib — no dependencies.

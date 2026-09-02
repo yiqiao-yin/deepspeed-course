@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "08_vtt" / "04_video_eval"))
+sys.path.insert(0, str(REPO_ROOT / "04_video_text" / "05_video_eval"))
 
 from video_mme_eval import (  # noqa: E402
     SINGLE_FRAME_CATEGORIES,

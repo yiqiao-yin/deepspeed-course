@@ -19,6 +19,10 @@ diagrams. This README covers setup and cluster operations.
 
 ---
 
+> **Folders were reorganised.** Every top-level number now appears once,
+> and examples live at `NN_section/NN_topic`. If a link into this repository
+> stopped working, [MOVED.md](MOVED.md) maps every old path to its new one.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -92,7 +96,7 @@ uv pip install deepspeed
 Each example folder's README has an **Environment & Local Testing** section with
 its exact dependencies, GPU requirement, and download size.
 
-All examples use DeepSpeed except `07_huggingface_trl_multi_agency`, which drives
+All examples use DeepSpeed except `03_huggingface/09_multi_agency`, which drives
 TRL's `GRPOTrainer` directly and needs only `uv`.
 
 ### What runs locally, and what does not
@@ -124,46 +128,46 @@ See [`tests/README.md`](tests/README.md).
 
 ```
 deepspeed-course/
-├── 01_basic_neuralnet/
+├── 01_basics/01_neuralnet/
 │   ├── train_ds.py                    # Basic neural network training
 │   ├── train_ds_enhanced.py           # Enhanced with W&B tracking
 │   ├── ds_config.json                 # DeepSpeed configuration
 │   ├── run_deepspeed.sh              # SLURM batch script
 │   └── README.md                      # Documentation
 │
-├── 02_basic_convnet/
+├── 01_basics/02_convnet/
 │   ├── train_ds.py                    # CNN training on synthetic MNIST
 │   ├── ds_config.json                 # DeepSpeed configuration
 │   ├── run_deepspeed.sh              # SLURM batch script
 │   └── README.md                      # Documentation
 │
-├── 02_basic_convnet_cifar10_examples/
+├── 01_basics/03_convnet_cifar10/
 │   ├── cifar10_deepspeed.py          # CIFAR-10 CNN (81% accuracy!)
 │   ├── ds_config.json                 # DeepSpeed config (SGD + BatchNorm)
 │   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
 │   ├── MODEL_IMPROVEMENT_STRATEGY.md  # Technical deep dive
 │   └── README.md                      # Comprehensive guide
 │
-├── 03_basic_rnn/
+├── 01_basics/04_rnn/
 │   ├── train_rnn_deepspeed.py        # LSTM time series prediction
 │   ├── ds_config_rnn.json            # DeepSpeed config (ZeRO-2 + FP16)
 │   ├── run_deepspeed.sh              # SLURM batch script
 │   └── README.md                      # Documentation with W&B guide
 │
-├── 04_bayesian_neuralnet/
+├── 02_intermediate/01_bayesian_neuralnet/
 │   ├── parallel_tempering_mcmc.py    # Parallel tempering MCMC for Bayesian NNs
 │   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
 │   └── README.md                      # Bayesian inference with replica exchange
 │
-├── 04_intermediate_rnn_stock_data/
+├── 02_intermediate/02_rnn_stock_data/
 │   ├── train_rnn_stock_data.py       # Single-machine stock RNN training
 │   ├── train_rnn_stock_data_ds.py    # DeepSpeed stock RNN with W&B
 │   ├── train_rnn_stock_data_config.json # DeepSpeed config (ZeRO-2 + FP16)
 │   ├── run_deepspeed.sh              # SLURM batch script (2 GPUs)
 │   └── README.md                      # Stock prediction guide with uv setup
 │
-├── 05_huggingface/                    # HuggingFace examples
-├── 05_huggingface_trl/                # TRL Function Calling with DeepSpeed
+├── 03_huggingface/01_llm_finetuning/                    # HuggingFace examples
+├── 03_huggingface/02_trl_sft/                # TRL Function Calling with DeepSpeed
 │   ├── train_trl_deepspeed.py         # SFTTrainer with DeepSpeed + ZeRO-2
 │   ├── inference_trl_model.py         # Inference (sample/single/interactive modes)
 │   ├── ds_config.json                 # DeepSpeed config (batch_size=16, auto weight_decay)
@@ -171,20 +175,20 @@ deepspeed-course/
 │   ├── tool_augmented_dataset.json    # Function calling training data
 │   └── README.md                      # Complete TRL + DeepSpeed guide
 │
-├── 05_huggingface_ocr/                # Vision-Language Model Fine-tuning
+├── 03_huggingface/03_ocr/                # Vision-Language Model Fine-tuning
 │   ├── train_ds.py                    # Qwen2-VL OCR training (2x RTX 4000 GPUs)
 │   ├── submit_job.sh                  # SLURM batch script for CoreWeave
 │   ├── README.md                      # Complete uv setup guide with DeepSpeed
 │   └── HARDWARE_REQUIREMENTS.md       # GPU comparison table and recommendations
 │
-├── 06_huggingface_grpo/               # GRPO (Group Relative Policy Optimization)
+├── 03_huggingface/06_grpo/               # GRPO (Group Relative Policy Optimization)
 │   ├── grpo_gsm8k_train.py            # Memory-efficient GRPO training with LoRA
 │   ├── ds_config.json                 # DeepSpeed ZeRO-2 config (tested on RTX 3070 8GB)
 │   ├── run_deepspeed.sh               # SLURM batch script (CoreWeave/HPC clusters)
 │   ├── archive/                       # Experimental scripts and configs
 │   └── README.md                      # Complete guide: LoRA + DeepSpeed + W&B + ZeRO stages
 │
-├── 07_huggingface_openai_gpt_oss_finetune_sft/  # SFT examples
+├── 03_huggingface/08_gpt_oss_lora/  # SFT examples
 │   └── lora/                          # LoRA fine-tuning with PEFT
 │       ├── train_ds.py                # GPT-OSS-20B training (4x A100/RTX 4090)
 │       ├── train_ds_mistral7b.py      # Mistral-7B for 8GB GPUs (2x RTX 3070)
@@ -194,9 +198,9 @@ deepspeed-course/
 │       ├── HARDWARE_GUIDE.md          # Hardware selection & comparison tables
 │       └── README.md                  # Complete guide: LoRA + DeepSpeed + W&B
 │
-├── 07_huggingface_trl_multi_agency/   # Multi-agent systems
+├── 03_huggingface/09_multi_agency/   # Multi-agent systems
 │
-├── 08_vtt/                            # Video-Text-to-Text Training
+├── 04_video_text/                            # Video-Text-to-Text Training
 │   ├── README.md                      # The advanced track: why each subsection exists
 │   │
 │   ├── 01_qwen25vl_baseline/          # Modern baseline — a model that can represent TIME
@@ -237,7 +241,7 @@ deepspeed-course/
 │       │
 │       └── README.md                   # Comparison: LLaVA vs Seq2Seq
 │
-├── 09_vss/                            # Video-Speech-to-Speech — video AND audio in, speech out
+├── 05_video_speech/                            # Video-Speech-to-Speech — video AND audio in, speech out
 │   ├── README.md                      # The track, and the current model landscape
 │   │
 │   ├── 01_longcat_flash_omni/         # The frontier: 560B, ~3 TB host RAM
@@ -466,7 +470,7 @@ Each training folder (01-04) includes a `run_deepspeed.sh` SLURM batch script op
 
 ```bash
 # 1. Navigate to your desired training folder
-cd 04_intermediate_rnn_stock_data
+cd 02_intermediate/02_rnn_stock_data
 
 # 2. Edit the SLURM script to configure your environment
 nano run_deepspeed.sh
@@ -821,7 +825,7 @@ source myenv/bin/activate
 uv pip install torch deepspeed wandb
 
 # Navigate to a training folder
-cd 04_intermediate_rnn_stock_data
+cd 02_intermediate/02_rnn_stock_data
 
 # Run training directly
 uv run deepspeed --num_gpus=1 train_rnn_stock_data_ds.py
@@ -846,28 +850,28 @@ jupyter lab --ip=0.0.0.0 --port=8888 --allow-root
 
 **Basic Neural Network (Single GPU):**
 ```bash
-cd 01_basic_neuralnet
+cd 01_basics/01_neuralnet
 sbatch run_deepspeed.sh  # SLURM
 # Or: deepspeed --num_gpus=1 train_ds_enhanced.py  # Direct
 ```
 
 **CIFAR-10 CNN (Multi-GPU):**
 ```bash
-cd 02_basic_convnet_cifar10_examples
+cd 01_basics/03_convnet_cifar10
 sbatch run_deepspeed.sh  # SLURM
 # Or: deepspeed --num_gpus=2 cifar10_deepspeed.py  # Direct
 ```
 
 **LSTM Time Series (Multi-GPU + ZeRO-2):**
 ```bash
-cd 03_basic_rnn
+cd 01_basics/04_rnn
 sbatch run_deepspeed.sh  # SLURM
 # Or: deepspeed --num_gpus=2 train_rnn_deepspeed.py  # Direct
 ```
 
 **Stock Price RNN (Multi-GPU + Real Data):**
 ```bash
-cd 04_intermediate_rnn_stock_data
+cd 02_intermediate/02_rnn_stock_data
 sbatch run_deepspeed.sh  # SLURM
 # Or: deepspeed --num_gpus=2 train_rnn_stock_data_ds.py  # Direct
 ```

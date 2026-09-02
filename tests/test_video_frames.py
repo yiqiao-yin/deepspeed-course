@@ -10,7 +10,7 @@ Run:
 
 Background
 ----------
-`08_vtt/.../video_training_script.py` originally shipped a placeholder:
+`04_video_text/.../video_training_script.py` originally shipped a placeholder:
 
     # For this example, we'll use a placeholder image repeated
     ...
@@ -36,7 +36,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results, load_function, source_contains  # noqa: E402
 
-SCRIPT = "08_vtt/hf_ds_vtt_test2/llava_video_trainer/video_training_script.py"
+SCRIPT = "04_video_text/01_hf_baseline/llava_video_trainer/video_training_script.py"
 
 
 def make_ramp_video(path: Path, n_frames: int = 100, size: int = 64) -> None:

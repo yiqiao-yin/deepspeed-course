@@ -111,7 +111,7 @@ Import torch at module scope and a CPU-only reader gets a CUDA traceback before 
 :::
 
 :::tip Better still: make part of your example CPU-runnable
-`08_vtt/02_token_compression/` and `08_vtt/03_streaming_memory/` run fully on CPU because their substance is *algorithms* rather than *weights*.
+`04_video_text/03_token_compression/` and `04_video_text/04_streaming_memory/` run fully on CPU because their substance is *algorithms* rather than *weights*.
 
 If your contribution has an algorithmic core, factor it into a module that runs on plain tensors. Readers without a GPU can then learn the actual idea — and you get a test suite that runs in CI.
 :::
@@ -256,7 +256,7 @@ In docs, READMEs, SLURM scripts and docstrings. `uv pip install X`, not `pip ins
 
 ### Use `deepspeed` — this is a DeepSpeed course
 
-An example that only calls `Trainer.train()` with no ZeRO config does not belong here. Two narrow exceptions exist already: `07_huggingface_trl_multi_agency` drives TRL directly, and `08_vtt/03_streaming_memory` / `04_video_eval` are inference and evaluation — no optimizer, nothing to shard.
+An example that only calls `Trainer.train()` with no ZeRO config does not belong here. Two narrow exceptions exist already: `03_huggingface/09_multi_agency` drives TRL directly, and `04_video_text/04_streaming_memory` / `04_video_eval` are inference and evaluation — no optimizer, nothing to shard.
 
 If yours is a third exception, **say so explicitly in the PR and explain why**.
 

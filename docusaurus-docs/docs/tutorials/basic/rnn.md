@@ -808,7 +808,7 @@ $$
 ## Quick Start
 
 ```bash
-cd 03_basic_rnn
+cd 01_basics/04_rnn
 
 # Single GPU
 deepspeed train_rnn_deepspeed.py

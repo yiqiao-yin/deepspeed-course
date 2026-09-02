@@ -191,7 +191,7 @@ If `TrainingArguments` sets `lr_scheduler_type` **and** `ds_config.json` defines
 Mechanism and rationale: [FP16 and dynamic loss scaling](/docs/tutorials/basic/neural-network#85-fp16-and-dynamic-loss-scaling).
 
 :::danger Never enable `fp16` and `bf16` together
-They are mutually exclusive. Setting both raises at initialization. Setting *neither* is valid and means FP32 — which is what `05_huggingface_trl/ds_config.json` does.
+They are mutually exclusive. Setting both raises at initialization. Setting *neither* is valid and means FP32 — which is what `03_huggingface/02_trl_sft/ds_config.json` does.
 :::
 
 ## 6. ZeRO Optimization
@@ -377,7 +377,7 @@ or `gradient_checkpointing=True` in `TrainingArguments`. The `activation_checkpo
 
 ## 9. Complete Examples
 
-**Small model, single node** (`01_basic_neuralnet`):
+**Small model, single node** (`01_basics/01_neuralnet`):
 
 ```json
 {
@@ -410,7 +410,7 @@ or `gradient_checkpointing=True` in `TrainingArguments`. The `activation_checkpo
 }
 ```
 
-**Very large model with offload** (`09_vss`, 560B):
+**Very large model with offload** (`05_video_speech`, 560B):
 
 ```json
 {

@@ -6,7 +6,7 @@
 Audit an example against the three-platform contract in CONTRIBUTING.md §3.
 
     uv run scripts/check_contract.py                    # every example
-    uv run scripts/check_contract.py 05_huggingface_dpo # just one
+    uv run scripts/check_contract.py 03_huggingface/05_dpo # just one
     uv run scripts/check_contract.py --strict           # exit 1 on any failure
 
 Why this exists
@@ -48,15 +48,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Documented exceptions, with the reason. An exception with no reason is a bug.
 NO_DEEPSPEED = {
-    "07_huggingface_trl_multi_agency": "drives TRL's GRPOTrainer directly",
-    "08_vtt/03_streaming_memory": "streaming inference — sequential, no optimizer",
-    "08_vtt/04_video_eval": "evaluation — short generate() calls",
-    "09_vss/03_duplex_streaming": "duplex inference — slices arrive in order",
-    "09_vss/04_omni_eval": "evaluation — modality-ablation generate() calls",
+    "03_huggingface/09_multi_agency": "drives TRL's GRPOTrainer directly",
+    "04_video_text/04_streaming_memory": "streaming inference — sequential, no optimizer",
+    "04_video_text/05_video_eval": "evaluation — short generate() calls",
+    "05_video_speech/03_duplex_streaming": "duplex inference — slices arrive in order",
+    "05_video_speech/04_omni_eval": "evaluation — modality-ablation generate() calls",
 }
 RUNTIME_DS_CONFIG = {
-    "04_bayesian_neuralnet": "writes a temporary config at runtime",
-    "05_huggingface_ocr": "generate_deepspeed_config() writes it at runtime",
+    "02_intermediate/01_bayesian_neuralnet": "writes a temporary config at runtime",
+    "03_huggingface/03_ocr": "generate_deepspeed_config() writes it at runtime",
 }
 
 
@@ -258,7 +258,7 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
     # Training bounds work with --max-steps. Other regimes bound the work
     # differently and their own name is the RIGHT one: an MCMC sampler caps
     # iterations, not optimizer steps, and renaming it for uniformity would
-    # make the flag lie about what it does. 04_bayesian_neuralnet was a false
+    # make the flag lie about what it does. 02_intermediate/01_bayesian_neuralnet was a false
     # positive here until --num_iterations was recognised.
     CAPS = ("max-steps", "max_steps", "--frames", "--slices", "--limit",
             "--questions", "--examples", "--dry-run",
@@ -267,7 +267,7 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
     # runpod_ctl.py -- not merely the files that happen to carry a __main__
     # guard. Two real cases this gets wrong otherwise:
     #
-    #   05_huggingface   train_ds.py is the registered entry point and has the
+    #   03_huggingface/01_llm_finetuning   train_ds.py is the registered entry point and has the
     #                    cap, but has no __main__ guard, so a guard-based scan
     #                    skips it and judges main.py instead.
     #   07_gpt_oss       the registered script is lora/train_ds.py, in a

@@ -107,7 +107,7 @@ This is what makes the batch-size invariant self-satisfying — set `train_batch
 :::danger `"auto"` silently does nothing outside HF Trainer
 Pass a config containing `"auto"` to `deepspeed.initialize` directly and there is nothing to resolve it. Depending on the key you get a parse error or, worse, a string where a number was expected.
 
-**Rule:** `"auto"` requires HF `Trainer` (or a TRL trainer). With raw `deepspeed.initialize`, every value must be literal. In this course, `07_huggingface_openai_gpt_oss_finetune_sft` uses `"auto"` because it runs under `Trainer`; `01_basic_neuralnet` uses literals because it does not.
+**Rule:** `"auto"` requires HF `Trainer` (or a TRL trainer). With raw `deepspeed.initialize`, every value must be literal. In this course, `03_huggingface/08_gpt_oss_lora` uses `"auto"` because it runs under `Trainer`; `01_basics/01_neuralnet` uses literals because it does not.
 :::
 
 ## 3. Choosing a Strategy from Parameter Count

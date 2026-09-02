@@ -10,7 +10,7 @@ while it is speaking it is **deaf**.
 
 That is a walkie-talkie.
 
-**Example:** `09_vss/03_duplex_streaming`
+**Example:** `05_video_speech/03_duplex_streaming`
 
 ## 1. Why Half Duplex Is Not Just "Less Polished"
 
@@ -141,7 +141,7 @@ model has no idea it was cut off mid-thought.
 ## 5. It Works
 
 ```
-$ uv run 09_vss/03_duplex_streaming/duplex.py
+$ uv run 05_video_speech/03_duplex_streaming/duplex.py
 
   slice  user      state       assistant
   --------------------------------------------------------------
@@ -172,8 +172,8 @@ Given a script, though, they are deterministic. So the scripts live in the test
 suite and the timing is asserted exactly:
 
 ```bash
-uv run 09_vss/03_duplex_streaming/duplex.py       # the scripted demo
-uv run 09_vss/03_duplex_streaming/run_duplex.py --slices 200
+uv run 05_video_speech/03_duplex_streaming/duplex.py       # the scripted demo
+uv run 05_video_speech/03_duplex_streaming/run_duplex.py --slices 200
 uv run tests/test_duplex.py                       # 36 checks, no GPU
 ```
 
@@ -205,7 +205,7 @@ uv pip install deepspeed transformers accelerate librosa soundfile opencv-python
 **CoreWeave / SLURM:**
 
 ```bash
-cd 09_vss/03_duplex_streaming
+cd 05_video_speech/03_duplex_streaming
 sbatch run_deepspeed.sh
 SLICES=1000 MODEL=Qwen/Qwen2.5-Omni-7B sbatch run_deepspeed.sh
 ```
@@ -214,7 +214,7 @@ SLICES=1000 MODEL=Qwen/Qwen2.5-Omni-7B sbatch run_deepspeed.sh
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 09_vss/03_duplex_streaming \
+uv run runpod/runpod_ctl.py run 05_video_speech/03_duplex_streaming \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```

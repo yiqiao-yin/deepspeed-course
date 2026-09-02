@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "04_intermediate_rnn_stock_data"))
+sys.path.insert(0, str(REPO_ROOT / "02_intermediate/02_rnn_stock_data"))
 
 from attention_layers import (  # noqa: E402
     InputAttention,

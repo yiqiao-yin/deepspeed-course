@@ -68,7 +68,7 @@ Anything that teaches distributed training, at any level:
 | Kind | Examples |
 |---|---|
 | **A new example** | a model, architecture, or training regime not yet covered |
-| **A new subsection** | a deeper treatment inside an existing topic (see `08_vtt/`) |
+| **A new subsection** | a deeper treatment inside an existing topic (see `04_video_text/`) |
 | **A fix** | a real bug — these are valued more than new features |
 | **A test** | a logic check that would have caught a bug we shipped |
 | **Docs** | clearer explanation, a diagram, a corrected claim |
@@ -104,20 +104,20 @@ Use this to decide which you are writing:
 | Is a variant of an existing method (a patched loss, a tweak) | **No** — add a module + test to the existing folder |
 
 **Worked example, from this repository.** The DPO family arrived as four
-documentation pages plus a loose module dropped into `06_huggingface_grpo/`.
+documentation pages plus a loose module dropped into `03_huggingface/06_grpo/`.
 That was wrong on both counts, and it was fixed by building what the contract
 actually requires:
 
-- `05_huggingface_dpo/` — the offline family, one `train_dpo.py` with
+- `03_huggingface/05_dpo/` — the offline family, one `train_dpo.py` with
   `--method dpo|ipo|cpo|kto|orpo|simpo`, because they share a trainer and
   differ by a scalar function. Six folders would have been six copies of the
   same file.
-- `05_huggingface_reward_model/` — a genuinely different objective
+- `03_huggingface/04_reward_model/` — a genuinely different objective
   (Bradley–Terry, a scalar head, `RewardTrainer`), so a separate folder.
-- `06_huggingface_online_dpo/` — different memory profile entirely (it
+- `03_huggingface/07_online_dpo/` — different memory profile entirely (it
   *generates* during training), so a separate folder with ZeRO-3 instead of
   ZeRO-2.
-- Dr. GRPO / DAPO / GSPO stayed **inside** `06_huggingface_grpo/` as a module,
+- Dr. GRPO / DAPO / GSPO stayed **inside** `03_huggingface/06_grpo/` as a module,
   because they are patches to an objective that already has a folder.
 
 The rule of thumb the split follows: **one folder per distinct memory profile
@@ -133,7 +133,7 @@ welcome.
 - **New top-level topic** → next number: `10_your_topic/`. Numbers signal
   difficulty; place it where its prerequisites sit, not where it is convenient.
 - **Deeper treatment of an existing topic** → a numbered subfolder:
-  `08_vtt/05_your_idea/`. This is often the better choice — it inherits the
+  `04_video_text/05_your_idea/`. This is often the better choice — it inherits the
   topic's context and does not claim the reader has finished everything before it.
 
 ### Before you start something large
@@ -182,7 +182,7 @@ The subset that *is* non-negotiable — `EXAMPLES` registration, `bash -n` over
 every shell script, `#SBATCH` presence — is enforced by `tests/test_runpod_ctl.py`
 and does fail CI.
 
-> **It works.** Pointing it at the repo found a shipped bug: `05_huggingface_ocr`
+> **It works.** Pointing it at the repo found a shipped bug: `03_huggingface/03_ocr`
 > requested `--ntasks-per-node=2` *and* ran `deepspeed --num_gpus=2`, so SLURM
 > started two tasks that each spawned two workers — four processes for two GPUs,
 > which hangs. It also found 13 READMEs that never told a RunPod reader how to
@@ -206,7 +206,7 @@ single most common reason people bounce off distributed training.
 **Requirement: every entry point calls `require_gpu()` before importing torch
 or deepspeed at module scope.**
 
-Copy it verbatim from any existing example (e.g. `01_basic_neuralnet/train_ds.py`)
+Copy it verbatim from any existing example (e.g. `01_basics/01_neuralnet/train_ds.py`)
 — the scaffold in §5 writes it for you. Then **customise the message body** to
 say something true about *your* example:
 
@@ -243,7 +243,7 @@ the code on CPU. Let them, with a warning that the DeepSpeed config also needs
 `"torch_adam": true` and fp16/bf16 disabled.
 
 > **Better still: make part of your example CPU-runnable.**
-> `08_vtt/02_token_compression/` and `08_vtt/03_streaming_memory/` are fully
+> `04_video_text/03_token_compression/` and `04_video_text/04_streaming_memory/` are fully
 > CPU-runnable because their substance is *algorithms* rather than *weights*.
 > If your contribution has an algorithmic core, factor it into a module that
 > runs on plain tensors. Readers without a GPU can then learn the actual idea,
@@ -313,7 +313,7 @@ sbatch run_deepspeed.sh                     # the real thing
 Two details worth stating in the README, because readers assume otherwise: the
 cap counts **optimizer steps, not epochs** (with gradient accumulation of 4,
 `--max-steps 5` consumes 20 micro-batches), and if your launcher is a bare
-script with no `#SBATCH` headers — like `09_vss/01_longcat_flash_omni/run_2xB200.sh` —
+script with no `#SBATCH` headers — like `05_video_speech/01_longcat_omni/run_2xB200.sh` —
 say `./run_2xB200.sh --max-steps 5`, not `sbatch`.
 
 Document the full loop, because a first-time SLURM user does not know it:
@@ -650,8 +650,8 @@ The whole point is distributed training. An example that only calls
 `Trainer.train()` with no ZeRO config does not belong here.
 
 **Two narrow exceptions**, both already present:
-- `07_huggingface_trl_multi_agency` drives TRL's `GRPOTrainer` directly.
-- `08_vtt/03_streaming_memory` and `08_vtt/04_video_eval` are inference and
+- `03_huggingface/09_multi_agency` drives TRL's `GRPOTrainer` directly.
+- `04_video_text/04_streaming_memory` and `04_video_text/05_video_eval` are inference and
   evaluation — no optimizer, nothing to shard.
 
 If you believe yours is a third exception, **say so explicitly in the PR and

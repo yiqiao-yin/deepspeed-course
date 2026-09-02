@@ -10,7 +10,7 @@ Run:
 
 Background
 ----------
-`04_intermediate_rnn_stock_data` originally fit MinMaxScaler on the ENTIRE
+`02_intermediate/02_rnn_stock_data` originally fit MinMaxScaler on the ENTIRE
 series before splitting:
 
     scaler = MinMaxScaler()
@@ -35,8 +35,8 @@ from sklearn.preprocessing import MinMaxScaler
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import Results, source_contains  # noqa: E402
 
-DS_SCRIPT = "04_intermediate_rnn_stock_data/train_rnn_stock_data_ds.py"
-SM_SCRIPT = "04_intermediate_rnn_stock_data/train_rnn_stock_data.py"
+DS_SCRIPT = "02_intermediate/02_rnn_stock_data/train_rnn_stock_data_ds.py"
+SM_SCRIPT = "02_intermediate/02_rnn_stock_data/train_rnn_stock_data.py"
 
 
 def create_sequences(data, seq_length):

@@ -13,7 +13,7 @@ This is what most alignment work actually uses. It is roughly an order of
 magnitude cheaper than [GRPO](./grpo-training.md) and, on most public
 benchmarks, competitive.
 
-**Example folder:** [`05_huggingface_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/05_huggingface_dpo) — one `train_dpo.py` with `--method dpo|ipo|cpo|kto|orpo|simpo`, plus `preference_losses.py` (all six losses on plain tensors, no GPU, no download).
+**Example folder:** [`03_huggingface/05_dpo/`](https://github.com/yiqiao-yin/deepspeed-course/tree/main/03_huggingface/05_dpo) — one `train_dpo.py` with `--method dpo|ipo|cpo|kto|orpo|simpo`, plus `preference_losses.py` (all six losses on plain tensors, no GPU, no download).
 
 **TRL trainers:** `DPOTrainer`, `KTOTrainer`, `ORPOTrainer`; `CPOTrainer` and `BCOTrainer` now live under `trl.experimental`.
 
@@ -289,7 +289,7 @@ objectives to save memory.
 Verify the objectives on CPU before renting anything:
 
 ```bash
-uv run 05_huggingface_dpo/preference_losses.py
+uv run 03_huggingface/05_dpo/preference_losses.py
 uv run tests/test_preference_losses.py     # 58 checks, no GPU
 ```
 

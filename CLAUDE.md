@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-A teaching course, not an application. Each top-level numbered directory (`01_basic_neuralnet` … `09_vss`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text → video-speech-to-speech.
+A teaching course, not an application. Each top-level numbered directory (`01_basics/01_neuralnet` … `05_video_speech`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text → video-speech-to-speech.
 
 There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~22 files on purpose.)
 
@@ -19,10 +19,10 @@ Contributions from outside are welcome and governed by `CONTRIBUTING.md`, which 
 
 | Folder | Deletes | Reference model? |
 |---|---|---|
-| `05_huggingface_reward_model` | — (this IS the pipeline) | — |
-| `05_huggingface_dpo` | the **reward model** (`--method` covers 6 objectives) | LoRA removes it |
-| `06_huggingface_grpo` | the **critic** | yes |
-| `06_huggingface_online_dpo` | — (re-adds sampling; needs a judge) | yes |
+| `03_huggingface/04_reward_model` | — (this IS the pipeline) | — |
+| `03_huggingface/05_dpo` | the **reward model** (`--method` covers 6 objectives) | LoRA removes it |
+| `03_huggingface/06_grpo` | the **critic** | yes |
+| `03_huggingface/07_online_dpo` | — (re-adds sampling; needs a judge) | yes |
 
 > "DPO removes the reward model" and "GRPO removes the critic" are two different
 > claims about two different components. Conflating them is the most common
@@ -36,23 +36,23 @@ precedes GRPO by three days, ORPO and SimPO follow.
 
 ### Topics 08 and 09 are multi-subtopic
 
-Most topics are a single flat folder. **`08_vtt/` and `09_vss/` each contain four
+Most topics are a single flat folder. **`04_video_text/` and `05_video_speech/` each contain four
 numbered subtopics**, because their subject matter escalates internally:
 
 ```
-08_vtt/{hf_ds_vtt_test2, 01_qwen25vl_baseline, 02_token_compression,
+04_video_text/{hf_ds_vtt_test2, 01_qwen25vl_baseline, 02_token_compression,
         03_streaming_memory, 04_video_eval}
-09_vss/{01_longcat_flash_omni, 02_thinker_talker,
+05_video_speech/{01_longcat_flash_omni, 02_thinker_talker,
         03_duplex_streaming, 04_omni_eval, data/}
 ```
 
 Each subtopic keeps the full six-file contract independently and is registered
-separately in `runpod/runpod_ctl.py` under a **nested key** (`"09_vss/02_thinker_talker"`),
+separately in `runpod/runpod_ctl.py` under a **nested key** (`"05_video_speech/02_thinker_talker"`),
 so a reader rents a 24 GB card for the tractable subtopic instead of the
 frontier model's unobtainable hardware. `tests/test_runpod_ctl.py` only requires
 *top-level* numbered dirs in that table; nested entries are additive.
 
-`09_vss/data/` (44 MB of real video+audio) is **shared across its subtopics**
+`05_video_speech/data/` (44 MB of real video+audio) is **shared across its subtopics**
 rather than duplicated four times into git history — override with
 `VSS_DATA_DIR`. Sharing sample *media* this way does not violate the
 no-shared-module rule, which is about logic.
@@ -82,7 +82,7 @@ Batch size consistency is enforced by DeepSpeed at startup: `train_batch_size ==
 ## Running examples
 
 ```bash
-cd 01_basic_neuralnet
+cd 01_basics/01_neuralnet
 deepspeed --num_gpus=1 train_ds_enhanced.py          # direct, e.g. RunPod / single pod
 sbatch run_deepspeed.sh                              # SLURM, e.g. CoreWeave
 ```
@@ -96,7 +96,7 @@ for throwaway checks. **Every example folder is a uv project** with a committed
 `uv.lock`, so the first thing a reader does is:
 
 ```bash
-cd 02_basic_convnet && uv sync && uv run deepspeed --num_gpus=1 train_ds.py
+cd 01_basics/02_convnet && uv sync && uv run deepspeed --num_gpus=1 train_ds.py
 ```
 
 Locks are per folder rather than a workspace, matching the no-shared-module
@@ -122,11 +122,11 @@ They carry `launcher="python"` in `runpod/runpod_ctl.py`:
 
 | Example | Why |
 |---|---|
-| `07_huggingface_trl_multi_agency` | drives TRL's `GRPOTrainer` directly |
-| `08_vtt/03_streaming_memory` | streaming *inference* — sequential, no optimizer |
-| `08_vtt/04_video_eval` | evaluation — short `generate()` calls |
-| `09_vss/03_duplex_streaming` | duplex inference — slices arrive in order |
-| `09_vss/04_omni_eval` | evaluation — modality-ablation `generate()` calls |
+| `03_huggingface/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
+| `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
+| `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
+| `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
+| `05_video_speech/04_omni_eval` | evaluation — modality-ablation `generate()` calls |
 
 Every other example uses both `uv` and `deepspeed`. If you add a sixth
 exception, say so explicitly and explain why.
@@ -153,14 +153,14 @@ them:**
 
 | Module | What it is |
 |---|---|
-| `05_huggingface_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
-| `05_huggingface_reward_model/reward_modeling.py` | Bradley-Terry objective |
-| `08_vtt/02_token_compression/token_compression.py` | ToMe / FastV / DyCoke |
-| `08_vtt/03_streaming_memory/star_memory.py` | STAR bounded memory bank |
-| `08_vtt/04_video_eval/video_mme_eval.py` | eval harness |
-| `09_vss/02_thinker_talker/tmrope.py` | the 40 ms shared clock — pure integer arithmetic |
-| `09_vss/03_duplex_streaming/duplex.py` | turn-taking policy, barge-in, RTF |
-| `09_vss/04_omni_eval/omni_eval.py` | modality-ablation grid |
+| `03_huggingface/05_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
+| `03_huggingface/04_reward_model/reward_modeling.py` | Bradley-Terry objective |
+| `04_video_text/03_token_compression/token_compression.py` | ToMe / FastV / DyCoke |
+| `04_video_text/04_streaming_memory/star_memory.py` | STAR bounded memory bank |
+| `04_video_text/05_video_eval/video_mme_eval.py` | eval harness |
+| `05_video_speech/02_thinker_talker/tmrope.py` | the 40 ms shared clock — pure integer arithmetic |
+| `05_video_speech/03_duplex_streaming/duplex.py` | turn-taking policy, barge-in, RTF |
+| `05_video_speech/04_omni_eval/omni_eval.py` | modality-ablation grid |
 
 **Assert mathematical properties, not shapes.** Every bug this repo has shipped
 in these areas ran fine and was quietly wrong, and a shape assertion would have
@@ -216,7 +216,7 @@ The README's central distinction, which shapes every launcher script:
 - **CoreWeave** — shared SLURM HPC cluster. You SSH to a login node and *submit*; you never run training interactively. Scripts carry `#SBATCH` headers (`--gres=gpu:N`, `--partition=h200-low`, `--time`, `--mem`).
 - **RunPod** — single-user pod with direct GPU access. Run `deepspeed ...` straight in the shell; the `#SBATCH` lines are inert comments.
 
-`09_vss/01_longcat_flash_omni/run_2xB200.sh` shows the non-SLURM style: preflight checks on GPU count, free disk, and RAM before launching.
+`05_video_speech/01_longcat_omni/run_2xB200.sh` shows the non-SLURM style: preflight checks on GPU count, free disk, and RAM before launching.
 
 ### The three-platform contract
 
@@ -233,7 +233,7 @@ legitimately differ, and failing the build on those would water the checks down
 until they catch nothing. The non-negotiable subset (`EXAMPLES` registration,
 `bash -n`, `#SBATCH` presence) is in `tests/test_runpod_ctl.py` and does fail CI.
 
-It earns its keep: pointing it at the repo found `05_huggingface_ocr` requesting
+It earns its keep: pointing it at the repo found `03_huggingface/03_ocr` requesting
 `--ntasks-per-node=2` while running `deepspeed --num_gpus=2` (four processes for
 two GPUs — a hang), and 13 READMEs that never told a RunPod reader how to shut
 the pod down.

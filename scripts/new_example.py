@@ -565,7 +565,7 @@ def main() -> int:
     parser.add_argument("folder",
                         help="Folder to create, relative to the repo root. "
                              "Top-level examples are numbered (10_my_topic); "
-                             "subsections may nest (08_vtt/05_my_idea).")
+                             "subsections may nest (04_video_text/05_my_idea).")
     parser.add_argument("--title", default=None,
                         help="Human-readable title. Defaults to the folder name.")
     parser.add_argument("--vram", type=int, default=24,

@@ -523,7 +523,7 @@ flowchart TB
 ## 8. Configurations Used in This Course
 
 ```json
-// 01_basic_neuralnet/ds_config.json — model states are irrelevant at this size;
+// 01_basics/01_neuralnet/ds_config.json — model states are irrelevant at this size;
 // the example exists to show the mechanics, not to save memory.
 {
   "zero_optimization": { "stage": 2 },
@@ -532,7 +532,7 @@ flowchart TB
 ```
 
 ```json
-// 06_huggingface_grpo/ds_config.json — LoRA means Psi_trainable is tiny, but the
+// 03_huggingface/06_grpo/ds_config.json — LoRA means Psi_trainable is tiny, but the
 // frozen base weights and the KL reference model still occupy memory. Offload
 // buys room for the rollout buffers GRPO needs.
 {
@@ -544,7 +544,7 @@ flowchart TB
 ```
 
 ```json
-// 09_vss/01_longcat_flash_omni/ds_config.json — a 560B-parameter multimodal
+// 05_video_speech/01_longcat_omni/ds_config.json — a 560B-parameter multimodal
 // model. Stage 3 with full
 // CPU offload is not an optimization here, it is the only way the run exists.
 {

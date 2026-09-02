@@ -14,7 +14,7 @@ it scores **62%**. Two completely different systems produce that number:
 
 **Accuracy cannot tell them apart.**
 
-**Example:** `09_vss/04_omni_eval`
+**Example:** `05_video_speech/04_omni_eval`
 
 :::danger B is what you get by default
 During training, one modality is usually sufficient for most examples — so the
@@ -158,8 +158,8 @@ The fix was two-part, and the second half matters as much as the first:
 ## 4. Runs on CPU
 
 ```bash
-uv run 09_vss/04_omni_eval/omni_eval.py                          # healthy model
-uv run 09_vss/04_omni_eval/omni_eval.py --video-skill 0 --fusion-skill 0
+uv run 05_video_speech/04_omni_eval/omni_eval.py                          # healthy model
+uv run 05_video_speech/04_omni_eval/omni_eval.py --video-skill 0 --fusion-skill 0
 uv run tests/test_omni_eval.py                                   # 49 checks
 ```
 
@@ -174,7 +174,7 @@ uv pip install deepspeed transformers accelerate librosa soundfile opencv-python
 **CoreWeave / SLURM:**
 
 ```bash
-cd 09_vss/04_omni_eval
+cd 05_video_speech/04_omni_eval
 sbatch run_deepspeed.sh
 MODEL=Qwen/Qwen2.5-Omni-7B DATASET=omnieval.json ASR_WER=0.03 sbatch run_deepspeed.sh
 ```
@@ -187,7 +187,7 @@ the grid cannot catch a known-broken model, every number after it is meaningless
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 09_vss/04_omni_eval \
+uv run runpod/runpod_ctl.py run 05_video_speech/04_omni_eval \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```

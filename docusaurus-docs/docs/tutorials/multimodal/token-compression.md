@@ -11,7 +11,7 @@ sidebar_position: 4
 Different terms of the same memory equation — and they compose. If you are OOMing, the first question is always *which term dominates*, because optimising the other one is free effort.
 :::
 
-**Example:** `08_vtt/02_token_compression`
+**Example:** `04_video_text/03_token_compression`
 
 ## 1. The Arithmetic That Forces the Issue
 
@@ -185,7 +185,7 @@ FastV keep 50%
 The algorithms are pure PyTorch on plain tensors. No model, no GPU, no download:
 
 ```bash
-uv run 08_vtt/02_token_compression/token_compression.py
+uv run 04_video_text/03_token_compression/token_compression.py
 uv run tests/test_token_compression.py    # 30 checks
 ```
 
@@ -210,7 +210,7 @@ uv pip install deepspeed transformers accelerate peft opencv-python-headless
 **CoreWeave / any SLURM cluster:**
 
 ```bash
-cd 08_vtt/02_token_compression
+cd 04_video_text/03_token_compression
 sbatch run_deepspeed.sh          # sweeps 8, 16, 32 frames
 FRAMES=64 sbatch run_deepspeed.sh
 ```
@@ -221,7 +221,7 @@ One GPU on purpose — sharding across devices would mix ZeRO's saving into a nu
 
 ```bash
 export RUNPOD_API_KEY=...
-uv run runpod/runpod_ctl.py run 08_vtt/02_token_compression \
+uv run runpod/runpod_ctl.py run 04_video_text/03_token_compression \
     --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods     # confirm: "Nothing is billing."
 ```
