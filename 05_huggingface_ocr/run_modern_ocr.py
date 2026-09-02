@@ -364,8 +364,14 @@ def run_model(key: str, spec: dict, pages, args, torch):
                 # stdout and returns None, which is why earlier runs scored the
                 # literal string "None" and then an empty file. Nothing about
                 # the model or the environment was wrong; the call was.
+                # "Free OCR.", NOT "<|grounding|>...". The grounding prompt
+                # makes this model emit layout markup -- refs and bounding
+                # boxes around every span -- so scoring it against plain text
+                # measured the markup, not the reading: CER 2.3107, i.e. it
+                # "wrote" more than twice the reference. The plain-text prompt
+                # is the one listed in the model's own source.
                 out = model.infer(
-                    tokenizer, prompt="<image>\n<|grounding|>OCR this image.",
+                    tokenizer, prompt="<image>\nFree OCR.",
                     image_file=path, output_path=tmp, base_size=640,
                     image_size=640, crop_mode=False, save_results=False,
                     test_compress=False, eval_mode=True)
