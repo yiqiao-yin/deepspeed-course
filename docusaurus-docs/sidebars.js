@@ -19,7 +19,7 @@ const sidebars = {
       items: [
         {
           type: 'category',
-          label: 'Basic Examples',
+          label: '01 · Basics',
           items: [
             'tutorials/basic/neural-network',
             'tutorials/basic/convnet',
@@ -29,7 +29,7 @@ const sidebars = {
         },
         {
           type: 'category',
-          label: 'Intermediate Examples',
+          label: '02 · Intermediate',
           items: [
             'tutorials/intermediate/bayesian-nn',
             'tutorials/intermediate/stock-prediction',
@@ -38,7 +38,7 @@ const sidebars = {
         },
         {
           type: 'category',
-          label: 'HuggingFace Integration',
+          label: '03 · HuggingFace',
           items: [
             'tutorials/huggingface/overview',
             'tutorials/huggingface/llm-finetuning',
@@ -59,18 +59,26 @@ const sidebars = {
         },
         {
           type: 'category',
-          label: 'Advanced Multimodal',
-          items: [
-            'tutorials/multimodal/video-text-training',
-            'tutorials/multimodal/video-speech-training',
-            'tutorials/multimodal/qwen-video-baseline',
-            'tutorials/multimodal/token-compression',
-            'tutorials/multimodal/streaming-video',
-            'tutorials/multimodal/video-evaluation',
-            'tutorials/multimodal/omni-thinker-talker',
-            'tutorials/multimodal/duplex-streaming',
-            'tutorials/multimodal/omni-evaluation',
-          ],
+            label: '04 · Video-Text',
+            items: [
+              // Ordered to match 04_video_text/01..05 in the repository.
+              'tutorials/multimodal/video-text-training',   // 01_hf_baseline
+              'tutorials/multimodal/qwen-video-baseline',   // 02_qwen25vl
+              'tutorials/multimodal/token-compression',     // 03_token_compression
+              'tutorials/multimodal/streaming-video',       // 04_streaming_memory
+              'tutorials/multimodal/video-evaluation',      // 05_video_eval
+            ],
+          },
+          {
+            type: 'category',
+            label: '05 · Video-Speech',
+            items: [
+              // Ordered to match 05_video_speech/01..04 in the repository.
+              'tutorials/multimodal/video-speech-training', // 01_longcat_omni
+              'tutorials/multimodal/omni-thinker-talker',   // 02_thinker_talker
+              'tutorials/multimodal/duplex-streaming',      // 03_duplex_streaming
+              'tutorials/multimodal/omni-evaluation',       // 04_omni_eval
+            ],
         },
       ],
     },
