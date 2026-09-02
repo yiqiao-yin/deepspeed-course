@@ -228,7 +228,7 @@ pages**, greedy decoding:
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
 | `florence-2-base` | 230M | 0.4108 | 0.4800 | 10* | n/a |
-| `deepseek-ocr` | 3B MoE | — | — | — | blocked |
+| `deepseek-ocr` | 3B MoE (570M active) | **0.0000** | 0.0000 | **100** | **1.000** |
 
 **\*** Florence-2's `10` is the length of `input_ids` alone. Its visual tokens
 travel in `pixel_values` and never enter `input_ids`, so the figure is **not
@@ -277,9 +277,10 @@ OCR pipeline across these models, and a concrete argument for the per-folder
 `uv.lock` this course now ships.
 
 A pinned `transformers==4.47.1` environment (the last release containing
-`LlamaFlashAttention2`, checked against the tagged sources) **unblocks
-Florence-2** — its row above is measured there — and does not unblock
-DeepSeek-OCR, which loads, runs, and returns `'\n\n'` for every page.
+`LlamaFlashAttention2`, checked against the tagged sources) **unblocks both**.
+Their rows above are measured there. Pinning the main environment back that far
+would break Qwen2.5-VL, so they get their own venv — built with
+`--system-site-packages` so torch is reused rather than re-downloaded.
 
 Florence-2 took four attempts, and the diagnosis is the lesson. The failure is
 inside `Florence2LanguageConfig.__init__`:
@@ -310,6 +311,27 @@ Reaching that conclusion took seven GPU runs, each surfacing the next layer:
 `AutoProcessor` cannot instantiate DeepSeek-OCR → it needs a custom `infer()` →
 which imports `addict`, `matplotlib`, then `easydict` → which then hits the
 version wall. Every package was discovered *after* several GB had downloaded.
+
+### What the table actually says
+
+Three models tie at **CER 0.0000**, so on this corpus accuracy does not
+separate them at all — and that is the point. What separates them is cost:
+
+| Model | Tokens/page | Accuracy per 100 tokens |
+|---|---:|---:|
+| `deepseek-ocr` | **100** | **1.000** |
+| `qwen2-vl-2b` | 164 | 0.610 |
+| `qwen2.5-vl-3b` | 164 | 0.610 |
+| `got-ocr2` | 286 | 0.296 |
+
+DeepSeek-OCR reads these pages perfectly using **39% fewer tokens** than the
+Qwen models and **65% fewer** than GOT-OCR2. That is its paper's claim —
+optical context compression — reproduced here on twelve easy pages. It is not
+evidence about hard documents, and the ceiling effect at the top of the table
+is a property of the corpus, not of the models.
+
+If you rank on accuracy alone, three models tie and you pick arbitrarily. Rank
+on accuracy *and* tokens and the answer is unambiguous.
 
 ### The metric is where OCR benchmarks go wrong
 

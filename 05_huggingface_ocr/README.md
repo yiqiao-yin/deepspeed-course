@@ -28,7 +28,7 @@ pages**, greedy decoding, `max_new_tokens=256`:
 | `qwen2.5-vl-3b` | 3.8B | **0.0000** | 0.0000 | 164 | 0.610 |
 | `got-ocr2` | 580M | 0.1530 | 0.0104 | 286 | 0.296 |
 | `florence-2-base` | 230M | 0.4108 | 0.4800 | 10* | n/a |
-| `deepseek-ocr` | 3B MoE | — | — | — | blocked (see below) |
+| `deepseek-ocr` | 3B MoE (570M active) | **0.0000** | 0.0000 | **100** | **1.000** |
 
 `florence-2-base` runs only on **transformers 4.47.1** (see below) and reads
 **0/12 exactly**, range 0.1957–0.6216, merging lines together
@@ -88,11 +88,14 @@ On that pinned environment **Florence-2 works** — the row above is measured
 there, and the harness prints which `transformers` each run actually imported
 so the provenance is in every log.
 
-**DeepSeek-OCR still does not.** On the pinned environment it loads and runs,
-and every page comes back as `'\n\n'` — its `infer()` writes to disk, and what
-it writes here is empty. The harness reports this as `NO OUTPUT` and refuses to
-score it, rather than turning empty strings into a CER near 1.0 that would read
-as a measurement.
+**DeepSeek-OCR works there too**, and its row is the most interesting in the
+table: it matches the Qwen models' perfect score while spending **100 tokens
+per page against their 164** — the highest accuracy-per-token here by a wide
+margin, which is exactly the claim its paper makes.
+
+Both remote-code models therefore need `transformers==4.47.1`, and the
+harness builds that environment for them. Pinning the main environment there
+would break Qwen2.5-VL, so they get their own.
 
 Getting Florence-2 there took four attempts because I kept mis-diagnosing it.
 The failure is inside `Florence2LanguageConfig.__init__`, which reads
