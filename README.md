@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 42 pages with
+The documentation site is the primary way to read this material: 43 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -143,7 +143,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 21 suites, no GPU and no downloads
+./tests/run_all.sh                  # 22 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 

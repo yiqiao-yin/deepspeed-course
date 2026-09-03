@@ -32,7 +32,8 @@ building the model on the meta device -- no weights downloaded.
                       causal conv kernel 4, SSM state in float32
     vision tower      27 layers, hidden 1152, patch 16  (0.46 B)
     context           262,144 tokens
-    needs             transformers >= 5.8
+    transformers      config saved with 5.8.0.dev0; verified working on
+                      5.16.1, which is what this folder's uv.lock pins
 
 This is a different bargain from `train_glm53_ds.py` in the same folder.
 GLM-5.3 is a SPARSE MoE: it buys capacity by holding 743 B parameters and
@@ -75,7 +76,7 @@ import sys
 KNOWN_MODELS = {
     "Qwen/Qwen3.8-27B": dict(gb=55.6, note="the headline model, hybrid attention"),
     "Qwen/Qwen3-8B":    dict(gb=16.4, note="dense, all full attention"),
-    "Qwen/Qwen3-1.7B":  dict(gb=3.4,  note="small proxy"),
+    "Qwen/Qwen3-1.7B":  dict(gb=4.1,  note="small proxy"),
 }
 
 DEFAULT_MODEL = "Qwen/Qwen3.8-27B"
@@ -636,7 +637,7 @@ def main() -> None:
             print()
             print("  Your options:")
             print("    more GPUs                            2 x 48 GB is enough")
-            print("    --model Qwen/Qwen3-1.7B              same code, 3.4 GB")
+            print("    --model Qwen/Qwen3-1.7B              same code, 4.1 GB")
             print("    --force                              proceed and OOM")
             print(bar)
             sys.exit(1)

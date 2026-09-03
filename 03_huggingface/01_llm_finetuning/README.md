@@ -684,3 +684,103 @@ different program — and it is asserted in `tests/test_glm53_arch.py`.
 
 Eight steps on 64 examples is a **pipeline test, not a result**. The loss moves
 and the model generates; nothing about quality is claimed.
+
+---
+
+# Qwen3.8-27B: a hybrid linear/full-attention model
+
+`train_qwen38_ds.py` is the third entry point in this folder, and the
+counterpart to the GLM-5.3 one above. Same four stages — download data,
+download model, LoRA fine-tune, generate — pointed at
+[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B).
+
+Unlike GLM-5.3, **this one you can actually rent hardware for**: 55.6 GB of
+weights on 2 × 48 GB.
+
+## Start here, with no GPU
+
+```bash
+uv run train_qwen38_ds.py --plan          # hybrid-layer, cache and capacity analysis
+uv run train_qwen38_ds.py --verify-arch   # build the real module tree, no weights
+```
+
+## The shape of the model
+
+| | |
+|---|---|
+| architecture | `Qwen3_5ForConditionalGeneration` (`model_type: qwen3_5`) |
+| parameters | 27.36 B total, **26.90 B** without the vision tower |
+| weights | 55.6 GB bf16 |
+| layers | 64 — **48 linear attention, 16 full attention** |
+| pattern | full attention every 4th layer |
+| full attention | GQA, 24 q-heads / 4 kv-heads, head_dim 256 |
+| linear attention | gated-delta, causal conv kernel 4, SSM state in float32 |
+| context | 262,144 tokens |
+| transformers | config saved with 5.8.0.dev0; **verified on 5.16.1** (this folder's lock) |
+
+Three quarters of the layers keep **no KV cache at all** — they carry a fixed
+recurrent state instead:
+
+| | per token | at 262,144 tokens |
+|---|---|---|
+| hybrid (16 full layers) | **64 KB** | **17.2 GB** |
+| if all 64 were full attention | 256 KB | 68.7 GB |
+
+and the 48 linear layers hold **159 MB per sequence**, the same for one token
+as for the full context. That constant is the entire argument for the design.
+
+## The mistake this model invites
+
+`q_proj`/`k_proj`/`v_proj`/`o_proj` — the list from every Llama recipe — **do
+exist here**, on the 16 full-attention layers only. The other 48 use
+`linear_attn.in_proj_{qkv,z,b,a}` and `linear_attn.out_proj`.
+
+So the Llama default does not error, does not warn, attaches adapters to 25% of
+the depth, and shows a healthy falling loss. `--plan` reports coverage as a
+number so you can see it:
+
+```
+$ uv run train_qwen38_ds.py --plan --lora-scope attention-full
+    layer coverage    16/64 (25% of depth)
+    WARNING: 48 layers get NO adapter.
+
+$ uv run train_qwen38_ds.py --plan
+    layer coverage    64/64 (100% of depth)
+```
+
+`--verify-arch` counts them in the real module tree: `q_proj` **16**,
+`in_proj_qkv` **48**. The trainer also asserts at runtime that the adapter
+attached to something, because peft will happily give you zero trainable
+parameters and train anyway.
+
+## Hardware
+
+55.6 GB of bf16 weights do not fit one 48 GB card, and LoRA does not change
+that — it removes optimizer state, not the base weights.
+
+| configuration | total | holds it? |
+|---|---|---|
+| 1 × 48 GB | 48 GB | no |
+| 2 × 24 GB | 48 GB | no |
+| **2 × 48 GB** | **96 GB** | **yes** — the default |
+| 2 × 80 GB | 160 GB | comfortable |
+
+Hence ZeRO **stage 3**: the parameters themselves are sharded, ~28 GB per rank.
+
+## Running it
+
+```bash
+# CoreWeave
+sbatch run_qwen38.sh --max-steps 20        # cheap dry run
+sbatch run_qwen38.sh
+
+# RunPod — needs 2 x 48 GB, so check what is available first
+uv run runpod/runpod_ctl.py gpus --min-vram 46
+uv run runpod/runpod_ctl.py run 03_huggingface/01_llm_finetuning \
+    --dry-run --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py pods           # must say "Nothing is billing."
+```
+
+> The `EXAMPLES` entry for this folder sizes the pod for `train_ds.py`
+> (2 × 24 GB). For Qwen3.8 you need 2 × 48 GB — pick the GPU explicitly with
+> `--gpu`, and note that 2-GPU capacity for any given card comes and goes.
