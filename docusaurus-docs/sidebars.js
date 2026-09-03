@@ -45,6 +45,7 @@ const sidebars = {
           items: [
             'tutorials/huggingface/overview',
             'tutorials/huggingface/llm-finetuning',
+            'tutorials/huggingface/glm53-moe-finetuning',
             'tutorials/huggingface/trl-function-calling',
             'tutorials/huggingface/ocr-vision-language',
             // The alignment thread, in the order the literature arrived:

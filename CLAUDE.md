@@ -358,6 +358,6 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 38 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 39 diagram pages conform.
 
 - **Verifying a deployed page needs a content check, not a status code.** A 200 only proves *a* page is there, not the new one — and a literal `grep` for text inside a KaTeX block will fail because it renders into split HTML spans. Match on plain prose instead.

@@ -45,6 +45,10 @@ import uuid
 REST = "https://rest.runpod.io/v1"
 GRAPHQL = "https://api.runpod.io/graphql"
 REPO_URL = "https://github.com/yiqiao-yin/deepspeed-course.git"
+# Codeload serves public tarballs without the anonymous-clone challenge
+# that GitHub applies to cloud IP ranges. Used as a fallback in bootstrap().
+TARBALL_URL = ("https://codeload.github.com/yiqiao-yin/deepspeed-course/"
+               "tar.gz/refs/heads/{branch}")
 
 # Result transport. RunPod's API exposes NO log endpoint (verified against both
 # the REST OpenAPI spec and GraphQL introspection), so the pod cannot be read
@@ -339,9 +343,37 @@ def bootstrap(example: str, spec: dict, branch: str,
         watchdog,
         'report "[1/6] pod up: $(hostname)"',
         "cd /workspace",
-        f"(git clone --depth 1 -b {branch} {REPO_URL} 2>&1 || true) | tail -2",
-        "cd deepspeed-course",
-        'report "[2/6] repo cloned"',
+        # Clone loudly. This used to be `(git clone ... || true) | tail -2`
+        # followed by an UNCONDITIONAL "repo cloned" report: when the clone
+        # failed, the pod reported success, then ran the launcher from
+        # /workspace where the script does not exist, and the failure was
+        # attributed to the example. Verify the directory actually arrived.
+        # Fetch the repo. `git clone` is tried first, but GitHub rate-limits
+        # anonymous smart-HTTP from cloud IP ranges and answers with an auth
+        # challenge -- on a pod that surfaces as
+        #     fatal: could not read Username for 'https://github.com'
+        #     fatal: expected flush after ref listing
+        # for a repository that is definitely public. The codeload tarball is
+        # served by a different path that does not challenge, so it is the
+        # fallback. GIT_TERMINAL_PROMPT=0 stops git blocking on a prompt that
+        # nothing can answer. NO CREDENTIAL IS EVER PUT ON THE POD -- see
+        # SECURITY.md; a read-only token would still be a token on rented
+        # hardware, and the tarball makes one unnecessary.
+        f"GIT_TERMINAL_PROMPT=0 git clone --depth 1 -b {branch} {REPO_URL} "
+        f"> /workspace/clone.log 2>&1 || true",
+        'if [ ! -d /workspace/deepspeed-course ]; then'
+        ' report "[2/6] git clone refused, falling back to tarball";'
+        f' curl -sL {TARBALL_URL.format(branch=branch)} -o /workspace/repo.tar.gz'
+        ' >> /workspace/clone.log 2>&1;'
+        ' tar xzf /workspace/repo.tar.gz -C /workspace >> /workspace/clone.log 2>&1;'
+        ' mv /workspace/deepspeed-course-* /workspace/deepspeed-course'
+        ' >> /workspace/clone.log 2>&1 || true;'
+        ' fi',
+        'if [ ! -d /workspace/deepspeed-course ]; then'
+        ' report "[2/6] CLONE FAILED: $(tail -3 /workspace/clone.log | tr \'\\n\' \' \')";'
+        ' exit 1; fi',
+        "cd /workspace/deepspeed-course",
+        'report "[2/6] repo present @ $(git rev-parse --short HEAD 2>/dev/null || echo tarball)"',
         "curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1",
         "export PATH=$HOME/.local/bin:$PATH",
         "export HF_HOME=/workspace/hf_cache",
@@ -357,11 +389,17 @@ def bootstrap(example: str, spec: dict, branch: str,
         " python -c \"import deepspeed;print('deepspeed',deepspeed.__version__)\";"
         " echo '=== ds_report ==='; ds_report 2>&1 | head -30; } > /workspace/run.log 2>&1",
         'report "[5/6] env captured"',
-        f"cd {example}",
-        f"({launch}) >> /workspace/run.log 2>&1",
+        # A missing example directory must not silently become "run the
+        # launcher from wherever we happen to be standing".
+        f'cd {example} || {{ report "[6/6] FAILED: no such example dir {example}"; exit 1; }}',
+        # Capture rc IMMEDIATELY. It used to be read after `push_log`, so
+        # `rc=$?` reported the exit code of the log-upload curl -- which is
+        # essentially always 0. Every run reported success regardless of
+        # whether training worked.
+        f"({launch}) >> /workspace/run.log 2>&1; rc=$?",
         "tail -40 /workspace/run.log",
         push_log,
-        'report "[6/6] DONE rc=$? — log attached"',
+        'report "[6/6] DONE rc=$rc — log attached"',
     ]
     return "; ".join(steps)
 

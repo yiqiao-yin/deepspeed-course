@@ -469,3 +469,206 @@ This example is sized in `runpod/runpod_ctl.py` as **24 GB VRAM, 2 GPU(s),
 The pod is **never given `RUNPOD_API_KEY`** — putting a spending credential on
 rented hardware would be the wrong trade, so termination is driven from your
 machine. See [SECURITY.md](../../SECURITY.md).
+
+---
+
+# GLM-5.3: fine-tuning a 755 GB sparse MoE
+
+`train_glm53_ds.py` is a second, self-contained entry point in this folder.
+One script, four stages — download data, download model, LoRA fine-tune,
+generate — pointed by default at
+[zai-org/GLM-5.3](https://huggingface.co/zai-org/GLM-5.3), released
+2026-08-31.
+
+It is here because GLM-5.3 breaks the assumptions the Llama example above
+rests on, and the ways it breaks them are instructive.
+
+## Start here: the analysis needs no GPU and downloads nothing
+
+```bash
+uv run train_glm53_ds.py --plan
+uv run train_glm53_ds.py --plan --model zai-org/glm-edge-1.5b-chat
+uv run train_glm53_ds.py --plan --num-gpus 8 --vram-gb 80    # try to fit it
+```
+
+`--plan` reads the published `config.json` and works out where the parameters
+are, which modules LoRA should adapt, what the KV cache costs, and whether your
+hardware can hold the model — before anything is downloaded.
+
+## What GLM-5.3 is
+
+Every number below was read from the model's published `config.json` and
+`model.safetensors.index.json`. That index lists all **118,629 tensor names**
+and the total byte count without downloading any weights, which is how the LoRA
+targets here were *verified* rather than guessed.
+
+| | |
+|---|---|
+| architecture | `GlmMoeDsaForCausalLM` (`model_type: glm_moe_dsa`) |
+| parameters | ~743 B, of which 8 of 256 experts fire per token |
+| weights | **755.7 GB** fp8 / 1,506.7 GB bf16 |
+| layers | 78 (+1 multi-token-prediction layer) |
+| attention | MLA — compressed q/kv (`q_lora_rank` 2048, `kv_lora_rank` 512) |
+| sparse attention | DSA indexer, on **22 of 78 layers only** |
+| context | 1,048,576 tokens |
+| requires | `transformers >= 5.15` |
+
+### Almost all of it is experts
+
+```
+routed experts     724.78 B   97.5%
+shared experts       2.83 B    0.4%
+dense MLP layers     0.68 B    0.1%
+attention           12.87 B    1.7%
+router (gate)        0.12 B    0.0%
+embeddings           1.90 B    0.3%
+TOTAL              743.18 B
+```
+
+That computed total cross-checks against the measured 755.7 GB of fp8 bytes —
+the gap is the `weight_scale_inv` block-scale tensors — which is what makes the
+arithmetic trustworthy rather than merely plausible.
+
+### MLA does not save parameters. It saves the cache
+
+This is the one most people get backwards, including the first version of this
+example's own test:
+
+```
+KV cache/token       87.8 KB  (MLA)
+vanilla would be   4992.0 KB  -> 57x larger
+at 1,048,576 tokens:  94 GB   vs  5,360 GB
+```
+
+On these dimensions — 64 heads × 256 head_dim is 2.7× the hidden size — MLA
+attention is slightly **larger** in parameters than vanilla attention would be
+(12.9 B vs 11.8 B). What it compresses is the KV cache, by 57×, and that is the
+only reason a 1M-token context is physically possible.
+
+## Why LoRA targets attention and not the experts
+
+`lora_target_modules()` returns `q_a_proj`, `q_b_proj`, `kv_a_proj_with_mqa`,
+`kv_b_proj`, `o_proj` — names verified against the safetensors index. The 256
+expert MLPs, 97% of the model, are left **frozen**, and so is the router:
+
+- An adapter on expert *k* only receives gradient when the router sends a token
+  to expert *k*. At top-8 of 256 that is about **3% of tokens**, so 256 adapters
+  would each train on a sliver of the data and most would stay near their
+  initialisation. You would add hundreds of thousands of matrices to fine-tune
+  badly.
+- Attention is shared by every token on every layer, so one adapter there sees
+  the whole dataset — for 2% of the parameters.
+- The **router stays frozen** deliberately. Training it changes *which* experts
+  fire, which is a far more destructive edit than changing how they are read;
+  routing collapse is the classic way a fine-tuned MoE quietly degrades.
+
+Copying `q_proj`/`k_proj`/`v_proj` from a Llama recipe would match **nothing**
+here — and depending on the peft version that either raises or silently trains
+an adapter attached to nothing while the loss still goes down, because the base
+model is already good.
+
+## Hardware: this does not fit, and the script says so first
+
+LoRA freezes the base weights, which removes optimizer state. It does **not**
+reduce what it costs to *hold* the model — all 755 GB must still be resident.
+
+| configuration | total VRAM | holds fp8 GLM-5.3? |
+|---|---|---|
+| 1 × A100 80GB | 80 GB | no — 11.3× short |
+| 8 × A100 80GB | 640 GB | no |
+| 8 × H100 80GB | 640 GB | no |
+| 8 × H200 141GB | 1,128 GB | **yes**, with room for LoRA + activations |
+| 8 × B200 192GB | 1,536 GB | yes, comfortably |
+
+The script computes this and **refuses before downloading**, because the
+alternative is discovering it after 755 GB:
+
+```
+    weights on disk   755.7 GB
+    needed (x1.2)     906.8 GB   (LoRA frees optimizer state, NOT the base weights)
+    you have          8 x 80 GB = 640 GB
+    verdict           DOES NOT FIT — short by 1.4x
+    would need        ~12 x 80 GB
+```
+
+Pass `--force` to override it and OOM anyway.
+
+## Running it
+
+### No GPU
+
+```bash
+uv run train_glm53_ds.py --plan          # the whole analysis
+uv run ../../tests/test_glm53_arch.py    # 26 property assertions
+```
+
+### CoreWeave / any SLURM cluster
+
+```bash
+sbatch run_glm53.sh --max-steps 20                        # cheap dry run
+sbatch run_glm53.sh                                       # the real thing, 8 GPUs
+NUM_GPUS=1 sbatch run_glm53.sh --model zai-org/glm-edge-1.5b-chat
+```
+
+`run_glm53.sh` requests `--gres=gpu:8` and 256 GB of host RAM, and forwards
+`"$@"` so those extra arguments reach the script.
+
+### RunPod
+
+`runpod_ctl.py` sizes this folder for the Llama example above. GLM-5.3 itself
+needs an 8×H200-class node, which RunPod does not reliably offer — so rent a
+single card and run the proxy model:
+
+```bash
+uv run runpod/runpod_ctl.py run 03_huggingface/01_llm_finetuning \
+    --dry-run --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py pods      # must say "Nothing is billing."
+```
+
+## What has and has not been verified
+
+**This script has never been run against GLM-5.3 itself.** Nothing is stubbed —
+the same code path runs both models, only the weights differ — but honesty about
+which parts are proven matters more than a tidy claim:
+
+| | Status |
+|---|---|
+| `--plan` architecture + capacity analysis | **verified**, cross-checked against measured file sizes |
+| LoRA target module names for GLM-5.3 | **verified** against the published safetensors index |
+| All four stages end to end | **verified on a rented RTX 3090** with `zai-org/glm-edge-1.5b-chat` — see below |
+| The same four stages on GLM-5.3 | **not verified** — needs ~8×H200, unavailable to test |
+
+### The verified run
+
+`deepspeed --num_gpus=1 train_glm53_ds.py --model zai-org/glm-edge-1.5b-chat
+--max-steps 8 --max-samples 64` on a rented RTX 3090, via
+`runpod_ctl.py --collect --wait --terminate`. Trimmed, and **measured**:
+
+```
+  [1/4] dataset: tatsu-lab/alpaca
+  64 examples
+  sample: '### Instruction:\nGive three tips for staying healthy.\n\n### Response:\n1.Eat a balanced diet...'
+
+  [2/4] model: zai-org/glm-edge-1.5b-chat  (3.2 GB)
+  LoRA targets: q_proj, k_proj, v_proj, o_proj
+
+  [3/4] fine-tuning
+  {'loss': '2.461', 'grad_norm': '1.349', 'mean_token_accuracy': '0.5519', 'epoch': '0.125'}
+  {'loss': '1.946', 'grad_norm': '1.061', 'mean_token_accuracy': '0.5746', 'epoch': '1'}
+  {'train_runtime': '61.39', 'train_loss': '2.296', 'epoch': '1'}
+  adapter written to ./glm53-lora-out
+
+  [4/4] inference
+  prompt:   Explain what a mixture-of-experts layer does, in two sentences.
+  response: 'A mixture-of-experts layer is a type of layer in a neural network that
+             combines the predictions from multiple different neural networks...'
+```
+
+Note the LoRA targets in that run: `q_proj, k_proj, v_proj, o_proj`, because
+glm-edge is a **dense** GLM with vanilla attention. The same function returns
+`q_a_proj, q_b_proj, kv_a_proj_with_mqa, kv_b_proj, o_proj` for GLM-5.3's MLA.
+That branch is what makes this a proxy for the real thing rather than a
+different program — and it is asserted in `tests/test_glm53_arch.py`.
+
+Eight steps on 64 examples is a **pipeline test, not a result**. The loss moves
+and the model generates; nothing about quality is claimed.

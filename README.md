@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 41 pages with
+The documentation site is the primary way to read this material: 42 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
