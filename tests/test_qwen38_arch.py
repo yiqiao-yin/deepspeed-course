@@ -214,13 +214,39 @@ def main() -> None:
 
     # ---- capacity ----------------------------------------------------------
     print("\n  -- capacity --")
+    # These expectations were CORRECTED by a measurement. The first version
+    # asserted that 2 x 48 GB fits, because an aggregate "total VRAM vs 1.2x
+    # the weights" model said so. On a real 2xL40S pod it OOMed at the first
+    # step with 44.25 GiB resident on a 44.39 GiB card. The check is now
+    # per-GPU, and the test says what the hardware said.
     check("1 x 48GB does NOT hold 55.6 GB of weights",
           not capacity_report(55.6, 1, 48.0)["fits"])
-    check("2 x 48GB DOES", capacity_report(55.6, 2, 48.0)["fits"])
+    check("2 x 48GB does NOT fit either (measured: OOM on 2xL40S)",
+          not capacity_report(55.6, 2, 48.0)["fits"],
+          "an aggregate check says 96 GB > 55.6 GB and passes; the per-GPU "
+          "reality is 27.8 GB of shard plus ~20.5 GB that does not shard")
+    check("2 x 80GB fits", capacity_report(55.6, 2, 80.0)["fits"])
+    check("4 x 48GB fits — more ranks shrink the shard, not the overhead",
+          capacity_report(55.6, 4, 48.0)["fits"])
     check("2 x 24GB does not", not capacity_report(55.6, 2, 24.0)["fits"])
+
+    # The overhead does not shard, so adding ranks has a floor: a card smaller
+    # than the per-rank overhead can never work, however many you buy.
+    tiny = capacity_report(55.6, 64, 16.0)
+    check("64 x 16GB still does not fit — the overhead alone exceeds the card",
+          not tiny["fits"] and tiny["gpus_needed"] == 0,
+          "if this passed, the model would be pretending activations shard")
+
     check("the requirement EXCEEDS the raw weight size",
           capacity_report(100.0, 1, 1000.0)["needed"] > 100.0,
           "LoRA frees optimizer state, not the base weights")
+    check("the weight shard scales with rank count",
+          capacity_report(55.6, 4, 48.0)["weight_shard"]
+          < capacity_report(55.6, 2, 48.0)["weight_shard"])
+    check("the per-GPU overhead does NOT scale with rank count",
+          capacity_report(55.6, 4, 48.0)["overhead"]
+          == capacity_report(55.6, 2, 48.0)["overhead"],
+          "that it does not shard is the entire point of the correction")
 
     print("\n" + bar)
     print(f"  {PASS} passed, {FAIL} failed")

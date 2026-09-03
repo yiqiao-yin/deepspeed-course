@@ -784,3 +784,15 @@ uv run runpod/runpod_ctl.py pods           # must say "Nothing is billing."
 > The `EXAMPLES` entry for this folder sizes the pod for `train_ds.py`
 > (2 × 24 GB). For Qwen3.8 you need 2 × 48 GB — pick the GPU explicitly with
 > `--gpu`, and note that 2-GPU capacity for any given card comes and goes.
+
+> **The 30-minute `--wait-seconds` default is not enough for this model.**
+> `runpod_ctl.py` stops waiting after 1800s and, with `--terminate`, then kills
+> the pod — while a 55.6 GB download may still be in progress. It does say
+> *"no DONE marker — the run may still be going"*, but the pod is gone by then.
+> Pass a realistic window:
+>
+> ```bash
+> uv run runpod/runpod_ctl.py run 03_huggingface/01_llm_finetuning \
+>     --collect --wait --wait-seconds 5700 --terminate --yes --gpu "NVIDIA L40S"
+> ```
+

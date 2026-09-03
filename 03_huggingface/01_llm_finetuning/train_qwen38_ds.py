@@ -315,28 +315,57 @@ def layer_coverage(config: dict, targets: list) -> dict:
                 fraction=(covered / split["n_layers"]) if split["n_layers"] else 0.0)
 
 
-def capacity_report(model_gb: float, num_gpus: int, vram_gb: float) -> dict:
+def capacity_report(model_gb: float, num_gpus: int, vram_gb: float,
+                    per_gpu_overhead_gb: float = 20.5) -> dict:
     """
-    Can this hardware hold this model, with LoRA?
+    Can this hardware hold this model, with LoRA and ZeRO-3?
 
-    LoRA freezes the base weights, which removes optimizer state (~12 bytes per
-    trainable parameter for Adam in mixed precision) but does NOT reduce what
-    it costs to HOLD the model. The 1.2 factor covers activations, the adapter,
-    gradients and fragmentation. A refuse/proceed gate, not a planner.
+    Modelled PER GPU, not in aggregate, because the two halves scale
+    differently:
+
+      * the WEIGHTS shard across ranks -- ZeRO-3 gives each GPU model_gb/N
+      * the ACTIVATIONS, ZeRO-3 gather buffers and allocator fragmentation do
+        NOT shard. Every rank pays them in full, and at 64 layers they are not
+        a rounding error even with gradient checkpointing enabled.
+
+    An aggregate "total VRAM vs 1.2x the weights" check gets this wrong in the
+    dangerous direction. It passed 2 x 48 GB for this model, which then OOMed
+    at the first step with 44.25 GiB resident on a 44.39 GiB card -- while
+    ZeRO-3 was correctly sharding the weights to ~27 GB. A gate that says FITS
+    and then OOMs after a 55.6 GB download is worse than no gate.
+
+    per_gpu_overhead_gb is CALIBRATED, not derived: 44.25 GiB observed minus
+    the ~25.1 GiB weight shard is ~19 GiB, rounded up. It is a floor taken from
+    one measurement at batch 1 / seq 512 on 2xL40S, so treat it as the smallest
+    plausible overhead rather than a prediction. Longer sequences or bigger
+    batches cost more.
 
     Args:
         model_gb: weights on disk, in GB
-        num_gpus: number of GPUs
+        num_gpus: number of GPUs (ZeRO-3 shards the weights across them)
         vram_gb: VRAM per GPU, in GB
+        per_gpu_overhead_gb: non-sharding per-rank cost
 
     Returns:
-        dict with total_vram, needed, fits, shortfall_x, gpus_needed
+        dict with per_gpu_needed, total_vram, needed, fits, shortfall_x,
+        gpus_needed
     """
-    total = num_gpus * vram_gb
-    needed = model_gb * 1.2
-    return dict(total_vram=total, needed=needed, fits=total >= needed,
-                shortfall_x=(needed / total) if total else float("inf"),
-                gpus_needed=math.ceil(needed / vram_gb) if vram_gb else 0)
+    shard = model_gb / num_gpus if num_gpus else model_gb
+    per_gpu_needed = shard + per_gpu_overhead_gb
+    fits = vram_gb >= per_gpu_needed
+
+    # How many ranks would bring the per-GPU figure under the card's capacity?
+    gpus_needed = 0
+    if vram_gb > per_gpu_overhead_gb:
+        gpus_needed = math.ceil(model_gb / (vram_gb - per_gpu_overhead_gb))
+    return dict(per_gpu_needed=per_gpu_needed,
+                weight_shard=shard,
+                overhead=per_gpu_overhead_gb,
+                total_vram=num_gpus * vram_gb,
+                needed=per_gpu_needed * num_gpus,
+                fits=fits,
+                shortfall_x=(per_gpu_needed / vram_gb) if vram_gb else float("inf"),
+                gpus_needed=gpus_needed)
 
 
 def fetch_config(model: str, token: str = None) -> dict:
@@ -499,16 +528,25 @@ def print_plan(args, config: dict, size_gb: float, num_gpus: int,
         print("  Capacity")
         print(bar)
         print(f"    weights on disk   {size_gb:.1f} GB")
-        print(f"    needed (x1.2)     {cap['needed']:.1f} GB   "
-              "(LoRA frees optimizer state, NOT the base weights)")
-        print(f"    you have          {num_gpus} x {vram_gb:.0f} GB = "
-              f"{cap['total_vram']:.0f} GB")
+        print(f"    weight shard      {cap['weight_shard']:.1f} GB per GPU "
+              f"(ZeRO-3 across {num_gpus})")
+        print(f"    + per-GPU overhead {cap['overhead']:.1f} GB   activations, "
+              "gather buffers, fragmentation —")
+        print("                          these do NOT shard; every rank pays them")
+        print(f"    = needed per GPU  {cap['per_gpu_needed']:.1f} GB")
+        print(f"    you have          {vram_gb:.0f} GB per GPU "
+              f"({num_gpus} x {vram_gb:.0f} = {cap['total_vram']:.0f} GB total)")
         if cap["fits"]:
             print("    verdict           FITS")
         else:
-            print(f"    verdict           DOES NOT FIT — short by "
-                  f"{cap['shortfall_x']:.1f}x")
-            print(f"    would need        ~{cap['gpus_needed']} x {vram_gb:.0f} GB")
+            print(f"    verdict           DOES NOT FIT — needs "
+                  f"{cap['shortfall_x']:.2f}x this card")
+            if cap["gpus_needed"]:
+                print(f"    would need        ~{cap['gpus_needed']} x "
+                      f"{vram_gb:.0f} GB, or fewer larger cards")
+            else:
+                print(f"    this card is smaller than the per-GPU overhead "
+                      "alone; more of them will not help")
         print(bar)
         return cap["fits"]
 
@@ -793,9 +831,18 @@ def main() -> None:
             f"modules {lora_target_modules(config, args.lora_scope)} matched "
             "no module in this model.")
     if is_main:
-        total = sum(p.numel() for p in trainer.model.parameters())
+        # Under ZeRO-3 each rank holds only its SHARD, and a partitioned
+        # parameter reports numel() == 0 locally, so this total is NOT the
+        # model size -- printing "47.5 M of 0.05 B (100%)" and calling it a
+        # ratio would be nonsense. ds_numel recovers the real count from the
+        # partitioning metadata when it is present.
+        total = sum(getattr(p, "ds_numel", p.numel())
+                    for p in trainer.model.parameters())
+        sharded = total != sum(p.numel() for p in trainer.model.parameters())
         print(f"  trainable: {trainable/1e6:.1f} M of {total/1e9:.2f} B "
-              f"({100*trainable/total:.3f}%)")
+              f"({100*trainable/total:.3f}%)"
+              + ("   [ZeRO-3: parameters are partitioned across ranks]"
+                 if sharded else ""))
 
     trainer.train()
     trainer.save_model(args.output)
