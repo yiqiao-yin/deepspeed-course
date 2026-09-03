@@ -695,7 +695,7 @@ download model, LoRA fine-tune, generate — pointed at
 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B).
 
 Unlike GLM-5.3, **this one you can actually rent hardware for**: 55.6 GB of
-weights on 2 × 48 GB.
+weights on 2 × 80 GB (or 4 × 48 GB).
 
 ## Start here, with no GPU
 
@@ -758,12 +758,19 @@ parameters and train anyway.
 55.6 GB of bf16 weights do not fit one 48 GB card, and LoRA does not change
 that — it removes optimizer state, not the base weights.
 
-| configuration | total | holds it? |
-|---|---|---|
-| 1 × 48 GB | 48 GB | no |
-| 2 × 24 GB | 48 GB | no |
-| **2 × 48 GB** | **96 GB** | **yes** — the default |
-| 2 × 80 GB | 160 GB | comfortable |
+The weights shard under ZeRO-3; activations, gather buffers and fragmentation
+do **not** — every rank pays ~20 GB of those, even with gradient checkpointing.
+
+| configuration | weight shard | + overhead | per GPU | verdict |
+|---|---|---|---|---|
+| 1 × 48 GB | 55.6 | 20.5 | 76.1 | no |
+| 2 × 24 GB | 27.8 | 20.5 | 48.3 | no |
+| 2 × 48 GB | 27.8 | 20.5 | **48.3** | **no — measured OOM on 2×L40S** |
+| **2 × 80 GB** | 27.8 | 20.5 | 48.3 | **yes** |
+| 4 × 48 GB | 13.9 | 20.5 | 34.4 | yes |
+
+2 × 48 GB passes an aggregate check (96 GB vs 55.6 GB) and then OOMs at the
+first step by about 1%. A "48 GB" L40S reports 44.39 GiB usable.
 
 Hence ZeRO **stage 3**: the parameters themselves are sharded, ~28 GB per rank.
 
@@ -796,3 +803,54 @@ uv run runpod/runpod_ctl.py pods           # must say "Nothing is billing."
 >     --collect --wait --wait-seconds 5700 --terminate --yes --gpu "NVIDIA L40S"
 > ```
 
+## The verified run
+
+`deepspeed --num_gpus=2 train_qwen38_ds.py --max-steps 4 --max-samples 32` on a
+rented **2 × A100-SXM4-80GB** pod. Measured, not illustrative:
+
+```
+    weight shard      27.8 GB per GPU (ZeRO-3 across 2)
+    + per-GPU overhead 20.5 GB
+    = needed per GPU  48.3 GB
+    you have          85 GB per GPU
+    verdict           FITS
+
+  [1/4] dataset: tatsu-lab/alpaca — 32 examples
+  [2/4] model: Qwen/Qwen3.8-27B  (55.6 GB)
+        LoRA targets: q_proj, k_proj, v_proj, o_proj, in_proj_qkv,
+                      in_proj_z, in_proj_b, in_proj_a, out_proj
+        layer coverage: 64/64 (100% of depth)
+  [3/4] fine-tuning
+        trainable: 47.5 M of 26.94 B (0.176%)   [ZeRO-3: partitioned across ranks]
+        loss 2.963 -> 2.848 -> 2.389 -> 2.076
+        adapter written to ./qwen38-lora-out
+  [4/4] inference
+        Skipped: ZeRO-3 shards the weights across ranks.
+```
+
+Four steps on 32 examples is a **pipeline test, not a result**.
+
+Two caveats stated plainly:
+
+- **Generation is skipped under multi-rank ZeRO-3**, by design — the weights
+  are sharded, so `generate()` on rank 0 would read partial tensors. Verified
+  separately on **1 × A100-SXM4-80GB** (which the corrected capacity model says
+  fits at 76.1 GB needed): the adapter loads, and the model answers coherently.
+  Note the raw output continues into a `<think>` block — Qwen3.8 emits
+  reasoning tokens, so strip them before scoring completions.
+- **400 s/step is not representative.** That pod needed `NCCL_P2P_DISABLE=1`,
+  which routes every ZeRO-3 all-gather through the host rather than the GPU
+  interconnect. The workaround makes the run possible, not fast.
+
+### What it took to get there
+
+Five attempts on real hardware, four distinct defects — worth listing because
+three of them were in this script and each produced a plausible-looking failure:
+
+| | Symptom | Cause |
+|---|---|---|
+| 1 | `ImportError: Qwen2VLImageProcessor requires PIL` | TRL builds an `AutoProcessor` unless given one; on a VLM repo that is the *image* processor. Fixed with `processing_class=tokenizer` |
+| 2 | no output at all | `--wait-seconds` defaults to 1800 and the pod was killed mid-download |
+| 3 | hang, then `rc=250` | NCCL barrier — an allreduce of **one element** — timed out after 1,800,069 ms. `nvidia-smi topo -m` showed `SYS` between the cards. Pod, not code |
+| 4 | OOM at 43.73 GiB/GPU | `SFTConfig` built *after* the model, so `zero.Init` never fired and every rank held the whole model |
+| 5 | OOM at 42.23 GiB/GPU | sharding now correct; the **capacity model** was wrong — see the table above |

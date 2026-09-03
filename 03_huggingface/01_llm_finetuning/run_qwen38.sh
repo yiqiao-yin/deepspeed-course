@@ -16,9 +16,18 @@
 # Qwen3.8-27B is 55.6 GB of bf16 weights. LoRA does NOT reduce what it costs to
 # HOLD them — it only removes optimizer state for the frozen base:
 #
-#     1 x 48GB (A6000/L40S) =  48 GB   NOT ENOUGH
-#     2 x 48GB              =  96 GB   works (this script's default)
-#     2 x 80GB (A100/H100)  = 160 GB   comfortable
+# Aggregate VRAM is the WRONG way to size this, and it was sized that way at
+# first. The weights shard across ranks under ZeRO-3; activations, gather
+# buffers and fragmentation do NOT -- every rank pays ~20 GB of those even with
+# gradient checkpointing on. So the figure that matters is per GPU:
+#
+#     1 x 48GB              55.6 + 20.5 = 76.1 per GPU   NOT ENOUGH
+#     2 x 48GB (A6000/L40S) 27.8 + 20.5 = 48.3 per GPU   NOT ENOUGH -- measured
+#                                                        OOM on 2xL40S, by ~1%
+#     2 x 80GB (A100/H100)  27.8 + 20.5 = 48.3 per GPU   works (the default)
+#     4 x 48GB              13.9 + 20.5 = 34.4 per GPU   works
+#
+# A "48 GB" L40S reports 44.39 GiB usable, which at this margin decides it.
 #
 # The script computes this itself and refuses before downloading. To see the
 # arithmetic without a GPU or a download:
@@ -28,13 +37,15 @@
 # =============================================================================
 
 #SBATCH --gres=gpu:2
-# TWO, and this is a memory floor rather than a preference. 55.6 GB of weights
-# do not fit one 48 GB card, so ZeRO-3 must shard the parameters across at
-# least two ranks (~28 GB each). On 80 GB cards one would technically hold the
-# weights, but leaves little room for activations at this sequence length.
+# TWO 80 GB cards, and the size matters as much as the count. ZeRO-3 shards the
+# weights to ~28 GB per rank, but each rank also needs ~20 GB that does NOT
+# shard, so the requirement is ~48 GB PER GPU. Two 48 GB cards therefore fail
+# -- measured, not assumed -- while two 80 GB cards have room. Four 48 GB cards
+# also work, because a smaller shard brings the per-GPU total down.
+# NUM_GPUS=4 sbatch run_qwen38.sh
 
 #SBATCH --partition=h200-low
-# Any partition with >= 2 x 48 GB cards. Check what you have with: sinfo
+# Needs 2 x 80 GB (or 4 x 48 GB). Check what you have with: sinfo
 
 #SBATCH --time=03:00:00
 # Wall-clock ceiling; the job is killed here. The 55.6 GB download alone can
