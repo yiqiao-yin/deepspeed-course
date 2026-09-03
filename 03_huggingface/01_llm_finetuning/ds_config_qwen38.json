@@ -1,0 +1,29 @@
+{
+  "_comment": "Qwen3.8-27B LoRA fine-tuning on 2 GPUs. Values are 'auto' because a HuggingFace Trainer fills them from SFTConfig before DeepSpeed parses the file -- a Trainer convention, NOT a DeepSpeed feature. Calling deepspeed.initialize() directly with this file is a parse error. train_batch_size is omitted so any --num_gpus works.",
+
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+
+  "_precision_comment": "bf16, not fp16, and here that is not merely preference. The linear-attention layers carry a recurrent SSM state that the model's own config pins to float32 (mamba_ssm_dtype). A recurrent state is applied repeatedly down the sequence, so a small representation error compounds with length instead of averaging out -- exactly what fp16's narrow exponent range produces. bf16 keeps fp32's range.",
+  "bf16": { "enabled": "auto" },
+  "fp16": { "enabled": false },
+
+  "_zero_comment": "Stage 3. At 55.6 GB the weights do not fit one 48 GB card, so the parameters themselves must be sharded; stage 2 would leave a full copy on every rank. Across 2 ranks this is ~28 GB of weights each, which leaves room for activations and the adapter.",
+  "zero_optimization": {
+    "stage": 3,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": "auto",
+    "stage3_prefetch_bucket_size": "auto",
+    "stage3_param_persistence_threshold": "auto",
+    "stage3_max_live_parameters": 1e9,
+    "stage3_max_reuse_distance": 1e9,
+    "stage3_gather_16bit_weights_on_model_save": true
+  },
+
+  "_save_comment": "stage3_gather_16bit_weights_on_model_save is REQUIRED with stage 3. Without it the checkpoint is written as per-rank shards that from_pretrained cannot load -- the run succeeds and the artefact is unusable. It lives at the top level because pydantic forbids extra fields inside the typed zero_optimization section.",
+
+  "steps_per_print": 1,
+  "wall_clock_breakdown": false
+}
