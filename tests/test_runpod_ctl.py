@@ -138,6 +138,53 @@ def main() -> int:
     r.check("ntfy" not in boot_plain.lower() or "report(){ :; }" in boot_plain,
             "without --collect nothing is pushed anywhere")
 
+    # ---- The three bugs that made every pod run report success ----------
+    # All three shipped in 9c696ed and survived 78 commits. Each one made a
+    # FAILED run look like a successful one, which is the worst failure mode
+    # for a verification harness: it does not merely lose information, it
+    # manufactures false confidence.
+
+    # (1) rc=$? was evaluated AFTER the log-upload curl, so the DONE marker
+    #     reported the curl's exit code -- essentially always 0. A real GLM-5.3
+    #     pod run reported "DONE rc=0" while its log showed return code 2.
+    i_rc = boot_c.find("; rc=$?")
+    i_curl = boot_c.find("curl -s -m 60 -T")
+    r.check(i_rc != -1 and i_curl != -1 and i_rc < i_curl,
+            "rc is captured right after the launcher, before the log upload",
+            "If the curl runs first, $? is the curl's status and every run "
+            "reports success no matter what training did.")
+    r.check('rc=$rc' in boot_c and 'DONE rc=$?' not in boot_c,
+            "the DONE marker reports the captured $rc, not a fresh $?")
+
+    # (2) '[2/6] repo cloned' was printed unconditionally and the following
+    #     `cd` failed silently, so a failed clone ran the launcher from
+    #     /workspace and the failure looked like a broken example.
+    r.check("if [ ! -d /workspace/deepspeed-course ]" in boot_c,
+            "the clone result is checked, not assumed")
+    r.check("no such example dir" in boot_c,
+            "a failed `cd <example>` aborts instead of running from the wrong cwd")
+
+    # (3) --dry-run appended `|| true`, forcing rc=0 whatever happened -- and
+    #     --dry-run is the command every README documents as the default, so
+    #     the documented path could not surface a failure at all. Only
+    #     timeout's own 124 ("I stopped it") may count as success.
+    r.check("[ $rc -eq 124 ] && rc=0" in boot_c,
+            "--dry-run treats ONLY timeout's 124 as success")
+    after_launch = boot_c[boot_c.find(f"timeout {ctl.DRY_RUN_SECONDS}"):][:120]
+    r.check("|| true" not in after_launch,
+            "--dry-run does not blanket-suppress the launcher's exit code",
+            "`timeout N cmd || true` reports success for a crash at second 3.")
+
+    # GitHub rate-limits anonymous clones from cloud IP ranges and answers with
+    # an auth challenge, which hangs git on a prompt nothing can answer.
+    r.check("GIT_TERMINAL_PROMPT=0" in boot_c,
+            "git cannot block on a credential prompt")
+    r.check("codeload.github.com" in boot_c,
+            "there is a tarball fallback when the anonymous clone is refused")
+    for cred in ("GITHUB_TOKEN", "GH_TOKEN", "git config --global credential"):
+        r.check(cred not in boot_c,
+                f"the clone fallback does not put {cred} on the pod")
+
     # The transport is public, so the bootstrap must never echo credentials.
     for danger in ("$RUNPOD_API_KEY", "$HF_TOKEN", "$WANDB_API_KEY", "env |", "printenv"):
         r.check(danger not in boot_c,

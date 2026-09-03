@@ -138,6 +138,47 @@ the router learns to send everything to a handful of experts — is the classic
 way a fine-tuned MoE quietly degrades, and it does not announce itself in the
 loss.
 
+:::info With stock peft, freezing the experts is the only option there is
+Building the model on the meta device reveals that transformers **fuses** the
+256 experts into 3D parameter tensors at runtime —
+`model.layers.N.mlp.experts.gate_up_proj` has shape `(256, 4096, 6144)` — even
+though the checkpoint stores them per expert as
+`mlp.experts.{k}.gate_proj`. **The checkpoint layout and the runtime module
+tree are not the same thing.**
+
+So the experts are not `nn.Linear` modules at all, and peft's LoRA only wraps
+`Linear`, `Embedding` and `Conv1D`. There is nothing for it to attach to.
+Adapting the experts would require custom code operating on the fused tensor.
+The reasoning above says you *should not*; the implementation says with
+standard tooling you *cannot*.
+:::
+
+### Verify all of this before you rent anything
+
+```bash
+uv run train_glm53_ds.py --verify-arch
+```
+
+builds the full 743 B module tree on the **meta device** — no memory, no weight
+download, a couple of seconds — and checks that every LoRA target actually
+resolves:
+
+```
+  built GlmMoeDsaForCausalLM: 1,660 modules
+    q_a_proj               FOUND      78 instances
+    q_b_proj               FOUND      78 instances
+    kv_a_proj_with_mqa     FOUND      78 instances
+    kv_b_proj              FOUND      78 instances
+    o_proj                 FOUND      78 instances
+  parameters: 743.38 B (transformers) vs 743.18 B (config arithmetic)
+```
+
+Two things are confirmed there for free. The targets are real — and a
+Llama-style `q_proj`/`k_proj`/`v_proj` list matches **zero** modules in this
+tree, so the warning above is not a hypothetical. And the independent
+parameter counts agree to **0.03%**, which is the config arithmetic in §2
+checking out against the actual implementation rather than against itself.
+
 ## 5. LoRA does not make it fit
 
 The most common misconception about parameter-efficient fine-tuning:
@@ -179,10 +220,11 @@ being precise about which claims are proven matters more than a tidy story:
 
 | | Status |
 |---|---|
-| The architecture and capacity analysis | **verified**, cross-checked against measured file sizes |
-| LoRA target module names | **verified** against the published safetensors index |
+| The architecture and capacity analysis | **verified**, cross-checked against measured file sizes and against transformers' own parameter count (0.03% apart) |
+| LoRA target module names | **verified twice** — against the published safetensors index, and against the real module tree built on the meta device |
 | All four stages end to end | **verified on a rented RTX 3090** with `zai-org/glm-edge-1.5b-chat` |
-| The same four stages on GLM-5.3 | **not verified** — needs ~8×H200, which was not available to rent |
+| transformers 5.16.1 can build GLM-5.3 | **verified** — `glm_moe_dsa` is implemented, `GlmMoeDsaForCausalLM` instantiates |
+| The same four stages on GLM-5.3 | **not verified** — needs ~8×H200 (~$29/hr on RunPod) or 4×B300 |
 
 ## 7. Running it
 

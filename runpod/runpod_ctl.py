@@ -308,7 +308,13 @@ def bootstrap(example: str, spec: dict, branch: str,
     # paying for a full training job. It still executes the real launcher, but
     # under a timeout, so a genuine crash is still caught.
     if dry_run:
-        launch = f"timeout {DRY_RUN_SECONDS} {launch} || true"
+        # `|| true` used to be appended here, which forced rc=0 whatever
+        # happened -- and --dry-run is the command every README documents as
+        # the default, so the documented path could not report a failure at
+        # all. Instead, let `timeout` set the exit code and treat ONLY its
+        # "I stopped it" code (124) as success; a crash at second 3 must still
+        # surface as a failure.
+        launch = f"timeout {DRY_RUN_SECONDS} {launch}"
 
     report = (f'report(){{ curl -s -m 15 -d "$1" {NTFY}/{topic} >/dev/null 2>&1 || true; }}'
               if topic else 'report(){ :; }')
@@ -397,6 +403,9 @@ def bootstrap(example: str, spec: dict, branch: str,
         # essentially always 0. Every run reported success regardless of
         # whether training worked.
         f"({launch}) >> /workspace/run.log 2>&1; rc=$?",
+        # 124 means `timeout` stopped a healthy run at the cap, which is
+        # exactly what --dry-run asks for. Anything else non-zero is real.
+        "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
         "tail -40 /workspace/run.log",
         push_log,
         'report "[6/6] DONE rc=$rc — log attached"',

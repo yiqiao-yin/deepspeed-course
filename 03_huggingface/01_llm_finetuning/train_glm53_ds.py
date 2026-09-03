@@ -312,6 +312,68 @@ def lora_target_modules(config: dict) -> list:
     return ["q_proj", "k_proj", "v_proj", "o_proj"]
 
 
+def verify_architecture(model: str, targets: list, token: str = None) -> bool:
+    """
+    Build the model on the META device and check the LoRA targets resolve.
+
+    This is the strongest check available without renting the hardware. The
+    meta device allocates NO memory and downloads NO weights: transformers
+    constructs the full module tree from config.json alone, so a 743B model
+    materialises in a second or two. What it proves:
+
+      * your installed transformers actually implements this architecture
+        (GLM-5.3 needs >= 5.15; an older one raises KeyError on model_type)
+      * the LoRA target names exist in the REAL module tree, not just in the
+        checkpoint's tensor names -- these differ, see below
+      * the parameter count agrees with the arithmetic in moe_parameter_split
+
+    Worth doing before renting an 8xH200 node, because all three failures
+    otherwise surface AFTER a 755 GB download.
+
+    A finding this check surfaced: GLM-5.3's 256 experts are FUSED into 3D
+    parameter tensors at runtime -- `mlp.experts.gate_up_proj` has shape
+    (256, 4096, 6144) -- even though the checkpoint stores them per expert as
+    `mlp.experts.{k}.gate_proj`. They are therefore not nn.Linear modules, and
+    stock peft cannot attach LoRA to them at all. Freezing the experts is not
+    merely the better choice here; with standard tooling it is the only
+    expressible one.
+
+    Args:
+        model: HuggingFace model id
+        targets: LoRA target module suffixes to look for
+        token: optional HF token
+
+    Returns:
+        True when every target resolves and the architecture builds.
+    """
+    import torch
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    print(f"  building {model} on the meta device (no weights, no memory)...")
+    cfg = AutoConfig.from_pretrained(model, token=token, trust_remote_code=True)
+    with torch.device("meta"):
+        net = AutoModelForCausalLM.from_config(cfg)
+
+    names = [n for n, _ in net.named_modules()]
+    print(f"  built {type(net).__name__}: {len(names):,} modules")
+
+    ok = True
+    for t in targets:
+        hits = sum(1 for n in names if n.endswith("." + t))
+        print(f"    {t:<22} {'FOUND' if hits else 'MISSING':<8} {hits:>4} instances")
+        if not hits:
+            ok = False
+
+    n_par = sum(p.numel() for p in net.parameters())
+    print(f"  parameters: {n_par/1e9:,.2f} B (transformers) vs "
+          f"{moe_parameter_split(cfg.to_dict())['total']/1e9:,.2f} B (config arithmetic)")
+
+    if not ok:
+        print("\n  A target did not resolve. peft would attach LoRA to NOTHING,")
+        print("  and training would still run and still show a falling loss.")
+    return ok
+
+
 def capacity_report(model_gb: float, num_gpus: int, vram_gb: float) -> dict:
     """
     Can this hardware hold this model, with LoRA?
@@ -512,6 +574,10 @@ def parse_args() -> argparse.Namespace:
                         "(755 GB — see --plan). Use "
                         "zai-org/glm-edge-1.5b-chat to exercise the same code "
                         "path on hardware you can rent.")
+    p.add_argument("--verify-arch", action="store_true",
+                   help="Build the model on the meta device and check the LoRA "
+                        "targets resolve against the real module tree. No GPU, "
+                        "no weight download. Do this before renting.")
     p.add_argument("--plan", action="store_true",
                    help="Print the architecture, LoRA and capacity analysis, "
                         "then exit. Needs NO GPU and downloads no weights.")
@@ -575,6 +641,16 @@ def main() -> None:
         print_plan(args, config, size_gb, n, v)
         print("  (assumed hardware; override with --num-gpus / --vram-gb)")
         return
+
+    if args.verify_arch:
+        # Also deliberately before require_gpu(): the entire point is that it
+        # needs no GPU.
+        print(bar)
+        print(f"  Architecture verification: {args.model}")
+        print(bar)
+        ok = verify_architecture(args.model, lora_target_modules(config), hf_token)
+        print(bar)
+        sys.exit(0 if ok else 1)
 
     require_gpu()
 

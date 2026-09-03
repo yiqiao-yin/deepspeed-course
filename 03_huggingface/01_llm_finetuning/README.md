@@ -599,8 +599,20 @@ Pass `--force` to override it and OOM anyway.
 
 ```bash
 uv run train_glm53_ds.py --plan          # the whole analysis
+uv run train_glm53_ds.py --verify-arch   # build it on the meta device, check the LoRA targets
 uv run ../../tests/test_glm53_arch.py    # 26 property assertions
 ```
+
+`--verify-arch` is the one to run before renting anything: it constructs the
+full 743 B module tree on the meta device — no memory, no weight download —
+and confirms your transformers version implements `glm_moe_dsa` and that every
+LoRA target resolves. All three of those failures otherwise surface only
+*after* a 755 GB download.
+
+It also exposes why the experts must stay frozen: transformers fuses the 256
+experts into 3D tensors (`mlp.experts.gate_up_proj` is `(256, 4096, 6144)`),
+so they are not `nn.Linear` modules and stock peft has nothing to attach LoRA
+to — regardless of whether you think adapting them is a good idea.
 
 ### CoreWeave / any SLURM cluster
 
