@@ -373,6 +373,18 @@ def check_assets(folder: Path, name: str, r: Report) -> None:
     """The rest of the asset inventory from CONTRIBUTING.md §4."""
     r.add(name, "assets", "README.md present", (folder / "README.md").is_file())
 
+    # The Clawdeck lab manifest is the only integration point with
+    # clawdeck-app.com, which builds its Lab picker from it. A topic missing
+    # here simply never appears over there, with no error on either side.
+    # tests/test_clawdeck_manifest.py is the hard gate; this is the nudge in
+    # the tool a contributor already runs before opening a PR.
+    manifest = REPO_ROOT / "clawdeck.yaml"
+    if manifest.is_file():
+        r.add(name, "assets", "registered in clawdeck.yaml",
+              f"id: {name}" in manifest.read_text(),
+              "Add a `- id: " + name + "` entry so the topic appears in "
+              "clawdeck-app.com's Lab picker. See CONTRIBUTING.md section 8.")
+
     has_cfg = bool(list(folder.glob("ds_config*.json"))
                    or list(folder.glob("*_config.json")))
     if name in RUNTIME_DS_CONFIG:

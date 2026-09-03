@@ -1,0 +1,292 @@
+# =============================================================================
+# Clawdeck lab manifest
+#
+# Consumed by clawdeck-app.com to build its Lab picker. Clawdeck boots a
+# disposable GPU box, clones this repo, installs uv, pre-warms the uv cache for
+# `default_lab`, then shows one entry per lab with buttons that run `cmd` in the
+# pod's terminal.
+#
+# THIS FILE IS THE ONLY INTEGRATION POINT. No training script contains
+# Clawdeck-specific code, and none should. If a folder is renamed, edit the id
+# here and Clawdeck needs no change.
+#
+# Contract (enforced by `uv run scripts/check_contract.py --labs`, which CI runs):
+#   * every id is a directory that exists and contains pyproject.toml
+#   * default_lab is one of the ids
+#   * every lab has at least one run entry and exactly one primary: true
+#   * every directory with a pyproject.toml appears here — so a new topic that
+#     is not registered fails CI rather than silently missing from Clawdeck
+#
+# Conventions for `run`:
+#   * cwd is the lab directory, so commands are relative to it
+#   * `uv run` is always the prefix; the environment comes from the committed
+#     uv.lock, so no `uv sync` step is needed
+#   * --num_gpus MUST match `gpu.count`. Several ds_config.json files pin the
+#     count through DeepSpeed's batch invariant
+#     (train_batch_size == micro x grad_accum x num_gpus), and mismatching it
+#     aborts at startup. Where a config omits train_batch_size the count is
+#     free, but the value here is still the one that has been run.
+#   * commands run unattended in a terminal a user is watching, so anything
+#     long offers a bounded variant (--max-steps / --epochs 1 / --limit)
+#
+# `est_minutes` is for the PRIMARY command on hardware meeting `gpu`, and
+# EXCLUDES model downloads, which dominate for anything in 03_huggingface and
+# beyond — a 55 GB download is not a training cost but the user still waits for
+# it. Treat these as order-of-magnitude.
+# =============================================================================
+
+version: 1
+
+# Small, fast, downloads nothing. The right thing to pre-warm.
+default_lab: 01_basics/01_neuralnet
+
+labs:
+  # ---------------------------------------------------------------------------
+  # 01_basics — synthetic data, tiny models, runs end to end in seconds
+  # ---------------------------------------------------------------------------
+  - id: 01_basics/01_neuralnet
+    title: "Neural net with DeepSpeed"
+    summary: "The smallest complete DeepSpeed job: an MLP on synthetic data."
+    est_minutes: 3
+    gpu: { min_vram_gb: 6, count: 1 }
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=1 train_ds_enhanced.py", primary: true }
+      - { label: "Quick (1 epoch)", cmd: "uv run deepspeed --num_gpus=1 train_ds_enhanced.py --epochs 1" }
+
+  - id: 01_basics/02_convnet
+    title: "ConvNet on MNIST"
+    summary: "A CNN with ZeRO, on synthetic MNIST-shaped data."
+    est_minutes: 4
+    gpu: { min_vram_gb: 6, count: 1 }
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=1 train_ds.py", primary: true }
+      - { label: "Quick (1 epoch)", cmd: "uv run deepspeed --num_gpus=1 train_ds.py --epochs 1" }
+
+  - id: 01_basics/03_convnet_cifar10
+    title: "CIFAR-10 architectures"
+    summary: "Compares modern CNN blocks; downloads CIFAR-10 (~170 MB)."
+    est_minutes: 10
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 cifar10_deepspeed.py --epochs 2", primary: true }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 cifar10_deepspeed.py --max-steps 20" }
+
+  - id: 01_basics/04_rnn
+    title: "LSTM sequence model"
+    summary: "Recurrent net on synthetic sequences, ZeRO stage 1."
+    est_minutes: 4
+    # ds_config.json: train_batch_size 128 = micro 32 x accum 2 x 2 GPUs.
+    # This count is not a preference; --num_gpus=1 aborts at startup.
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 train_rnn_deepspeed.py", primary: true }
+      - { label: "Quick (1 epoch)", cmd: "uv run deepspeed --num_gpus=2 train_rnn_deepspeed.py --epochs 1" }
+
+  # ---------------------------------------------------------------------------
+  # 02_intermediate — still small, but the modelling questions get harder
+  # ---------------------------------------------------------------------------
+  - id: 02_intermediate/01_bayesian_neuralnet
+    title: "Bayesian net (MCMC)"
+    summary: "Parallel-tempering MCMC: uncertainty, not point estimates."
+    est_minutes: 8
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      - { label: "Sample", cmd: "uv run deepspeed --num_gpus=2 parallel_tempering_mcmc.py", primary: true }
+      - { label: "Quick (100 iters)", cmd: "uv run deepspeed --num_gpus=2 parallel_tempering_mcmc.py --num_iterations 100 --burn_in 20" }
+
+  - id: 02_intermediate/02_rnn_stock_data
+    title: "Stock forecasting"
+    summary: "Time series on real market data, and why baselines are hard to beat."
+    est_minutes: 10
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      # Needs network egress for yfinance; there is no --max-steps here.
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 train_rnn_stock_data_ds.py", primary: true }
+
+  - id: 02_intermediate/03_learning_to_rank
+    title: "Learning to rank"
+    summary: "RankNet / LambdaRank / ListNet — ranking lives in the loss."
+    est_minutes: 5
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      - { label: "Compare objectives", cmd: "uv run deepspeed --num_gpus=2 train_learning_to_rank.py --method all", primary: true }
+      - { label: "Objectives + metrics (CPU)", cmd: "uv run ranking_losses.py" }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_learning_to_rank.py --method all --max-steps 20" }
+
+  - id: 02_intermediate/04_groupwise_ranking
+    title: "Groupwise ranking"
+    summary: "GSF and SetRank — scoring documents in context, not alone."
+    est_minutes: 6
+    gpu: { min_vram_gb: 8, count: 2 }
+    run:
+      - { label: "Compare models", cmd: "uv run deepspeed --num_gpus=2 train_groupwise_ranking.py --model all", primary: true }
+      - { label: "Property checks (CPU)", cmd: "uv run groupwise.py" }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_groupwise_ranking.py --model all --max-steps 20" }
+
+  # ---------------------------------------------------------------------------
+  # 03_huggingface — real models and real downloads. est_minutes excludes those.
+  # ---------------------------------------------------------------------------
+  - id: 03_huggingface/01_llm_finetuning
+    title: "LLM fine-tuning with ZeRO"
+    summary: "Llama SFT, plus frontier-model analysis (GLM-5.3, Qwen3.8)."
+    est_minutes: 15
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
+      - { label: "GLM-5.3 analysis (no GPU)", cmd: "uv run train_glm53_ds.py --plan" }
+      - { label: "Qwen3.8 analysis (no GPU)", cmd: "uv run train_qwen38_ds.py --plan" }
+
+  - id: 03_huggingface/02_trl_sft
+    title: "TRL supervised fine-tuning"
+    summary: "Qwen3-0.6B SFT for function calling, via TRL."
+    est_minutes: 15
+    # ds_config.json: train_batch_size 16 = micro 4 x accum 2 x 2 GPUs.
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_trl_deepspeed.py --max-steps 20", primary: true }
+      - { label: "Full run", cmd: "uv run deepspeed --num_gpus=2 train_trl_deepspeed.py" }
+
+  - id: 03_huggingface/03_ocr
+    title: "Vision-language OCR"
+    summary: "Qwen2-VL fine-tuning; cap max_pixels to bound memory."
+    est_minutes: 20
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
+
+  - id: 03_huggingface/04_reward_model
+    title: "Reward modelling"
+    summary: "Bradley-Terry preference model — this IS the RLHF pipeline."
+    est_minutes: 15
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=1 train_reward_model.py --max-steps 20", primary: true }
+      - { label: "The objective (CPU)", cmd: "uv run reward_modeling.py" }
+
+  - id: 03_huggingface/05_dpo
+    title: "DPO and 5 descendants"
+    summary: "Deletes the reward model; six objectives behind --method."
+    est_minutes: 15
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Train DPO (20 steps)", cmd: "uv run deepspeed --num_gpus=1 train_dpo.py --max-steps 20", primary: true }
+      - { label: "All six losses (CPU)", cmd: "uv run preference_losses.py" }
+
+  - id: 03_huggingface/06_grpo
+    title: "GRPO on GSM8K"
+    summary: "Deletes the critic. Generation makes this slower than DPO."
+    est_minutes: 30
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py --max-steps 20", primary: true }
+
+  - id: 03_huggingface/07_online_dpo
+    title: "Online DPO"
+    summary: "Re-adds sampling, so it needs a judge and a reference model."
+    est_minutes: 30
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_online_dpo.py --max-steps 20", primary: true }
+
+  - id: 03_huggingface/08_gpt_oss_lora
+    title: "LoRA on a 20B model"
+    summary: "Large-scale LoRA SFT. Needs 4 x 80 GB — most boxes cannot run it."
+    est_minutes: 45
+    gpu: { min_vram_gb: 80, count: 4 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=4 lora/train_ds.py --max-steps 20", primary: true }
+
+  - id: 03_huggingface/09_multi_agency
+    title: "Multi-agent GRPO"
+    summary: "Drives TRL's GRPOTrainer directly — no deepspeed launcher."
+    est_minutes: 25
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run train_grpo_math.py --max-steps 20", primary: true }
+
+  # ---------------------------------------------------------------------------
+  # 04_video_text — every frontier technique here is a memory technique
+  # ---------------------------------------------------------------------------
+  - id: 04_video_text/01_hf_baseline
+    title: "Video-text baseline"
+    summary: "LLaVA-style video trainer; the reference point for 02-05."
+    est_minutes: 30
+    gpu: { min_vram_gb: 48, count: 2 }
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 llava_video_trainer/video_training_script.py", primary: true }
+
+  - id: 04_video_text/02_qwen25vl
+    title: "Qwen2.5-VL fine-tuning"
+    summary: "LoRA on a video-language model, with frame-rate control."
+    est_minutes: 25
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_qwen25vl.py --max-steps 20", primary: true }
+
+  - id: 04_video_text/03_token_compression
+    title: "Visual token compression"
+    summary: "ToMe / FastV / DyCoke — shrink what the model looks at."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Train compressed", cmd: "uv run deepspeed --num_gpus=1 train_compressed.py --steps 20", primary: true }
+      - { label: "The algorithms (CPU)", cmd: "uv run token_compression.py" }
+
+  - id: 04_video_text/04_streaming_memory
+    title: "STAR streaming memory"
+    summary: "Bounded memory for endless video. Inference, not training."
+    est_minutes: 8
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Stream", cmd: "uv run stream_infer.py --frames 64", primary: true }
+      - { label: "The memory bank (CPU)", cmd: "uv run star_memory.py" }
+
+  - id: 04_video_text/05_video_eval
+    title: "Video-MME evaluation"
+    summary: "An eval harness, and how to keep it honest."
+    est_minutes: 12
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Evaluate (10 items)", cmd: "uv run video_mme_eval.py --limit 10", primary: true }
+      - { label: "Dry run (no model)", cmd: "uv run video_mme_eval.py --dry-run" }
+
+  # ---------------------------------------------------------------------------
+  # 05_video_speech — shared sample media lives in 05_video_speech/data/
+  # ---------------------------------------------------------------------------
+  - id: 05_video_speech/01_longcat_omni
+    title: "LongCat-Flash-Omni"
+    summary: "560B omni model. Needs 2 x B200 and ~3 TB host RAM."
+    est_minutes: 60
+    gpu: { min_vram_gb: 180, count: 2 }
+    run:
+      - { label: "Train (10 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds_2xB200.py --max-steps 10", primary: true }
+
+  - id: 05_video_speech/02_thinker_talker
+    title: "Thinker-Talker (TMRoPE)"
+    summary: "The 40 ms shared clock that aligns video with audio."
+    est_minutes: 20
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_omni.py --max-steps 20", primary: true }
+      - { label: "The shared clock (CPU)", cmd: "uv run tmrope.py" }
+
+  - id: 05_video_speech/03_duplex_streaming
+    title: "Duplex streaming"
+    summary: "Turn-taking, barge-in and real-time factor. Inference only."
+    est_minutes: 6
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Run duplex", cmd: "uv run run_duplex.py --slices 40", primary: true }
+      - { label: "Turn-taking policy (CPU)", cmd: "uv run duplex.py" }
+
+  - id: 05_video_speech/04_omni_eval
+    title: "Omni modality ablation"
+    summary: "Does the model actually use each modality? Evaluation only."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # omni_eval.py runs the SIMULATED model when --model is omitted, which
+      # needs no GPU and no download. `--model none` would be read as an HF
+      # model id called "none" and fail.
+      - { label: "Ablation grid (CPU)", cmd: "uv run omni_eval.py", primary: true }
+      - { label: "Fewer questions", cmd: "uv run omni_eval.py --questions 20" }

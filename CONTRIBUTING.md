@@ -493,12 +493,71 @@ verifiable, and almost every one is enforced by CI or by a test:
 | **Book page** | `docusaurus-docs/docs/tutorials/…` | `npm run build` |
 | **Sidebar entry** | `docusaurus-docs/sidebars.js` | `test_docs_style.py` — a missing entry silently **orphans** the page, so it is now checked |
 | **Mermaid palette** | any `\`\`\`mermaid` block | `test_docs_style.py` |
+| **Clawdeck lab entry** | `clawdeck.yaml` at the repo root | `test_clawdeck_manifest.py` **fails** without it |
 
-Every row is now guarded. `test_docs_style.py` closed the last gap — the
-sidebar entry, which nothing in the Docusaurus build warns about.
+Every row is now guarded. `test_docs_style.py` closed the sidebar gap, which
+nothing in the Docusaurus build warns about, and `test_clawdeck_manifest.py`
+closed the last one — a topic missing from `clawdeck.yaml` is invisible in a
+*different product*, so nothing in this repository would ever have complained.
 
 `uv run scripts/new_example.py <folder>` writes the four in-folder files and
 prints the `runpod_ctl.py` line for you. The rest is on you.
+
+### `clawdeck.yaml` — the lab manifest
+
+[clawdeck-app.com](https://clawdeck-app.com) boots a disposable GPU box, clones
+this repository, installs `uv`, pre-warms the cache, and shows a **Lab picker**:
+one entry per topic, with buttons that run a command in the pod's terminal.
+
+It builds that picker from `clawdeck.yaml` at the repo root. **That file is the
+only integration point.** No training script contains Clawdeck-specific code,
+and none should — if a folder is renamed, you edit one id here and Clawdeck
+needs no change.
+
+This matters because the failure is silent *in a different repository*.
+Clawdeck previously hardcoded `01_basic_neuralnet`; this repo reorganised into
+`01_basics/…`; every Clawdeck GPU boot then printed "dependency pre-install
+FAILED" until a human noticed. Neither codebase could have caught it.
+
+Add your topic:
+
+```yaml
+  - id: 10_my_topic/01_thing        # path from the repo root; MUST have pyproject.toml
+    title: "Short title"            # <= 40 chars — it renders in a ~320px sidebar
+    summary: "One line, <= 95 chars."
+    est_minutes: 5                  # for the PRIMARY command, excluding downloads
+    gpu: { min_vram_gb: 24, count: 2 }   # omit entirely if CPU is fine
+    run:
+      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 train_ds.py", primary: true }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20" }
+```
+
+Rules the test enforces, and why each one exists:
+
+| Rule | Why |
+|---|---|
+| every `id` is a real directory with a `pyproject.toml` | Clawdeck runs `uv run` there; without a lock there is nothing to run |
+| **every lab directory on disk appears here** | the one that catches you. Add a topic, forget this file, and it simply never appears in Clawdeck — no error on either side |
+| `default_lab` is one of the ids | it is what gets pre-warmed on **every** boot; a bad value breaks every boot, not one lab |
+| exactly one `primary: true` per lab | the UI has one primary button |
+| every `cmd` starts with `uv run` and names a script that exists | the box has `uv` and your committed lock, so nothing else needs setup |
+| `--num_gpus` matches `gpu.count`, **and** `gpu.count` satisfies the batch invariant | see below — this one has bitten this repo twice |
+
+That last rule is worth dwelling on. Where a `ds_config.json` hardcodes
+`train_batch_size`, `train_micro_batch_size_per_gpu` and
+`gradient_accumulation_steps`, it has **pinned the GPU count**, and DeepSpeed
+asserts it at startup. `01_basics/04_rnn` (128 = 32 × 2 × **2**) and
+`03_huggingface/02_trl_sft` (16 = 4 × 2 × **2**) both require two GPUs, and both
+were registered in `EXAMPLES` as needing one — so `runpod_ctl.py run` on either
+would have rented a box and then aborted. The manifest test now cross-checks
+`gpu.count` against the config, so that class of mistake fails CI instead of
+your reader's wallet.
+
+Commands run **unattended, in a terminal a user is watching**. Keep them safe to
+run and bounded in time: if a full run is long, offer a `--max-steps` or
+`--epochs 1` variant alongside it. If your example has a CPU-runnable core,
+offer that too — it is the fastest way for someone to see what the topic is
+about.
 
 ### The batch invariant
 
@@ -946,6 +1005,7 @@ Copy this into your PR. The PR template already contains it.
 - [ ] `run_deepspeed.sh` is executable (`chmod +x`)
 - [ ] Registered in `EXAMPLES` in `runpod/runpod_ctl.py`
 - [ ] A book page exists **and** is listed in `sidebars.js`
+- [ ] Registered in `clawdeck.yaml` (title ≤ 40 chars, summary ≤ 95, one `primary`)
 - [ ] A logic test exists, registered in **both** `tests/run_all.sh` and the CI workflow
 - [ ] Managed by **`uv`**, trained with **`deepspeed`** (or a stated exception)
 - [ ] No shared logic extracted into a common module
@@ -986,6 +1046,7 @@ Copy this into your PR. The PR template already contains it.
 - [ ] Test registered in `tests/run_all.sh` **and** `.github/workflows/tests.yml`
 - [ ] `cd docusaurus-docs && npm run build` passes (if docs changed)
 - [ ] Docs page has frontmatter **and** a `sidebars.js` entry
+- [ ] `clawdeck.yaml` entry added; `--num_gpus` matches `gpu.count` and the batch invariant
 - [ ] Expected output is real, or marked "not yet verified on hardware"
 
 ### The one command
