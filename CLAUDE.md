@@ -187,7 +187,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 22 suites, no GPU, no downloads
+./tests/run_all.sh              # all 23 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -264,6 +264,30 @@ than merely documented.
 **Never give the pod `RUNPOD_API_KEY`** — termination is driven from the local
 machine in a `finally`, with a keyless in-pod watchdog as backstop. See
 `SECURITY.md`.
+
+## The Clawdeck lab manifest
+
+`clawdeck.yaml` at the repo root is the **only** integration point with
+[clawdeck-app.com](https://clawdeck-app.com), which boots a GPU box, clones
+this repo and builds a Lab picker from it. Never put Clawdeck-specific code in
+a training script.
+
+Every directory with a `pyproject.toml` must appear in it, and
+`tests/test_clawdeck_manifest.py` **fails CI** if one does not — because the
+symptom otherwise shows up in a different product with no error on either side.
+That already happened once: Clawdeck hardcoded `01_basic_neuralnet`, this repo
+restructured, and every Clawdeck boot failed its pre-install until a human
+noticed.
+
+The subtle check is `gpu.count`. Where a `ds_config.json` hardcodes
+`train_batch_size`, `micro` and `grad_accum`, it has pinned the GPU count and
+DeepSpeed asserts it at startup. `01_basics/04_rnn` and
+`03_huggingface/02_trl_sft` both require **2** GPUs and were both registered in
+`EXAMPLES` as needing 1 — fixed, and now cross-checked.
+
+Note that `scripts/check_contract.py` is **advisory and not in CI**, so the
+manifest is guarded by a `tests/` suite instead. Its per-example "registered in
+clawdeck.yaml" note is a convenience for contributors, not the gate.
 
 ## Scaffolding a new example
 

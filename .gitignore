@@ -9,11 +9,12 @@ docusaurus-docs/.docusaurus/
 runpod/results/
 !runpod/sample_output/*.log
 
-# Advanced video track: generated measurement artefacts
-08_vtt/**/compression_results*.json
-08_vtt/**/eval_*.json
-
-# Omni track: generated measurement artefacts
-09_vss/**/omni_eval_results.json
-09_vss/**/duplex_results.json
-09_vss/**/eval_*.json
+# Generated measurement artefacts from the CPU-runnable demos. The paths below
+# said 08_vtt/ and 09_vss/ until the restructure into 04_video_text/ and
+# 05_video_speech/ silently stopped matching anything -- which is how
+# omni_eval_results.json nearly got committed.
+04_video_text/**/compression_results*.json
+04_video_text/**/eval_*.json
+05_video_speech/**/omni_eval_results.json
+05_video_speech/**/duplex_results.json
+05_video_speech/**/eval_*.json
