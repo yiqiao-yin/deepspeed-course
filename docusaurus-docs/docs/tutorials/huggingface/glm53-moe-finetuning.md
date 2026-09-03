@@ -153,7 +153,7 @@ All 755 GB must still be resident across your ranks.
 | 8 × A100 80GB | 640 GB | no |
 | 8 × H100 80GB | 640 GB | no |
 | 8 × H200 141GB | 1,128 GB | **yes**, with room for LoRA + activations |
-| 8 × B200 192GB | 1,536 GB | yes, comfortably |
+| 8 × B200 180GB | 1,440 GB | yes, comfortably |
 
 The script computes this and refuses **before** downloading, because the
 alternative is discovering it after 755 GB have landed:
@@ -203,6 +203,161 @@ uv run runpod/runpod_ctl.py run 03_huggingface/01_llm_finetuning \
     --dry-run --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods        # must say "Nothing is billing."
 ```
+
+## 8. Serving it on EC2: what changes when the traffic is concurrent
+
+Everything above is about **fine-tuning**, which is a batch job — it either
+fits or it does not, and if it takes six hours nobody is waiting on a socket.
+**Serving** the same model behind an API is a different regime with different
+walls, and the interesting one is not the one people expect.
+
+:::note These numbers are derived, not measured
+Everything in this section is arithmetic on the verified `config.json` plus
+published hardware specifications. Nothing here has been benchmarked on a real
+node, and real throughput will be lower than every ceiling quoted. Treat it as
+capacity *planning*, not as a result.
+:::
+
+### The instance choice is made for you
+
+| EC2 instance | GPUs | total HBM | holds 755.7 GB fp8? |
+|---|---|---|---|
+| `p4d.24xlarge` | 8 × A100 40/80GB | 320–640 GB | no |
+| `p5.48xlarge` | 8 × H100 80GB | 640 GB | **no** — 116 GB short |
+| `p5e.48xlarge` | 8 × H200 141GB | 1,128 GB | yes, 372 GB spare |
+| `p6-b200.48xlarge` | 8 × B200 180GB | ~1,440 GB | yes, comfortably |
+
+The jump from `p5` to `p5e` is not a performance upgrade here, it is the
+difference between one node and two. On 8×H100 you must shard across **two**
+nodes, and every layer's expert dispatch then crosses the network instead of
+NVLink — EFA at 3.2 Tbps against NVLink's ~900 GB/s per GPU. Single-node
+serving is worth a great deal at this size.
+
+### The real limit on concurrency is the KV cache, not compute
+
+On a `p5e` node, weights take 755.7 GB and leave ~372 GB. Every concurrent
+request needs its own KV cache, at the 87.8 KB/token MLA figure from §3:
+
+| context per request | KV cache per request | concurrent requests (p5e) |
+|---|---|---|
+| 8K | 0.74 GB | **~429** |
+| 32K | 2.94 GB | ~107 |
+| 128K | 11.78 GB | ~26 |
+| **1M (the advertised context)** | **94.22 GB** | **~3** |
+
+```mermaid
+flowchart LR
+  subgraph N["p5e.48xlarge — 1,128 GB HBM"]
+    direction TB
+    W["weights (fp8)<br/>755.7 GB — fixed cost"]:::dark
+    K["KV cache<br/>~372 GB — divided among users"]:::bright
+  end
+  K --> A["429 users @ 8K context"]:::base
+  K --> B["26 users @ 128K"]:::base
+  K --> C["3 users @ 1M"]:::steel
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class N deep
+```
+
+**The 1M-token context and meaningful concurrency are mutually exclusive.** A
+node that serves 429 chat users at 8K serves three users at full context. That
+is a product decision disguised as an infrastructure one, and it should be
+made deliberately: cap the context you expose per tier, or provision separate
+pools for long-context traffic. Selling "1M context" on a shared endpoint
+without that arithmetic is how you discover it at 3am.
+
+MLA is what makes this survivable at all — vanilla attention would need 4,992
+KB/token, which is **4.9 GB per 1K tokens** and would allow roughly zero
+concurrent long-context requests.
+
+### The MoE batching paradox
+
+For a dense model, bigger batches are strictly good: you amortise the weight
+read over more tokens. For a 256-expert MoE, batching also **widens** how many
+experts get touched, because different tokens route differently:
+
+| batch | distinct experts hit | expert bytes read per step | per token |
+|---|---|---|---|
+| 1 | 8 (3%) | 23 GB | 23.0 GB |
+| 16 | 102 (40%) | 293 GB | 18.3 GB |
+| 64 | 222 (87%) | 638 GB | 10.0 GB |
+| 128 | 252 (98%) | 722 GB | 5.6 GB |
+| 256 | 256 (100%) | **734 GB** | 2.9 GB |
+
+Per-token cost falls, which is why batching still wins. But total weight
+traffic **saturates**: past a batch of roughly 128, every decode step reads
+essentially the entire expert bank, and the model stops being sparse in the
+only sense HBM cares about. You are paying dense-743B bandwidth for
+sparse-39B compute.
+
+The practical consequences:
+
+- **Throughput scales sub-linearly with batch size**, and the knee is early.
+  Capacity-plan against measured throughput at your batch size, never by
+  extrapolating from batch 1.
+- **Expert load imbalance becomes a straggler problem.** Routing is
+  data-dependent, so under expert parallelism one GPU can receive far more
+  tokens than another in the same step, and every other rank waits. Traffic
+  that is topically uniform — one language, one domain, one prompt template —
+  makes this *worse*, not better, because real routing is far from uniform.
+- **All-to-all is on the critical path.** 76 MoE layers × (dispatch + combine)
+  is 152 collective operations per forward pass. On one node that is NVLink;
+  across nodes it is your network, per token.
+
+### Decode is memory-bound, and that sets the latency floor
+
+Each generated token activates ~39 B of the 743 B parameters — 5.3%. At fp8
+that is 39 GB read per token, against ~38.4 TB/s of aggregate HBM bandwidth on
+8×H200:
+
+$$
+\frac{39\text{ GB}}{38.4\text{ TB/s}} \approx 1.0\text{ ms/token}
+$$
+
+That is a hard floor of roughly **1,000 tokens/second single-stream**, before
+any kernel inefficiency, all-to-all, or Python. Adding GPUs does not reduce
+per-token latency much — it buys you concurrency and KV cache room. If your
+product needs faster single-stream generation, the lever is speculative
+decoding or the model's own multi-token-prediction head, not more hardware.
+
+### Operational issues that bite before any of the above
+
+- **Cold start is minutes, not seconds.** 755 GB has to reach the node from S3
+  before it serves one request. Even at an optimistic 10 GB/s that is ~75
+  seconds of pure transfer, and realistically several minutes with
+  dequantisation and sharding. **Scale-to-zero is not viable**; you hold warm
+  capacity and pay for it. Autoscaling reacts far too slowly for a traffic
+  spike — provision for the peak or queue.
+- **Head-of-line blocking on long prefills.** A single 1M-token prefill is an
+  enormous compute job. Without disaggregated prefill/decode and continuous
+  batching, that one request stalls every other user on the node. This is the
+  most common way a long-context endpoint feels broken.
+- **Failure domain.** One node is 8 GPUs; a single GPU fault takes the whole
+  replica down, and the replacement pays the cold start again. Run at least
+  two replicas before you promise an SLA.
+- **Cost is dominated by idle time, not tokens.** These instances are billed
+  by the hour whether or not anyone calls the API, so utilisation is the whole
+  economic story. Check current on-demand and capacity-block pricing — it
+  changes, and reserved capacity behaves very differently from on-demand for a
+  workload you cannot scale to zero.
+
+### And if you fine-tune at this scale on EC2
+
+The page above uses ZeRO-3 on a single node. Across nodes, ZeRO-3's
+parameter all-gather runs per layer per step over EFA rather than NVLink, and
+at 755 GB that communication, not compute, sets your step time. Production
+training at this size generally combines expert parallelism with tensor and
+pipeline parallelism instead of relying on ZeRO-3 alone.
+
+One genuine consolation: **LoRA checkpoints are megabytes, not terabytes.**
+You never write the frozen 755 GB base, so checkpointing is cheap and frequent
+— which matters when a multi-node job's mean time between failures is measured
+in hours.
+
 
 ## References
 

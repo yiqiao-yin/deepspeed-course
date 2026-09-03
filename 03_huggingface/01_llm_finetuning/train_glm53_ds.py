@@ -58,7 +58,7 @@ optimizer state for the frozen weights. All 755 GB must still be resident.
     8 x A100 80GB                  640 GB   no
     8 x H100 80GB                  640 GB   no
     8 x H200 141GB               1,128 GB   yes, with room for LoRA + activations
-    8 x B200 192GB               1,536 GB   yes, comfortably
+    8 x B200 180GB               1,440 GB   yes, comfortably
 
 RunPod does not reliably offer 8xH200 single nodes, so **this script has never
 been run against GLM-5.3 itself.** Everything below the model download is

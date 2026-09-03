@@ -20,7 +20,7 @@
 #     8 x A100 80GB  =   640 GB   NOT ENOUGH
 #     8 x H100 80GB  =   640 GB   NOT ENOUGH
 #     8 x H200 141GB = 1,128 GB   works
-#     8 x B200 192GB = 1,536 GB   comfortable
+#     8 x B200 180GB = 1,440 GB   comfortable
 #
 # The script computes this itself and refuses before downloading. To see the
 # arithmetic without a GPU or a download:

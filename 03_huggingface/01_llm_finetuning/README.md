@@ -578,7 +578,7 @@ reduce what it costs to *hold* the model — all 755 GB must still be resident.
 | 8 × A100 80GB | 640 GB | no |
 | 8 × H100 80GB | 640 GB | no |
 | 8 × H200 141GB | 1,128 GB | **yes**, with room for LoRA + activations |
-| 8 × B200 192GB | 1,536 GB | yes, comfortably |
+| 8 × B200 180GB | 1,440 GB | yes, comfortably |
 
 The script computes this and **refuses before downloading**, because the
 alternative is discovering it after 755 GB:
