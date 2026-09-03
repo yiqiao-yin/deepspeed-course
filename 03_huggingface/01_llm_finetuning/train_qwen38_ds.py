@@ -752,7 +752,16 @@ def main() -> None:
         print(bar)
         print("  [3/4] fine-tuning")
         print(bar)
+    # processing_class is passed EXPLICITLY, and that is not optional here.
+    # Left to itself, SFTTrainer calls AutoProcessor.from_pretrained(...), and
+    # because this repo is a vision-language model that resolves to the full
+    # multimodal processor -- which imports Qwen2VLImageProcessor and dies with
+    #     ImportError: Qwen2VLImageProcessor requires the PIL library
+    # even though we are doing text-only SFT and never touch an image. Handing
+    # it the tokenizer we already built skips the processor path entirely.
+    # (Observed on a real 2xL40S pod run before this line existed.)
     trainer = SFTTrainer(model=model, args=sft_config, train_dataset=ds,
+                         processing_class=tokenizer,
                          peft_config=peft_config)
 
     # Assert the adapter actually attached to something. peft silently
