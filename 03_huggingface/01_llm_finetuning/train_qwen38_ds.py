@@ -692,6 +692,38 @@ def main() -> None:
         print(f"  {len(ds)} examples")
         print(f"  sample: {ds['text'][0][:160]!r}")
 
+    # The DeepSpeed config must exist BEFORE from_pretrained is called.
+    #
+    # Building SFTConfig with deepspeed=... instantiates transformers'
+    # HfDeepSpeedConfig, which registers a global that from_pretrained checks
+    # to decide whether to partition parameters as it loads (zero.Init).
+    # Construct the model first and that global is absent, so EVERY RANK
+    # MATERIALISES THE WHOLE MODEL before DeepSpeed ever shards it.
+    #
+    # This is not a subtle inefficiency. Measured on a 2xL40S pod with the
+    # order the other way round: 43.73 GiB allocated per GPU on a card with
+    # 44.39 GiB, then
+    #     torch.OutOfMemoryError: CUDA out of memory.
+    #     Tried to allocate 60.00 MiB
+    # -- a 27 B model failing to fit 96 GB of VRAM, because ZeRO-3 was doing
+    # nothing at load time. With the config built first it shards to ~28 GB
+    # per rank as intended.
+    sft_config = SFTConfig(
+        output_dir=args.output,
+        max_steps=args.max_steps,
+        num_train_epochs=args.epochs,
+        per_device_train_batch_size=args.batch_size,
+        gradient_accumulation_steps=args.grad_accum,
+        learning_rate=args.lr,
+        bf16=True,
+        gradient_checkpointing=True,
+        logging_steps=1,
+        save_strategy="no",
+        max_length=args.max_length,
+        report_to="wandb" if use_wandb else "none",
+        deepspeed=args.deepspeed,
+    )
+
     # ---- stage 2: model ----------------------------------------------------
     if is_main:
         print(bar)
@@ -733,21 +765,6 @@ def main() -> None:
                                lora_rank=args.lora_rank, lr=args.lr,
                                lora_scope=args.lora_scope))
 
-    sft_config = SFTConfig(
-        output_dir=args.output,
-        max_steps=args.max_steps,
-        num_train_epochs=args.epochs,
-        per_device_train_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.grad_accum,
-        learning_rate=args.lr,
-        bf16=True,
-        gradient_checkpointing=True,
-        logging_steps=1,
-        save_strategy="no",
-        max_length=args.max_length,
-        report_to="wandb" if use_wandb else "none",
-        deepspeed=args.deepspeed,
-    )
 
     if is_main:
         print(bar)
