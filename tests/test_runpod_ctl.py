@@ -185,6 +185,19 @@ def main() -> int:
         r.check(cred not in boot_c,
                 f"the clone fallback does not put {cred} on the pod")
 
+    # Collected logs are named after the example, and example names are nested
+    # ("03_huggingface/01_llm_finetuning"), so the attachment filename contains
+    # a "/". Writing it without creating the parent fails with ENOENT and loses
+    # the log -- the entire point of --collect -- while the run still reports
+    # success.
+    src = (REPO_ROOT / "runpod" / "runpod_ctl.py").read_text()
+    i_target = src.find("target = out_dir / name")
+    i_mkdir = src.find("target.parent.mkdir", i_target)
+    i_write = src.find("target.write_bytes", i_target)
+    r.check(i_mkdir != -1 and i_target < i_mkdir < i_write,
+            "the collected log's parent directory is created before writing",
+            "Nested example names put a '/' in the attachment filename.")
+
     # The transport is public, so the bootstrap must never echo credentials.
     for danger in ("$RUNPOD_API_KEY", "$HF_TOKEN", "$WANDB_API_KEY", "env |", "printenv"):
         r.check(danger not in boot_c,

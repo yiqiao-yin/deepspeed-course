@@ -592,6 +592,12 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
 
     for name, url in attachments.items():
         target = out_dir / name
+        # Example names are nested now ("03_huggingface/01_llm_finetuning"),
+        # and the log is named after the example, so the attachment filename
+        # contains a "/". Without this the write fails with ENOENT and the log
+        # -- the entire point of --collect -- is silently lost while the run
+        # itself reports success.
+        target.parent.mkdir(parents=True, exist_ok=True)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "dsc-runpod-ctl/1.0"})
             with urllib.request.urlopen(req, timeout=120) as resp:
