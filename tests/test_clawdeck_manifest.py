@@ -322,6 +322,28 @@ def main() -> None:
     #
     # count -> the largest per-GPU VRAM available at that count.
     BOOKABLE = {1: 180, 2: 180, 4: 80, 8: 80}
+    # Provenance: confirmed against Clawdeck v169 (2026-09-05), which checked
+    # this table against their live matcher on 11 boundary cases and agreed on
+    # all 11. Those cases are asserted below, so if this copy ever drifts from
+    # their catalog the disagreement shows up here rather than as a lab that
+    # silently cannot be booked. If Clawdeck adds hardware they will say so;
+    # this constant is the single place to edit.
+    BOUNDARY_CASES = [
+        # (count, min_vram_gb, bookable) -- verified against the live matcher
+        (1, 180, True), (2, 180, True), (2, 141, True),
+        (4, 80, True), (8, 80, True),
+        (3, 24, False), (5, 24, False),
+        (4, 141, False), (8, 141, False),
+        (1, 181, False), (4, 81, False),
+    ]
+    for cnt, vram, want in BOUNDARY_CASES:
+        got = cnt in BOOKABLE and vram <= BOOKABLE[cnt]
+        check(f"catalog boundary: {cnt} x {vram} GB is "
+              f"{'bookable' if want else 'not bookable'}",
+              got == want,
+              "this table has drifted from Clawdeck's live matcher; a lab "
+              "sized against it could be unbookable, or a bookable shape "
+              "wrongly rejected")
     print("\n  -- gpu shapes are bookable on Clawdeck --")
     for lab in labs:
         i = lab.get("id", "")
@@ -371,6 +393,19 @@ def main() -> None:
             if "--num_gpus" in cmd:
                 continue
             label = r.get("label")
+            if r.get("needs_gpu") is False:
+                # Clawdeck's declaration can only ADD a GPU requirement, never
+                # remove one -- deliberately, so one wrong line cannot re-create
+                # the bug the field exists to prevent. Writing `false` here
+                # therefore does nothing, and an author who wrote it expecting
+                # to force an entry CPU-only would be misled by their own
+                # manifest.
+                check(f"{i}: {label!r} does not use `needs_gpu: false`", False,
+                      "the field can only add a GPU requirement, never remove "
+                      "one, so `false` is silently a no-op on Clawdeck. Delete "
+                      "the line: an entry with no --num_gpus is already "
+                      "advertised as CPU-only.")
+                continue
             if r.get("needs_gpu") is True:
                 check(f"{i}: {label!r} is marked needs_gpu", True)
                 continue
