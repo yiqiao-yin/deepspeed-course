@@ -9,6 +9,48 @@ const config = {
   tagline: 'Master distributed deep learning with DeepSpeed',
   favicon: 'img/favicon.png',
 
+  // iOS ignores <link rel="icon"> for "Add to Home Screen". Without an
+  // apple-touch-icon it renders a letter tile instead of the logo -- which is
+  // why the site showed a bare "D". These tags are what fix that, and they must
+  // be absolute-with-baseUrl because the site is served from a subpath.
+  //
+  // The icons are PRE-FLATTENED onto #000000 (static/img/apple-touch-icon.png
+  // and friends). iOS does not honour transparency in home-screen icons and
+  // composites it to black anyway; doing it ourselves means the result is the
+  // site's own background rather than an accident. iOS also masks the corners,
+  // so the mark carries ~9% padding.
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'apple-touch-icon',
+        sizes: '180x180',
+        href: '/deepspeed-course/img/apple-touch-icon.png',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'manifest',
+        href: '/deepspeed-course/site.webmanifest',
+      },
+    },
+    {
+      // The home-screen label. Without this iOS uses the <title>, which is
+      // long enough to be truncated to something unhelpful.
+      tagName: 'meta',
+      attributes: {name: 'apple-mobile-web-app-title', content: 'DeepSpeed'},
+    },
+    {
+      tagName: 'meta',
+      attributes: {name: 'application-name', content: 'DeepSpeed Course'},
+    },
+    {
+      tagName: 'meta',
+      attributes: {name: 'theme-color', content: '#000000'},
+    },
+  ],
+
   // GitHub Pages deployment config
   url: 'https://yiqiao-yin.github.io',
   baseUrl: '/deepspeed-course/',
