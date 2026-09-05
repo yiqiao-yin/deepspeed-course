@@ -228,6 +228,95 @@ def main() -> None:
               f"{Path(cfgs[0]).name} implies N={implied:g}; DeepSpeed asserts "
               "this at startup, so the Run button would abort")
 
+    # ---- gpu shapes Clawdeck can actually book ----------------------------
+    # MIRROR OF CLAWDECK'S MACHINE CATALOG, not a property of this repo.
+    # Clawdeck matches a lab to the cheapest machine satisfying it, and requires
+    # an EXACT GPU count, because DeepSpeed is launched with --num_gpus=N and
+    # aborts if that disagrees with the hardware. A lab whose shape no catalog
+    # entry satisfies renders as "Needs a different machine" with nothing to
+    # switch to -- a dead end, and nothing anywhere logs a word about it.
+    #
+    # count -> the largest per-GPU VRAM available at that count.
+    BOOKABLE = {1: 180, 2: 180, 4: 80, 8: 80}
+    print("\n  -- gpu shapes are bookable on Clawdeck --")
+    for lab in labs:
+        i = lab.get("id", "")
+        g = lab.get("gpu")
+        if not g:
+            continue                      # no gpu block == CPU lab, always fine
+        cnt, vram = g.get("count"), g.get("min_vram_gb")
+        check(f"{i}: gpu.count={cnt} is a bookable count {sorted(BOOKABLE)}",
+              cnt in BOOKABLE,
+              "Clawdeck books an EXACT count. 3 is a reasonable thing to write "
+              "and cannot be booked; the lab would show as 'Needs a different "
+              "machine' with no machine to switch to.")
+        if cnt in BOOKABLE:
+            check(f"{i}: {cnt} x {vram} GB exists in the catalog "
+                  f"(max {BOOKABLE[cnt]} GB at that count)",
+                  vram <= BOOKABLE[cnt],
+                  f"no Clawdeck machine offers {vram} GB per GPU at count "
+                  f"{cnt}. This is a PLATFORM CAPACITY limit, not a typo in "
+                  "your lab -- either lower the requirement or use a count "
+                  "that offers bigger cards.")
+
+    # ---- entries with no --num_gpus are advertised as needing no GPU -------
+    # Clawdeck's rule is exactly `is_cpu_only = "--num_gpus" not in cmd`, and
+    # such entries are shown FIRST, under "Runs now - no GPU needed", drawn
+    # even from locked labs. It is what a learner clicks while the machine is
+    # still installing. An entry that lands there and then needs a GPU is worse
+    # than a locked lab: the learner was told it would work.
+    #
+    # `needs_gpu: true` marks an entry that genuinely needs a GPU but cannot say
+    # so through --num_gpus, because its example deliberately does not use the
+    # deepspeed launcher (CLAUDE.md lists five such examples; using a
+    # distributed launcher where there is nothing to distribute is cargo cult,
+    # and faking one here purely to smuggle a GPU signal would be worse).
+    # CLAWDECK DOES NOT READ THIS FIELD YET -- see the note in clawdeck.yaml.
+    GPU_LAUNCHERS = ("torchrun", "accelerate launch", "mpirun",
+                     "deepspeed.init_distributed", "torch.distributed.run")
+    # Flags whose code path returns before require_gpu() is ever reached.
+    CPU_SAFE_FLAGS = ("--plan", "--verify-arch", "--list-methods",
+                      "--list-models", "--dry-run")
+    print("\n  -- entries advertised as 'no GPU needed' really are --")
+    for lab in labs:
+        i = lab.get("id", "")
+        d = REPO / i
+        for r in lab.get("run") or []:
+            cmd = r.get("cmd", "")
+            if "--num_gpus" in cmd:
+                continue
+            label = r.get("label")
+            if r.get("needs_gpu") is True:
+                check(f"{i}: {label!r} is marked needs_gpu", True)
+                continue
+            script = next((t for t in shlex.split(cmd) if t.endswith(".py")), None)
+            if not script or not (d / script).is_file():
+                continue                  # already reported above
+            src = (d / script).read_text(errors="ignore")
+
+            # A GPU launcher invoked from inside the script is unambiguous.
+            found = [t for t in GPU_LAUNCHERS if t in src]
+            check(f"{i}: {label!r} launches no GPU-shaped process",
+                  not found,
+                  f"{script} references {found}; Clawdeck decides CPU-only by "
+                  "the absence of --num_gpus, so this would be advertised "
+                  "under 'Runs now - no GPU needed' and fail when clicked. "
+                  "Route it through `deepspeed --num_gpus=N`, or add "
+                  "`needs_gpu: true`.")
+
+            # require_gpu() means the script exits without a GPU, unless this
+            # invocation takes a documented early-return path.
+            if "require_gpu()" in src:
+                safe = [f for f in CPU_SAFE_FLAGS if f in cmd]
+                check(f"{i}: {label!r} reaches a CPU path despite require_gpu()",
+                      bool(safe),
+                      f"{script} calls require_gpu(), and this command passes "
+                      "no flag that returns before it "
+                      f"({', '.join(CPU_SAFE_FLAGS)}). Clawdeck would advertise "
+                      "it under 'Runs now - no GPU needed' and the learner "
+                      "would get the no-GPU preflight instead. Add "
+                      "`needs_gpu: true`, or give it a real CPU path.")
+
     # ---- fields the UI depends on -----------------------------------------
     print("\n  -- fields the picker renders --")
     for lab in labs:

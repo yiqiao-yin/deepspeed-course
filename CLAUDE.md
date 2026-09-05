@@ -383,6 +383,29 @@ Note that `scripts/check_contract.py` is **advisory and not in CI**, so the
 manifest is guarded by a `tests/` suite instead. Its per-example "registered in
 clawdeck.yaml" note is a convenience for contributors, not the gate.
 
+Two rules exist because Clawdeck reads this file **live from `main`**, cached
+five minutes, with no deploy and no review step — whatever lands is in front of
+learners within minutes:
+
+- **`gpu.count` must be 1, 2, 4 or 8**, with `min_vram_gb` ≤ 180 at counts 1–2
+  and ≤ 80 at 4–8. Clawdeck books an *exact* count from a fixed catalog, so
+  `count: 3` is unbookable and the lab dead-ends as "Needs a different machine".
+  The table in `tests/test_clawdeck_manifest.py` mirrors their catalog; if it
+  changes, that constant is what to edit.
+- **Any run entry without `--num_gpus` is advertised as "Runs now — no GPU
+  needed"** and shown first, even for locked labs. So such an entry must really
+  run on CPU, or carry `needs_gpu: true`. That field covers the five examples
+  that deliberately skip the deepspeed launcher; **Clawdeck does not read it
+  yet**, so those entries are still mislabelled in their UI until it does.
+
+Clawdeck **fails open**: an unreachable or malformed manifest yields zero labs,
+so the Lab tab disappears and plain compute keeps working. The flip side is that
+a broken manifest looks like *"this course has no labs"* rather than an error —
+which is why the CI gate is the thing making that trade safe.
+
+`main` is **not** branch-protected, so a direct push lands live before CI has
+run. Prefer a PR for manifest edits.
+
 ## Scaffolding a new example
 
 ```bash
