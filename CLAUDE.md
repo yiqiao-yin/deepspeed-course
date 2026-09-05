@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A teaching course, not an application. Each top-level numbered directory (`01_basics/01_neuralnet` … `05_video_speech`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text → video-speech-to-speech.
 
-There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~22 files on purpose.)
+There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~34 files on purpose.)
 
 There *is* a regression suite in `tests/` (CPU-only, runs in CI) and a GPU tier in `tests/gpu/`; see [What can and cannot be run here](#what-can-and-cannot-be-run-here). Tooling lives in `runpod/` for provisioning GPUs on demand, and `scripts/` for scaffolding and drift auditing.
 
 Contributions from outside are welcome and governed by `CONTRIBUTING.md`, which is written to double as a spec an agent can follow. Read it before adding an example — it encodes the three-platform contract below. Repo is MIT (`LICENSE`).
 
-### The alignment thread spans five topic folders
+### The alignment thread spans four topics in `03_huggingface/`
 
-`05`–`06` are not independent examples; they are one escalating argument about
+`04`–`07` are not independent examples; they are one escalating argument about
 **what you can delete from the RLHF pipeline**, and the deletions are different:
 
 | Folder | Deletes | Reference model? |
@@ -34,16 +34,61 @@ arrived relative to GRPO (Feb 5, 2024)**. That ordering is deliberate and the
 pages carry dated tables because the families genuinely straddle it — KTO
 precedes GRPO by three days, ORPO and SimPO follow.
 
-### Topics 08 and 09 are multi-subtopic
+### `02_intermediate/03` and `04` are a matched pair
 
-Most topics are a single flat folder. **`04_video_text/` and `05_video_speech/` each contain four
-numbered subtopics**, because their subject matter escalates internally:
+They vary opposite halves of the same system, and only make sense read together:
+
+| Folder | Held fixed | Varied |
+|---|---|---|
+| `03_learning_to_rank` | the scorer | the **objective** — pointwise / RankNet / LambdaRank / ListNet |
+| `04_groupwise_ranking` | the objective (ListNet) | the **architecture** — pointwise / GSF / SetRank |
+
+Two findings there are load-bearing and easy to undo by "tidying":
+
+- The published spread between objectives **depends on training budget** (0.041
+  at 1 epoch, 0.001 at 40). The docs give the budget with every number on
+  purpose; a single "listwise beats pointwise by X" would be meaningless.
+- `04`'s two property checks — **context sensitivity** and **permutation
+  equivariance** — are not decoration. The first GSF written here scored well
+  and had a permutation error of 1.5e-01, i.e. it was reading candidate order,
+  which at training time is label order. Only the property test caught it.
+
+### `03_huggingface/01_llm_finetuning` holds three entry points
+
+Not one. `train_ds.py` (Llama SFT, the original), `train_glm53_ds.py` (GLM-5.3,
+a 755 GB sparse MoE) and `train_qwen38_ds.py` (Qwen3.8-27B, hybrid
+linear/full attention). The two frontier scripts share a shape worth reusing:
+
+```bash
+uv run train_glm53_ds.py --plan          # architecture + capacity, from config.json
+uv run train_qwen38_ds.py --verify-arch  # build the real module tree, no weights
+```
+
+**`--verify-arch` is the technique to copy.** It builds the model on torch's
+**meta device** — no memory, no weight download, about two seconds for 743 B
+parameters — and checks that the LoRA target names resolve against the real
+module tree. That catches, for free, the three things that otherwise fail only
+*after* a multi-hundred-gigabyte download: an unsupported architecture, target
+names that match nothing, and parameter arithmetic that disagrees with the
+implementation.
+
+It also surfaced a fact no amount of reading the checkpoint would: transformers
+**fuses** GLM-5.3's 256 experts into 3D tensors at runtime
+(`mlp.experts.gate_up_proj` is `(256, 4096, 6144)`) although the checkpoint
+stores them per expert. **Checkpoint layout and runtime module tree are not the
+same thing**, and peft can only wrap `Linear`/`Embedding`/`Conv1D`, so freezing
+the experts there is the only expressible option rather than merely the wise one.
+
+### Sections 04 and 05 are multi-subtopic
+
+Most sections hold flat topics. **`04_video_text/` and `05_video_speech/` escalate
+internally**, so each holds several numbered subtopics:
 
 ```
-04_video_text/{hf_ds_vtt_test2, 01_qwen25vl_baseline, 02_token_compression,
-        03_streaming_memory, 04_video_eval}
-05_video_speech/{01_longcat_flash_omni, 02_thinker_talker,
-        03_duplex_streaming, 04_omni_eval, data/}
+04_video_text/{01_hf_baseline, 02_qwen25vl, 03_token_compression,
+               04_streaming_memory, 05_video_eval}
+05_video_speech/{01_longcat_omni, 02_thinker_talker,
+                 03_duplex_streaming, 04_omni_eval, data/}
 ```
 
 Each subtopic keeps the full six-file contract independently and is registered
@@ -145,7 +190,7 @@ it will not fit, and a partial run proves nothing. Write or extend a **logic tes
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
-### The big exception: eight modules ARE fully CPU-runnable
+### The big exception: ten modules ARE fully CPU-runnable
 
 Their substance is *algorithms, objectives and policy* rather than weights, so
 they need no GPU and no download. **Run these directly rather than mocking
@@ -153,6 +198,8 @@ them:**
 
 | Module | What it is |
 |---|---|
+| `02_intermediate/03_learning_to_rank/ranking_losses.py` | pointwise / RankNet / LambdaRank / ListNet, plus NDCG, MRR, MAP |
+| `02_intermediate/04_groupwise_ranking/groupwise.py` | GSF / SetRank, and the two property checks that police them |
 | `03_huggingface/05_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
 | `03_huggingface/04_reward_model/reward_modeling.py` | Bradley-Terry objective |
 | `04_video_text/03_token_compression/token_compression.py` | ToMe / FastV / DyCoke |
@@ -264,6 +311,53 @@ than merely documented.
 **Never give the pod `RUNPOD_API_KEY`** — termination is driven from the local
 machine in a `finally`, with a keyless in-pod watchdog as backstop. See
 `SECURITY.md`.
+
+### The RunPod harness lies less than it used to
+
+Four bugs in `runpod/runpod_ctl.py` were found and fixed by actually running
+pods. Each made a **failed** run look successful, which is the worst failure
+mode a verification harness can have — it does not lose information, it
+manufactures confidence. All four are now pinned by assertions in
+`tests/test_runpod_ctl.py`:
+
+| Was | Effect |
+|---|---|
+| `rc=$?` read *after* the log-upload `curl` | the DONE marker reported the curl's status — essentially always 0 |
+| `[2/6] repo cloned` printed unconditionally, `cd` failing silently | a failed clone ran the launcher from `/workspace` and looked like a broken example |
+| `--dry-run` appended `\|\| true` | the command every README documents could not report a failure at all |
+| collected log written without `mkdir -p` on its parent | nested example names contain `/`, so the log was silently lost |
+
+Two operational facts that cost real time:
+
+- **GitHub rate-limits anonymous clones from cloud IP ranges** and answers with
+  an auth challenge, so a pod fails with `could not read Username for
+  'https://github.com'` on a public repo. There is a codeload tarball fallback.
+  **No credential is ever placed on the pod** — see `SECURITY.md`.
+- **`--wait-seconds` defaults to 1800.** For anything with a large download that
+  is not enough, and with `--terminate` the pod is destroyed mid-download. Pass
+  a realistic window for big models.
+
+### Sizing multi-GPU jobs: model it per GPU, not in aggregate
+
+The weights shard under ZeRO-3. **Activations, gather buffers and
+fragmentation do not** — every rank pays those in full. An aggregate
+"total VRAM vs the weights" check passed 2 × 48 GB for a 55.6 GB model that
+then OOMed at the first step with 44.25 GiB resident on a 44.39 GiB card.
+
+$$\text{per GPU} = \frac{\text{weights}}{N} + \text{overhead that does not shard}$$
+
+Two signatures worth recognising:
+
+- **An OOM whose requested allocation is trivially small** (60 MiB) on hardware
+  that should have tens of GB spare means **sharding never happened**, not that
+  you are marginally short. Under ZeRO-3 the DeepSpeed config must exist
+  *before* `from_pretrained`, or `zero.Init` never fires and every rank
+  materialises the whole model. Build `SFTConfig`/`TrainingArguments` first.
+- **A collective whose payload is one element is a barrier.** A 1,800,069 ms
+  timeout on an `ALLREDUCE` with `NumelIn=1` is never a model problem — it is
+  the box advertising peer-to-peer it cannot perform. `nvidia-smi topo -m`
+  showing `SYS` between cards is the tell; `NCCL_P2P_DISABLE=1` is the fix, at
+  a real throughput cost. `tests/gpu/diagnose_nccl.sh` decides it in a minute.
 
 ## The Clawdeck lab manifest
 
