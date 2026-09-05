@@ -29,6 +29,27 @@
 #   * commands run unattended in a terminal a user is watching, so anything
 #     long offers a bounded variant (--max-steps / --epochs 1 / --limit)
 #
+# `needs_gpu: true` on a run entry
+# -------------------------------
+# Clawdeck decides whether an entry needs a GPU with exactly one rule:
+#     is_cpu_only = "--num_gpus" not in cmd
+# and CPU-only entries are shown FIRST, under "Runs now — no GPU needed", drawn
+# even from locked labs — they are what a learner clicks while the machine is
+# still installing.
+#
+# Five examples in this course deliberately do NOT use the deepspeed launcher
+# (see CLAUDE.md: using a distributed launcher where there is nothing to
+# distribute is cargo cult). Their commands therefore carry no --num_gpus, yet
+# some of them genuinely need a GPU. Faking a launcher purely to smuggle the
+# signal would be worse than the problem.
+#
+# `needs_gpu: true` states that truth in the manifest, and
+# tests/test_clawdeck_manifest.py enforces it.
+#
+#   !! CLAWDECK DOES NOT READ THIS FIELD YET. Until it does, such an entry is
+#   !! still mislabelled in the UI. The platform-side fix is one line:
+#   !!     is_cpu_only = ("--num_gpus" not in cmd) and not entry.get("needs_gpu")
+#
 # `est_minutes` is for the PRIMARY command on hardware meeting `gpu`, and
 # EXCLUDES model downloads, which dominate for anything in 03_huggingface and
 # beyond — a 55 GB download is not a training cost but the user still waits for
@@ -202,7 +223,12 @@ labs:
     est_minutes: 25
     gpu: { min_vram_gb: 24, count: 1 }
     run:
-      - { label: "Train (20 steps)", cmd: "uv run train_grpo_math.py --max-steps 20", primary: true }
+      # needs_gpu, because this example deliberately does not use the deepspeed
+      # launcher (it drives TRL's GRPOTrainer directly), so the command has no
+      # --num_gpus for Clawdeck to key on. Without this marker it would be
+      # advertised under "Runs now — no GPU needed" and hit the no-GPU
+      # preflight when clicked. See the note on needs_gpu at the top of this file.
+      - { label: "Train (20 steps)", cmd: "uv run train_grpo_math.py --max-steps 20", primary: true, needs_gpu: true }
 
   # ---------------------------------------------------------------------------
   # 04_video_text — every frontier technique here is a memory technique

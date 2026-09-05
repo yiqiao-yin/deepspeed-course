@@ -543,6 +543,21 @@ Rules the test enforces, and why each one exists:
 | every `cmd` starts with `uv run` and names a script that exists | the box has `uv` and your committed lock, so nothing else needs setup |
 | `--num_gpus` matches `gpu.count`, **and** `gpu.count` satisfies the batch invariant | see below — this one has bitten this repo twice |
 
+Two more that exist because Clawdeck is a *live* consumer — it reads this file
+from `main` every five minutes, with no deploy and no review in between:
+
+| Rule | Why |
+|---|---|
+| `gpu.count` ∈ {1, 2, 4, 8}, and `min_vram_gb` ≤ 180 at counts 1–2, ≤ 80 at counts 4–8 | Clawdeck books an **exact** count from a fixed catalog. `count: 3` is a perfectly reasonable thing to write and **cannot be booked** — the lab renders as "Needs a different machine" with nothing to switch to |
+| a run entry with no `--num_gpus` must genuinely run on CPU, or carry `needs_gpu: true` | Clawdeck's rule is literally `is_cpu_only = "--num_gpus" not in cmd`, and those entries are shown **first**, under "Runs now — no GPU needed", drawn even from locked labs. An entry that lands there and then needs a GPU is worse than a locked lab: the learner was told it would work |
+
+`needs_gpu: true` exists for the five examples that deliberately do **not** use
+the deepspeed launcher. Their commands have no `--num_gpus` for Clawdeck to key
+on, and faking a launcher purely to smuggle the signal would be exactly the
+cargo cult this repo warns against. Note that **Clawdeck does not read the field
+yet** — the manifest and the test are correct, the platform needs a one-line
+change to honour it.
+
 That last rule is worth dwelling on. Where a `ds_config.json` hardcodes
 `train_batch_size`, `train_micro_batch_size_per_gpu` and
 `gradient_accumulation_steps`, it has **pinned the GPU count**, and DeepSpeed
@@ -1006,6 +1021,7 @@ Copy this into your PR. The PR template already contains it.
 - [ ] Registered in `EXAMPLES` in `runpod/runpod_ctl.py`
 - [ ] A book page exists **and** is listed in `sidebars.js`
 - [ ] Registered in `clawdeck.yaml` (title ≤ 40 chars, summary ≤ 95, one `primary`)
+- [ ] `gpu.count` is 1, 2, 4 or 8 and the shape is bookable; any run entry without `--num_gpus` really runs on CPU (else `needs_gpu: true`)
 - [ ] A logic test exists, registered in **both** `tests/run_all.sh` and the CI workflow
 - [ ] Managed by **`uv`**, trained with **`deepspeed`** (or a stated exception)
 - [ ] No shared logic extracted into a common module
