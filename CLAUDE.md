@@ -395,8 +395,20 @@ learners within minutes:
 - **Any run entry without `--num_gpus` is advertised as "Runs now — no GPU
   needed"** and shown first, even for locked labs. So such an entry must really
   run on CPU, or carry `needs_gpu: true`. That field covers the five examples
-  that deliberately skip the deepspeed launcher; **Clawdeck does not read it
-  yet**, so those entries are still mislabelled in their UI until it does.
+  that deliberately skip the deepspeed launcher, and Clawdeck reads it as of
+  their v169.
+
+  The check for this is **reachability-based, not string-based**, and that
+  distinction is the whole difficulty. Two guard forms exist here —
+  `require_gpu()` and an inline
+  `if not torch.cuda.is_available() and ALLOW_CPU != "1"` — and mere presence
+  proves nothing, because four scripts put the inline form inside
+  `if args.model:` and default `--model` to `None`. Six manifest entries sit in
+  exactly that position and all six exit 0 on a CPU-only box. `gpu_guards()` in
+  `tests/test_clawdeck_manifest.py` therefore returns each guard with the flags
+  gating it, and treats a guard as reachable when it is unconditional **or** the
+  command passes any gating flag — over-flagging is recoverable with
+  `needs_gpu`, under-flagging ships a lie to a learner.
 
 Clawdeck **fails open**: an unreachable or malformed manifest yields zero labs,
 so the Lab tab disappears and plain compute keeps working. The flip side is that

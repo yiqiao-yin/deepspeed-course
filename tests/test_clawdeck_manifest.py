@@ -88,6 +88,90 @@ def lab_dirs_on_disk() -> set:
     return out
 
 
+def gpu_guards(src: str) -> list:
+    """
+    Every GPU preflight in a script, with the argparse flags gating each one.
+
+    TWO FORMS EXIST IN THIS REPO and both must be recognised. Keying on the
+    literal string `require_gpu()` missed the second, which Clawdeck caught:
+
+        require_gpu()                                     # the convention
+        if not torch.cuda.is_available() and \
+           os.environ.get("ALLOW_CPU") != "1":            # the inline form
+            sys.exit(1)
+
+    But presence is not the question — REACHABILITY is. All four inline guards
+    in this repo sit inside `if args.model:`, and `--model` defaults to None, so
+    a command that never passes `--model` never reaches them. Six manifest
+    entries are in exactly that position and all six exit 0 on a CPU-only box.
+    A checker that flagged mere presence would fail all six, which is precisely
+    the false-positive trap that made a bare `.cuda(` grep unusable.
+
+    So each guard is returned with the set of `args.X` names appearing in the
+    conditions enclosing it, mapped to flag spellings. A guard gated by an
+    argument the command does not pass cannot fire.
+
+    Returns:
+        list of sets of flag names, one per guard. An EMPTY set means the guard
+        is unconditional — it always fires.
+    """
+    import ast
+
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return []
+
+    guards: list = []
+    stack: list = []
+
+    def is_guard(node) -> bool:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            f = node.value.func
+            if isinstance(f, ast.Name) and f.id == "require_gpu":
+                return True
+        if isinstance(node, ast.If):
+            dumped = ast.dump(node.test)
+            if "cuda" in dumped and "is_available" in dumped:
+                return True
+        return False
+
+    def arg_flags(test) -> set:
+        out = set()
+        for n in ast.walk(test):
+            if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                    and n.value.id == "args"):
+                out.add("--" + n.attr.replace("_", "-"))
+        return out
+
+    def walk(stmts) -> None:
+        # Takes a STATEMENT LIST, not a node. The first version took a node and
+        # recursed with walk(sub), which only ever inspected sub's CHILDREN --
+        # so a guard that was itself a statement of a block was never tested,
+        # and the whole check silently passed everything. Verified against the
+        # four inline guards, which it now finds.
+        for st in stmts:
+            if is_guard(st):
+                guards.append(set().union(*stack) if stack else set())
+                if isinstance(st, ast.If):
+                    continue              # do not descend into the guard body
+            if isinstance(st, ast.If):
+                stack.append(arg_flags(st.test))
+                walk(st.body)
+                stack.pop()
+                walk(st.orelse)
+                continue
+            for field in ("body", "orelse", "finalbody"):
+                inner = getattr(st, field, None)
+                if isinstance(inner, list):
+                    walk([x for x in inner if isinstance(x, ast.stmt)])
+            for handler in getattr(st, "handlers", None) or []:
+                walk(handler.body)
+
+    walk(tree.body)
+    return guards
+
+
 def main() -> None:
     bar = "=" * 74
     print(bar)
@@ -227,6 +311,104 @@ def main() -> None:
               implied == want,
               f"{Path(cfgs[0]).name} implies N={implied:g}; DeepSpeed asserts "
               "this at startup, so the Run button would abort")
+
+    # ---- gpu shapes Clawdeck can actually book ----------------------------
+    # MIRROR OF CLAWDECK'S MACHINE CATALOG, not a property of this repo.
+    # Clawdeck matches a lab to the cheapest machine satisfying it, and requires
+    # an EXACT GPU count, because DeepSpeed is launched with --num_gpus=N and
+    # aborts if that disagrees with the hardware. A lab whose shape no catalog
+    # entry satisfies renders as "Needs a different machine" with nothing to
+    # switch to -- a dead end, and nothing anywhere logs a word about it.
+    #
+    # count -> the largest per-GPU VRAM available at that count.
+    BOOKABLE = {1: 180, 2: 180, 4: 80, 8: 80}
+    print("\n  -- gpu shapes are bookable on Clawdeck --")
+    for lab in labs:
+        i = lab.get("id", "")
+        g = lab.get("gpu")
+        if not g:
+            continue                      # no gpu block == CPU lab, always fine
+        cnt, vram = g.get("count"), g.get("min_vram_gb")
+        check(f"{i}: gpu.count={cnt} is a bookable count {sorted(BOOKABLE)}",
+              cnt in BOOKABLE,
+              "Clawdeck books an EXACT count. 3 is a reasonable thing to write "
+              "and cannot be booked; the lab would show as 'Needs a different "
+              "machine' with no machine to switch to.")
+        if cnt in BOOKABLE:
+            check(f"{i}: {cnt} x {vram} GB exists in the catalog "
+                  f"(max {BOOKABLE[cnt]} GB at that count)",
+                  vram <= BOOKABLE[cnt],
+                  f"no Clawdeck machine offers {vram} GB per GPU at count "
+                  f"{cnt}. This is a PLATFORM CAPACITY limit, not a typo in "
+                  "your lab -- either lower the requirement or use a count "
+                  "that offers bigger cards.")
+
+    # ---- entries with no --num_gpus are advertised as needing no GPU -------
+    # Clawdeck's rule is exactly `is_cpu_only = "--num_gpus" not in cmd`, and
+    # such entries are shown FIRST, under "Runs now - no GPU needed", drawn
+    # even from locked labs. It is what a learner clicks while the machine is
+    # still installing. An entry that lands there and then needs a GPU is worse
+    # than a locked lab: the learner was told it would work.
+    #
+    # `needs_gpu: true` marks an entry that genuinely needs a GPU but cannot say
+    # so through --num_gpus, because its example deliberately does not use the
+    # deepspeed launcher (CLAUDE.md lists five such examples; using a
+    # distributed launcher where there is nothing to distribute is cargo cult,
+    # and faking one here purely to smuggle a GPU signal would be worse).
+    # CLAWDECK DOES NOT READ THIS FIELD YET -- see the note in clawdeck.yaml.
+    GPU_LAUNCHERS = ("torchrun", "accelerate launch", "mpirun",
+                     "deepspeed.init_distributed", "torch.distributed.run")
+    # Flags whose code path returns before any guard is reached.
+    CPU_SAFE_FLAGS = ("--plan", "--verify-arch", "--list-methods",
+                      "--list-models", "--dry-run")
+
+    print("\n  -- entries advertised as 'no GPU needed' really are --")
+    for lab in labs:
+        i = lab.get("id", "")
+        d = REPO / i
+        for r in lab.get("run") or []:
+            cmd = r.get("cmd", "")
+            if "--num_gpus" in cmd:
+                continue
+            label = r.get("label")
+            if r.get("needs_gpu") is True:
+                check(f"{i}: {label!r} is marked needs_gpu", True)
+                continue
+            script = next((t for t in shlex.split(cmd) if t.endswith(".py")), None)
+            if not script or not (d / script).is_file():
+                continue                  # already reported above
+            src = (d / script).read_text(errors="ignore")
+
+            found = [t for t in GPU_LAUNCHERS if t in src]
+            check(f"{i}: {label!r} launches no GPU-shaped process",
+                  not found,
+                  f"{script} references {found}; Clawdeck decides CPU-only by "
+                  "the absence of --num_gpus, so this would be advertised "
+                  "under 'Runs now - no GPU needed' and fail when clicked. "
+                  "Route it through `deepspeed --num_gpus=N`, or add "
+                  "`needs_gpu: true`.")
+
+            if any(f in cmd for f in CPU_SAFE_FLAGS):
+                continue                  # returns before any guard
+
+            passed = {t for t in shlex.split(cmd) if t.startswith("--")}
+            # Conservative: a guard counts as reachable when it is
+            # unconditional, OR when the command passes ANY of the flags that
+            # gate it. Requiring ALL of them would be the dangerous direction --
+            # `video_mme_eval.py --model X` is gated by {--model, --dry-run},
+            # passes only --model, and genuinely DOES hit the preflight. Over-
+            # flagging is recoverable with `needs_gpu`; under-flagging ships a
+            # lie to a learner.
+            reachable = [g for g in gpu_guards(src) if not g or (g & passed)]
+            gate = (sorted(reachable[0]) or "nothing - it always fires"
+                    if reachable else "")
+            check(f"{i}: {label!r} reaches no GPU preflight",
+                  not reachable,
+                  f"{script} has a GPU preflight this command can reach "
+                  f"(gated by {gate}). Clawdeck would advertise it under "
+                  "'Runs now - no GPU needed' and the learner would get the "
+                  "preflight instead. Add `needs_gpu: true`, or give it a "
+                  "real CPU path.")
 
     # ---- gpu shapes Clawdeck can actually book ----------------------------
     # MIRROR OF CLAWDECK'S MACHINE CATALOG, not a property of this repo.
