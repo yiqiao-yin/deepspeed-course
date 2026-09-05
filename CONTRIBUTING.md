@@ -551,6 +551,10 @@ from `main` every five minutes, with no deploy and no review in between:
 | `gpu.count` ∈ {1, 2, 4, 8}, and `min_vram_gb` ≤ 180 at counts 1–2, ≤ 80 at counts 4–8 | Clawdeck books an **exact** count from a fixed catalog. `count: 3` is a perfectly reasonable thing to write and **cannot be booked** — the lab renders as "Needs a different machine" with nothing to switch to |
 | a run entry with no `--num_gpus` must genuinely run on CPU, or carry `needs_gpu: true` | Clawdeck's rule is literally `is_cpu_only = "--num_gpus" not in cmd`, and those entries are shown **first**, under "Runs now — no GPU needed", drawn even from locked labs. An entry that lands there and then needs a GPU is worse than a locked lab: the learner was told it would work |
 
+`main` is branch-protected and requires the `Logic tests (no GPU required)`
+check, with `enforce_admins` on — so a manifest edit physically cannot reach
+learners without the gate passing, even from an admin's terminal. Open a PR.
+
 `needs_gpu: true` exists for the five examples that deliberately do **not** use
 the deepspeed launcher. Their commands have no `--num_gpus` for Clawdeck to key
 on, and faking a launcher purely to smuggle the signal would be exactly the

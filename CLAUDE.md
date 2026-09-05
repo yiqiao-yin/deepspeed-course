@@ -403,8 +403,16 @@ so the Lab tab disappears and plain compute keeps working. The flip side is that
 a broken manifest looks like *"this course has no labs"* rather than an error —
 which is why the CI gate is the thing making that trade safe.
 
-`main` is **not** branch-protected, so a direct push lands live before CI has
-run. Prefer a PR for manifest edits.
+`main` is **branch-protected**: the `Logic tests (no GPU required)` check is
+required, `enforce_admins` is on, and force-pushes and deletions are blocked. A
+direct push to `main` is rejected — including for repo admins — so **every
+change goes through a PR**, and the manifest cannot reach learners without the
+gate having passed. Emergency escape hatch, if you ever truly need it:
+
+```bash
+gh api -X DELETE repos/yiqiao-yin/deepspeed-course/branches/main/protection
+# ... fix, push ... then re-enable, or the last window stays open
+```
 
 ## Scaffolding a new example
 
