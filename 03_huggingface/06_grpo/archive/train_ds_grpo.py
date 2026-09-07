@@ -83,14 +83,19 @@ training_args = GRPOConfig(
     adam_beta1=0.9,
     adam_beta2=0.99,
     weight_decay=0.1,
-    warmup_ratio=0.1,
+    # warmup_ratio was removed in transformers 5.x. Only the ABSOLUTE
+    # warmup_steps survives, and ratio -> steps is not a rename: the old
+    # value (0.1) was a fraction of a total step count that depends on
+    # dataset size, so it cannot be converted statically. This is a small
+    # absolute warmup; raise it for a long run.
+    warmup_steps=10,
     lr_scheduler_type="cosine",
     optim="paged_adamw_8bit",
     logging_steps=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,
     num_generations=2,
-    max_prompt_length=256,
+    # max_prompt_length was removed in the pinned library version (removed from GRPOConfig in trl 1.x).
     max_completion_length=200,
     max_steps=100,
     save_steps=250,

@@ -71,7 +71,7 @@ training_args = TrainingArguments(
     fp16=True,
     deepspeed="ds_config_zero1.json",
     report_to="none",                  # No logging clutter
-    save_safetensors=True,             # Lighter + faster saves
+    # save_safetensors was removed in transformers 5.x; safetensors is the default format.
     remove_unused_columns=False
 )
 

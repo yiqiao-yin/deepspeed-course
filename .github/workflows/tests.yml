@@ -100,6 +100,9 @@ jobs:
       - name: Clawdeck lab manifest
         run: uv run tests/test_clawdeck_manifest.py
 
+      - name: Config kwargs match the installed library
+        run: uv run tests/test_config_kwargs.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

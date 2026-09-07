@@ -202,7 +202,7 @@ def get_training_arguments(
         deepspeed="ds_config.json",  # DeepSpeed configuration
         report_to=["wandb"] if use_wandb else [],
         run_name="trl-qwen-function-calling" if use_wandb else None,
-        logging_dir="./logs",
+        # logging_dir was removed in the pinned library version (removed in transformers 5.x; TensorBoard logs now live under output_dir).
         remove_unused_columns=False,  # Keep all dataset columns
         dataloader_num_workers=2,
     )
