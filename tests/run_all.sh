@@ -42,6 +42,7 @@ TESTS=(
     tests/test_glm53_arch.py
     tests/test_qwen38_arch.py
     tests/test_clawdeck_manifest.py
+    tests/test_config_kwargs.py
 )
 
 for test in "${TESTS[@]}"; do

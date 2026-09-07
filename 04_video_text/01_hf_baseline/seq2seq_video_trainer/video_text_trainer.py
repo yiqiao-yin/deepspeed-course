@@ -439,7 +439,7 @@ response = processor.decode(outputs[0], skip_special_tokens=True)
             num_train_epochs=3,
             learning_rate=5e-5,
             save_strategy="epoch",
-            logging_dir="./logs",
+            # logging_dir was removed in the pinned library version (removed in transformers 5.x; TensorBoard logs now live under output_dir).
             logging_steps=1,
             report_to=[],
             deepspeed=deepspeed_config_path,

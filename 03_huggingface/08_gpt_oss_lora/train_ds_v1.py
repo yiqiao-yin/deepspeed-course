@@ -167,7 +167,12 @@ def train(peft_model, tokenizer, dataset, output_dir: str, hf_user: str, push_to
         max_length=2048,
 
         # Optimization settings
-        warmup_ratio=0.03,
+        # warmup_ratio was removed in transformers 5.x. Only the ABSOLUTE
+        # warmup_steps survives, and ratio -> steps is not a rename: the old
+        # value (0.03) was a fraction of a total step count that depends on
+        # dataset size, so it cannot be converted statically. This is a small
+        # absolute warmup; raise it for a long run.
+        warmup_steps=10,
         lr_scheduler_type="cosine_with_min_lr",
         lr_scheduler_kwargs={"min_lr_rate": 0.1},
 
@@ -183,7 +188,7 @@ def train(peft_model, tokenizer, dataset, output_dir: str, hf_user: str, push_to
 
         # Output settings
         output_dir=output_dir,
-        overwrite_output_dir=True,
+        # overwrite_output_dir was removed in the pinned library version (removed in transformers 5.x).
         report_to=["tensorboard"] if torch.distributed.get_rank() == 0 else [],
 
         # Hub settings - only enable if authentication is available

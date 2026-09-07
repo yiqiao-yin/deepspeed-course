@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 23 suites, no GPU, no downloads
+./tests/run_all.sh              # all 24 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -358,6 +358,36 @@ Two signatures worth recognising:
   the box advertising peer-to-peer it cannot perform. `nvidia-smi topo -m`
   showing `SYS` between cards is the tell; `NCCL_P2P_DISABLE=1` is the fix, at
   a real throughput cost. `tests/gpu/diagnose_nccl.sh` decides it in a minute.
+
+### Library API drift is a CI gate, not a runtime surprise
+
+`logging_dir=` is syntactically valid, so `compileall` cannot catch it — it
+fails only when `TrainingArguments` is constructed. A learner discovered exactly
+that on rented GPUs after both ranks had launched and the model had loaded.
+
+`tests/test_config_kwargs.py` parses every call to a known config constructor
+(`TrainingArguments`, `SFTConfig`, `DPOConfig`, `GRPOConfig`, `LoraConfig`, …)
+and checks each keyword against the **installed** class's signature. No GPU, no
+download — the constructors import fine on CPU, which is what makes this
+catchable at all.
+
+Run against the tree when written it found **20** rejected kwargs in 13 files,
+of which only one had been reported: `logging_dir`, `warmup_ratio`,
+`overwrite_output_dir`, `save_safetensors` and `max_prompt_length` were all
+removed by transformers 5.x / trl 1.x. **Four sat in commands Clawdeck offers
+by name**, so three more labs would have failed the same way.
+
+Two properties keep it honest, and both matter:
+
+- **A constructor whose signature takes `**kwargs` is skipped**, loudly. It
+  accepts anything, so a pass would be false confidence.
+- **The pinned versions in its PEP 723 header are checked against every lab's
+  `uv.lock`.** Otherwise the suite validates a version no learner runs — passing
+  while the labs are broken, which is precisely the failure it exists to
+  prevent.
+
+When bumping a library, expect this to fail and read it as a to-do list: it
+names the file, the line and the exact kwarg.
 
 ## The Clawdeck lab manifest
 

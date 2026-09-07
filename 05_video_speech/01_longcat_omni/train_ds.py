@@ -439,7 +439,12 @@ def train(
         per_device_train_batch_size=1,  # Very small due to model size
         gradient_accumulation_steps=32,  # Large accumulation for effective batch size
         learning_rate=1e-4,
-        warmup_ratio=0.03,
+        # warmup_ratio was removed in transformers 5.x. Only the ABSOLUTE
+        # warmup_steps survives, and ratio -> steps is not a rename: the old
+        # value (0.03) was a fraction of a total step count that depends on
+        # dataset size, so it cannot be converted statically. This is a small
+        # absolute warmup; raise it for a long run.
+        warmup_steps=10,
         lr_scheduler_type="cosine",
 
         # Memory optimization
@@ -454,7 +459,7 @@ def train(
         save_total_limit=3,
 
         # Output settings
-        overwrite_output_dir=True,
+        # overwrite_output_dir was removed in the pinned library version (removed in transformers 5.x).
         report_to=report_to if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0 else [],
 
         # Hub settings
