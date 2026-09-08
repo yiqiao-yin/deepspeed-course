@@ -18,3 +18,10 @@ runpod/results/
 05_video_speech/**/omni_eval_results.json
 05_video_speech/**/duplex_results.json
 05_video_speech/**/eval_*.json
+
+# Datasets downloaded at runtime by the examples. CIFAR-10 is 78 MB and lands
+# in 01_basics/03_convnet_cifar10/data/ the first time the lab runs; it was
+# committed by accident once and removed before the branch merged.
+**/data/cifar-10-batches-py/
+**/data/cifar-10-python.tar.gz
+01_basics/03_convnet_cifar10/data/

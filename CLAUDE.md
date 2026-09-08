@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 24 suites, no GPU, no downloads
+./tests/run_all.sh              # all 25 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -358,6 +358,29 @@ Two signatures worth recognising:
   the box advertising peer-to-peer it cannot perform. `nvidia-smi topo -m`
   showing `SYS` between cards is the tell; `NCCL_P2P_DISABLE=1` is the fix, at
   a real throughput cost. `tests/gpu/diagnose_nccl.sh` decides it in a minute.
+
+### A custom torch index pins its companions too, or nothing works
+
+`01_basics/03_convnet_cifar10` passed every check and still could not run:
+
+    RuntimeError: operator torchvision::nms does not exist
+
+raised from inside `torch/_library/fake_impl.py`, which reads like a torch bug
+and is not one. `[tool.uv.sources]` pinned `torch` to the cu128 index but not
+`torchvision`, and with `explicit = true` only the packages named there come
+from that index — so torch resolved to `2.11.0+cu128` while torchvision came
+from PyPI, built against a different torch. Its compiled `_C.so` never
+registered its ops.
+
+**Any package with a compiled extension linked against torch must appear in
+`[tool.uv.sources]` whenever torch does** — `torchvision`, `torchaudio`. Fixing
+one and not the other is the easy mistake: `05_video_speech/01_longcat_omni`
+had the identical bug with `torchaudio` and was found only by generalising the
+report.
+
+`tests/test_torch_index_pins.py` guards it by reading the **lock**, not the
+pyproject — the resolution rather than the declaration — so a lock regenerated
+against a different index fails even while `pyproject.toml` still looks right.
 
 ### Library API drift is a CI gate, not a runtime surprise
 
