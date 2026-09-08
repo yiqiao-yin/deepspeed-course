@@ -103,6 +103,9 @@ jobs:
       - name: Config kwargs match the installed library
         run: uv run tests/test_config_kwargs.py
 
+      - name: torch-linked packages share torch's index
+        run: uv run tests/test_torch_index_pins.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
