@@ -574,4 +574,18 @@ There are **two** CI workflows:
   palette, the absence of inline overrides, label quoting, and that the config
   still sets what CONTRIBUTING.md publishes — all 40 diagram pages conform.
 
+- **The site's own background is `#000000`**, not the dark blue of the Mermaid
+  palette above — `custom.css` sets `--ifm-background-color: #000000` and dark
+  mode is the only mode. Those are two different colour systems and it is easy
+  to assume one from the other.
+- **`headTags` in `docusaurus.config.js` carries the iOS home-screen icon**, and
+  it is load-bearing: iOS Safari ignores `<link rel="icon">` for "Add to Home
+  Screen" and shows a **letter tile** without an `apple-touch-icon`. The site
+  did exactly that — a bare "D" — until the tags were added. The icons under
+  `static/img/` (180 for iOS, 192 and 512 for the manifest) are **pre-flattened
+  onto black on purpose**: iOS does not honour transparency in home-screen icons
+  and composites it to black regardless, so doing it deliberately makes the
+  result the site's own background instead of the renderer's choice. iOS also
+  masks the corners, hence the padding.
+
 - **Verifying a deployed page needs a content check, not a status code.** A 200 only proves *a* page is there, not the new one — and a literal `grep` for text inside a KaTeX block will fail because it renders into split HTML spans. Match on plain prose instead.
