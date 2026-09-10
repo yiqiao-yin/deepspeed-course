@@ -109,6 +109,9 @@ jobs:
       - name: Synthetic data contains a learnable signal
         run: uv run tests/test_synthetic_data_is_learnable.py
 
+      - name: Multi-head Latent Attention
+        run: uv run tests/test_mla.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

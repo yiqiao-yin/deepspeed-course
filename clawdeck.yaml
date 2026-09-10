@@ -230,6 +230,16 @@ labs:
       # preflight when clicked. See the note on needs_gpu at the top of this file.
       - { label: "Train (20 steps)", cmd: "uv run train_grpo_math.py --max-steps 20", primary: true, needs_gpu: true }
 
+  - id: 03_huggingface/10_deepseek_from_scratch
+    title: "DeepSeek MLA from scratch"
+    summary: "Multi-head Latent Attention, built from the paper and measured."
+    est_minutes: 8
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      - { label: "Compare MHA/GQA/MLA", cmd: "uv run deepspeed --num_gpus=1 train_deepseek_from_scratch.py --variant all", primary: true }
+      - { label: "The architecture (CPU)", cmd: "uv run mla.py" }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=1 train_deepseek_from_scratch.py --variant all --max-steps 20" }
+
   # ---------------------------------------------------------------------------
   # 04_video_text — every frontier technique here is a memory technique
   # ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ TESTS=(
     tests/test_config_kwargs.py
     tests/test_torch_index_pins.py
     tests/test_synthetic_data_is_learnable.py
+    tests/test_mla.py
 )
 
 for test in "${TESTS[@]}"; do
