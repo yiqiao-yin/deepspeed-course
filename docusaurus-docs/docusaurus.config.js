@@ -9,6 +9,37 @@ const config = {
   tagline: 'Master distributed deep learning with DeepSpeed',
   favicon: 'img/favicon.png',
 
+
+  // The section was renamed 03_huggingface -> 03_llms, which moved these 15
+  // pages. Without redirects every previously-shared link 404s: GitHub does not
+  // redirect renamed in-repo paths either, so the book is the only place this
+  // is recoverable. Old URLs exist in commit messages, in the Clawdeck team's
+  // notes, and anywhere a reader bookmarked one.
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          { from: '/docs/tutorials/huggingface/beyond-grpo', to: '/docs/tutorials/llms/beyond-grpo' },
+          { from: '/docs/tutorials/huggingface/deepseek-mla', to: '/docs/tutorials/llms/deepseek-mla' },
+          { from: '/docs/tutorials/huggingface/glm53-moe-finetuning', to: '/docs/tutorials/llms/glm53-moe-finetuning' },
+          { from: '/docs/tutorials/huggingface/gpt-oss-finetuning', to: '/docs/tutorials/llms/gpt-oss-finetuning' },
+          { from: '/docs/tutorials/huggingface/grpo-training', to: '/docs/tutorials/llms/grpo-training' },
+          { from: '/docs/tutorials/huggingface/grpo-worked-example', to: '/docs/tutorials/llms/grpo-worked-example' },
+          { from: '/docs/tutorials/huggingface/llm-finetuning', to: '/docs/tutorials/llms/llm-finetuning' },
+          { from: '/docs/tutorials/huggingface/multi-agent', to: '/docs/tutorials/llms/multi-agent' },
+          { from: '/docs/tutorials/huggingface/ocr-vision-language', to: '/docs/tutorials/llms/ocr-vision-language' },
+          { from: '/docs/tutorials/huggingface/online-preference-methods', to: '/docs/tutorials/llms/online-preference-methods' },
+          { from: '/docs/tutorials/huggingface/overview', to: '/docs/tutorials/llms/overview' },
+          { from: '/docs/tutorials/huggingface/preference-optimization', to: '/docs/tutorials/llms/preference-optimization' },
+          { from: '/docs/tutorials/huggingface/qwen38-hybrid-attention', to: '/docs/tutorials/llms/qwen38-hybrid-attention' },
+          { from: '/docs/tutorials/huggingface/rlhf-reward-modeling', to: '/docs/tutorials/llms/rlhf-reward-modeling' },
+          { from: '/docs/tutorials/huggingface/trl-function-calling', to: '/docs/tutorials/llms/trl-function-calling' }
+        ],
+      },
+    ],
+  ],
+
   // iOS ignores <link rel="icon"> for "Add to Home Screen". Without an
   // apple-touch-icon it renders a letter tile instead of the logo -- which is
   // why the site showed a bare "D". These tags are what fix that, and they must

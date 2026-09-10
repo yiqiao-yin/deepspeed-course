@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-05-huggingface-reward-model"
+name = "deepspeed-course-03-llms-04-reward-model"
 version = "0.1.0"
 description = "Bradley-Terry reward modelling on preference pairs"
 readme = "README.md"

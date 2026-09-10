@@ -537,7 +537,7 @@ wheels = [
 ]
 
 [[package]]
-name = "deepspeed-course-07-huggingface-trl-multi-agency"
+name = "deepspeed-course-03-llms-09-multi-agency"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

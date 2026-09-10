@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-05-huggingface-trl"
+name = "deepspeed-course-03-llms-02-trl-sft"
 version = "0.1.0"
 description = "TRL supervised fine-tuning for function calling"
 readme = "README.md"

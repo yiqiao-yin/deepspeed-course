@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-05-huggingface-dpo"
+name = "deepspeed-course-03-llms-05-dpo"
 version = "0.1.0"
 description = "DPO and its descendants: six preference objectives"
 readme = "README.md"
