@@ -474,7 +474,7 @@ Then run one step with `steps_per_print: 1` and `wall_clock_breakdown: true` and
 
 - [DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — the theory behind §6
 - [Troubleshooting](/docs/reference/troubleshooting) — symptom-first diagnosis
-- [HuggingFace Integration](/docs/tutorials/llms/overview) — `"auto"` and strategy selection
+- [LLM Training with DeepSpeed](/docs/tutorials/llms/overview) — `"auto"` and strategy selection
 
 ## References
 
