@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-07-huggingface-openai-gpt-oss-finetune-sft"
+name = "deepspeed-course-03-llms-08-gpt-oss-lora"
 version = "0.1.0"
 description = "LoRA SFT of a 20B GPT-OSS model"
 readme = "README.md"

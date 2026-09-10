@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-06-huggingface-online-dpo"
+name = "deepspeed-course-03-llms-07-online-dpo"
 version = "0.1.0"
 description = "Online preference optimization: Online DPO, Nash-MD, XPO"
 readme = "README.md"

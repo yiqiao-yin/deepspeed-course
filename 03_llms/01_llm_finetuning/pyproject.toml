@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-05-huggingface"
+name = "deepspeed-course-03-llms-01-llm-finetuning"
 version = "0.1.0"
 description = "HuggingFace LLM fine-tuning with DeepSpeed ZeRO"
 readme = "README.md"

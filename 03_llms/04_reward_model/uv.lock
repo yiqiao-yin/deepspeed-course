@@ -558,7 +558,7 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e8/bc/96f6154dcb825b0004961b877480a1896fe2816c7b205171d86eae2e0b56/deepspeed-0.19.6.tar.gz", hash = "sha256:31593acffbe4794c74446094122b1bc29d8c73a137e37aff899ca4a6480df2d8", size = 1923541, upload-time = "2026-08-27T19:09:27.166Z" }
 
 [[package]]
-name = "deepspeed-course-05-huggingface-reward-model"
+name = "deepspeed-course-03-llms-04-reward-model"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

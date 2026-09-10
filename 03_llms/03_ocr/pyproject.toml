@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-05-huggingface-ocr"
+name = "deepspeed-course-03-llms-03-ocr"
 version = "0.1.0"
 description = "Vision-language OCR fine-tuning"
 readme = "README.md"

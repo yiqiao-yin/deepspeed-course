@@ -14,7 +14,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-06-huggingface-grpo"
+name = "deepspeed-course-03-llms-06-grpo"
 version = "0.1.0"
 description = "GRPO on GSM8K: RL without a critic"
 readme = "README.md"

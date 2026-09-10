@@ -18,7 +18,7 @@
 # =============================================================================
 
 [project]
-name = "deepspeed-course-03-huggingface-10-deepseek-from-scratch"
+name = "deepspeed-course-03-llms-10-deepseek-from-scratch"
 version = "0.1.0"
 description = "DeepSeek MLA from Scratch"
 readme = "README.md"
