@@ -117,6 +117,6 @@ jobs:
           uv run --no-project python -m compileall -q \
             01_basics/01_neuralnet 01_basics/02_convnet 01_basics/03_convnet_cifar10 \
             01_basics/04_rnn 02_intermediate/01_bayesian_neuralnet 02_intermediate/02_rnn_stock_data \
-            03_huggingface/01_llm_finetuning 03_huggingface/03_ocr 03_huggingface/02_trl_sft \
-            03_huggingface/06_grpo 03_huggingface/08_gpt_oss_lora \
-            03_huggingface/09_multi_agency 04_video_text 05_video_speech tests
+            03_llms/01_llm_finetuning 03_llms/03_ocr 03_llms/02_trl_sft \
+            03_llms/06_grpo 03_llms/08_gpt_oss_lora \
+            03_llms/09_multi_agency 04_video_text 05_video_speech tests

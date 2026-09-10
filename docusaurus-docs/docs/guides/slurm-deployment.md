@@ -93,15 +93,15 @@ entire course:
 | `01_basics/04_rnn` | `run_deepspeed.sh` | 2 |
 | `02_intermediate/01_bayesian_neuralnet` | `run_deepspeed.sh` | 2 |
 | `02_intermediate/02_rnn_stock_data` | `run_deepspeed.sh` | 2 |
-| `03_huggingface/01_llm_finetuning` | `run_deepspeed.sh` | 2 |
-| `03_huggingface/02_trl_sft` | `run_deepspeed.sh` | 2 |
-| `03_huggingface/03_ocr` | `submit_job.sh` | 2 |
-| `03_huggingface/05_dpo` | `run_deepspeed.sh` | 1 |
-| `03_huggingface/04_reward_model` | `run_deepspeed.sh` | 1 |
-| `03_huggingface/06_grpo` | `run_deepspeed.sh` | 2 |
-| `03_huggingface/07_online_dpo` | `run_deepspeed.sh` | 2 |
+| `03_llms/01_llm_finetuning` | `run_deepspeed.sh` | 2 |
+| `03_llms/02_trl_sft` | `run_deepspeed.sh` | 2 |
+| `03_llms/03_ocr` | `submit_job.sh` | 2 |
+| `03_llms/05_dpo` | `run_deepspeed.sh` | 1 |
+| `03_llms/04_reward_model` | `run_deepspeed.sh` | 1 |
+| `03_llms/06_grpo` | `run_deepspeed.sh` | 2 |
+| `03_llms/07_online_dpo` | `run_deepspeed.sh` | 2 |
 | `07_..._gpt_oss_finetune_sft` | `lora/run_deepspeed.sh` | 4 |
-| `03_huggingface/09_multi_agency` | `run_slurm.sh` | 1 |
+| `03_llms/09_multi_agency` | `run_slurm.sh` | 1 |
 | `04_video_text/02_qwen25vl` | `run_deepspeed.sh` | 2 |
 | `04_video_text/03_token_compression` | `run_deepspeed.sh` | 1 |
 | `04_video_text/04_streaming_memory` | `run_deepspeed.sh` | 1 |
@@ -122,7 +122,7 @@ uv run tests/test_runpod_ctl.py     # includes the SLURM-coverage checks
 ```
 
 :::note Two that differ from the pattern
-`03_huggingface/09_multi_agency` uses `run_slurm.sh` and launches with plain
+`03_llms/09_multi_agency` uses `run_slurm.sh` and launches with plain
 `python`, because it drives TRL's `GRPOTrainer` directly rather than using the
 DeepSpeed launcher.
 

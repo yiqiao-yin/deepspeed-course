@@ -104,20 +104,20 @@ Use this to decide which you are writing:
 | Is a variant of an existing method (a patched loss, a tweak) | **No** — add a module + test to the existing folder |
 
 **Worked example, from this repository.** The DPO family arrived as four
-documentation pages plus a loose module dropped into `03_huggingface/06_grpo/`.
+documentation pages plus a loose module dropped into `03_llms/06_grpo/`.
 That was wrong on both counts, and it was fixed by building what the contract
 actually requires:
 
-- `03_huggingface/05_dpo/` — the offline family, one `train_dpo.py` with
+- `03_llms/05_dpo/` — the offline family, one `train_dpo.py` with
   `--method dpo|ipo|cpo|kto|orpo|simpo`, because they share a trainer and
   differ by a scalar function. Six folders would have been six copies of the
   same file.
-- `03_huggingface/04_reward_model/` — a genuinely different objective
+- `03_llms/04_reward_model/` — a genuinely different objective
   (Bradley–Terry, a scalar head, `RewardTrainer`), so a separate folder.
-- `03_huggingface/07_online_dpo/` — different memory profile entirely (it
+- `03_llms/07_online_dpo/` — different memory profile entirely (it
   *generates* during training), so a separate folder with ZeRO-3 instead of
   ZeRO-2.
-- Dr. GRPO / DAPO / GSPO stayed **inside** `03_huggingface/06_grpo/` as a module,
+- Dr. GRPO / DAPO / GSPO stayed **inside** `03_llms/06_grpo/` as a module,
   because they are patches to an objective that already has a folder.
 
 The rule of thumb the split follows: **one folder per distinct memory profile
@@ -182,7 +182,7 @@ The subset that *is* non-negotiable — `EXAMPLES` registration, `bash -n` over
 every shell script, `#SBATCH` presence — is enforced by `tests/test_runpod_ctl.py`
 and does fail CI.
 
-> **It works.** Pointing it at the repo found a shipped bug: `03_huggingface/03_ocr`
+> **It works.** Pointing it at the repo found a shipped bug: `03_llms/03_ocr`
 > requested `--ntasks-per-node=2` *and* ran `deepspeed --num_gpus=2`, so SLURM
 > started two tasks that each spawned two workers — four processes for two GPUs,
 > which hangs. It also found 13 READMEs that never told a RunPod reader how to
@@ -566,7 +566,7 @@ That last rule is worth dwelling on. Where a `ds_config.json` hardcodes
 `train_batch_size`, `train_micro_batch_size_per_gpu` and
 `gradient_accumulation_steps`, it has **pinned the GPU count**, and DeepSpeed
 asserts it at startup. `01_basics/04_rnn` (128 = 32 × 2 × **2**) and
-`03_huggingface/02_trl_sft` (16 = 4 × 2 × **2**) both require two GPUs, and both
+`03_llms/02_trl_sft` (16 = 4 × 2 × **2**) both require two GPUs, and both
 were registered in `EXAMPLES` as needing one — so `runpod_ctl.py run` on either
 would have rented a box and then aborted. The manifest test now cross-checks
 `gpu.count` against the config, so that class of mistake fails CI instead of
@@ -728,7 +728,7 @@ The whole point is distributed training. An example that only calls
 `Trainer.train()` with no ZeRO config does not belong here.
 
 **Two narrow exceptions**, both already present:
-- `03_huggingface/09_multi_agency` drives TRL's `GRPOTrainer` directly.
+- `03_llms/09_multi_agency` drives TRL's `GRPOTrainer` directly.
 - `04_video_text/04_streaming_memory` and `04_video_text/05_video_eval` are inference and
   evaluation — no optimizer, nothing to shard.
 

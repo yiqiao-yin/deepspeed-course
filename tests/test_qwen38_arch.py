@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _srcload import load_function  # noqa: E402
 
-SCRIPT = "03_huggingface/01_llm_finetuning/train_qwen38_ds.py"
+SCRIPT = "03_llms/01_llm_finetuning/train_qwen38_ds.py"
 
 FULL = ["q_proj", "k_proj", "v_proj", "o_proj"]
 LINEAR = ["in_proj_qkv", "in_proj_z", "in_proj_b", "in_proj_a", "out_proj"]

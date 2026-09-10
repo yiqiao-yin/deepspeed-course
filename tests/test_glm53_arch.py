@@ -48,7 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _srcload import load_function  # noqa: E402
 
-SCRIPT = "03_huggingface/01_llm_finetuning/train_glm53_ds.py"
+SCRIPT = "03_llms/01_llm_finetuning/train_glm53_ds.py"
 
 moe_parameter_split = load_function(SCRIPT, "moe_parameter_split")
 lora_target_modules = load_function(SCRIPT, "lora_target_modules")

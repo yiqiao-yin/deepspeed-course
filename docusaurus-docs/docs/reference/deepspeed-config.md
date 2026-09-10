@@ -78,7 +78,7 @@ Outside `Trainer`, omit `train_batch_size` and give the other two — DeepSpeed 
 
 ### The `"auto"` mechanism
 
-`"auto"` is a **HuggingFace convention, not a DeepSpeed feature.** `Trainer` walks the config before initialization and substitutes values from `TrainingArguments`. With raw `deepspeed.initialize` there is nothing to resolve it, and you get a parse error or a string where a number belongs. Full detail in [the integration page](/docs/tutorials/huggingface/overview#2-the-auto-mechanism).
+`"auto"` is a **HuggingFace convention, not a DeepSpeed feature.** `Trainer` walks the config before initialization and substitutes values from `TrainingArguments`. With raw `deepspeed.initialize` there is nothing to resolve it, and you get a parse error or a string where a number belongs. Full detail in [the integration page](/docs/tutorials/llms/overview#2-the-auto-mechanism).
 
 | Config key | Resolved from |
 |---|---|
@@ -191,7 +191,7 @@ If `TrainingArguments` sets `lr_scheduler_type` **and** `ds_config.json` defines
 Mechanism and rationale: [FP16 and dynamic loss scaling](/docs/tutorials/basic/neural-network#85-fp16-and-dynamic-loss-scaling).
 
 :::danger Never enable `fp16` and `bf16` together
-They are mutually exclusive. Setting both raises at initialization. Setting *neither* is valid and means FP32 — which is what `03_huggingface/02_trl_sft/ds_config.json` does.
+They are mutually exclusive. Setting both raises at initialization. Setting *neither* is valid and means FP32 — which is what `03_llms/02_trl_sft/ds_config.json` does.
 :::
 
 ## 6. ZeRO Optimization
@@ -474,7 +474,7 @@ Then run one step with `steps_per_print: 1` and `wall_clock_breakdown: true` and
 
 - [DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — the theory behind §6
 - [Troubleshooting](/docs/reference/troubleshooting) — symptom-first diagnosis
-- [HuggingFace Integration](/docs/tutorials/huggingface/overview) — `"auto"` and strategy selection
+- [HuggingFace Integration](/docs/tutorials/llms/overview) — `"auto"` and strategy selection
 
 ## References
 

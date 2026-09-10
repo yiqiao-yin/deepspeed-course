@@ -6,8 +6,8 @@ Rent a GPU, run a course example on it, and shut it down — from the command li
 export RUNPOD_API_KEY=...          # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24      # what's available, live prices
-uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
-uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py recommend 03_llms/06_grpo
+uv run runpod/runpod_ctl.py run 03_llms/06_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                    # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>       # stop paying
 ```
@@ -135,11 +135,11 @@ real hardware. `smoke` starts one pod per example, each with `--dry-run` and
 `--collect`:
 
 ```bash
-uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_huggingface/06_grpo
+uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_llms/06_grpo
 #   Will start 3 pod(s), one per example:
 #     01_basics/01_neuralnet    1x  6G  ~$0.13/hr
 #     01_basics/04_rnn          1x  8G  ~$0.13/hr
-#     03_huggingface/06_grpo   1x 24G  ~$0.22/hr
+#     03_llms/06_grpo   1x 24G  ~$0.22/hr
 #   Combined burn rate: ~$0.48/hour
 #   Refusing without --yes.
 ```
@@ -188,9 +188,9 @@ example. `recommend` warns about this explicitly.
 | `01_basics/04_rnn` | 8 GB | 1 | 20 GB |
 | `02_intermediate/01_bayesian_neuralnet` | 8 GB | 2 | 20 GB |
 | `02_intermediate/02_rnn_stock_data` | 8 GB | 1 | 20 GB |
-| `03_huggingface/02_trl_sft` | 24 GB | 1 | 60 GB |
-| `03_huggingface/03_ocr` | 24 GB | 1 | 60 GB |
-| `03_huggingface/06_grpo` | 24 GB | 1 | 80 GB |
+| `03_llms/02_trl_sft` | 24 GB | 1 | 60 GB |
+| `03_llms/03_ocr` | 24 GB | 1 | 60 GB |
+| `03_llms/06_grpo` | 24 GB | 1 | 80 GB |
 | `07_..._gpt_oss_finetune_sft` | 80 GB | 4 | 200 GB |
 | `04_video_text` | 48 GB | 2 | 120 GB |
 | `05_video_speech` | 180 GB | 2 | 2 TB (plus ~3 TB host RAM — see above) |

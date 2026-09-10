@@ -51,7 +51,7 @@
 #   !!     is_cpu_only = ("--num_gpus" not in cmd) and not entry.get("needs_gpu")
 #
 # `est_minutes` is for the PRIMARY command on hardware meeting `gpu`, and
-# EXCLUDES model downloads, which dominate for anything in 03_huggingface and
+# EXCLUDES model downloads, which dominate for anything in 03_llms and
 # beyond — a 55 GB download is not a training cost but the user still waits for
 # it. Treat these as order-of-magnitude.
 # =============================================================================
@@ -145,9 +145,9 @@ labs:
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_groupwise_ranking.py --model all --max-steps 20" }
 
   # ---------------------------------------------------------------------------
-  # 03_huggingface — real models and real downloads. est_minutes excludes those.
+  # 03_llms — real models and real downloads. est_minutes excludes those.
   # ---------------------------------------------------------------------------
-  - id: 03_huggingface/01_llm_finetuning
+  - id: 03_llms/01_llm_finetuning
     title: "LLM fine-tuning with ZeRO"
     summary: "Llama SFT, plus frontier-model analysis (GLM-5.3, Qwen3.8)."
     est_minutes: 15
@@ -157,7 +157,7 @@ labs:
       - { label: "GLM-5.3 analysis (no GPU)", cmd: "uv run train_glm53_ds.py --plan" }
       - { label: "Qwen3.8 analysis (no GPU)", cmd: "uv run train_qwen38_ds.py --plan" }
 
-  - id: 03_huggingface/02_trl_sft
+  - id: 03_llms/02_trl_sft
     title: "TRL supervised fine-tuning"
     summary: "Qwen3-0.6B SFT for function calling, via TRL."
     est_minutes: 15
@@ -167,7 +167,7 @@ labs:
       - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_trl_deepspeed.py --max-steps 20", primary: true }
       - { label: "Full run", cmd: "uv run deepspeed --num_gpus=2 train_trl_deepspeed.py" }
 
-  - id: 03_huggingface/03_ocr
+  - id: 03_llms/03_ocr
     title: "Vision-language OCR"
     summary: "Qwen2-VL fine-tuning; cap max_pixels to bound memory."
     est_minutes: 20
@@ -175,7 +175,7 @@ labs:
     run:
       - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
 
-  - id: 03_huggingface/04_reward_model
+  - id: 03_llms/04_reward_model
     title: "Reward modelling"
     summary: "Bradley-Terry preference model — this IS the RLHF pipeline."
     est_minutes: 15
@@ -184,7 +184,7 @@ labs:
       - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=1 train_reward_model.py --max-steps 20", primary: true }
       - { label: "The objective (CPU)", cmd: "uv run reward_modeling.py" }
 
-  - id: 03_huggingface/05_dpo
+  - id: 03_llms/05_dpo
     title: "DPO and 5 descendants"
     summary: "Deletes the reward model; six objectives behind --method."
     est_minutes: 15
@@ -193,7 +193,7 @@ labs:
       - { label: "Train DPO (20 steps)", cmd: "uv run deepspeed --num_gpus=1 train_dpo.py --max-steps 20", primary: true }
       - { label: "All six losses (CPU)", cmd: "uv run preference_losses.py" }
 
-  - id: 03_huggingface/06_grpo
+  - id: 03_llms/06_grpo
     title: "GRPO on GSM8K"
     summary: "Deletes the critic. Generation makes this slower than DPO."
     est_minutes: 30
@@ -201,7 +201,7 @@ labs:
     run:
       - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 grpo_gsm8k_train.py --max-steps 20", primary: true }
 
-  - id: 03_huggingface/07_online_dpo
+  - id: 03_llms/07_online_dpo
     title: "Online DPO"
     summary: "Re-adds sampling, so it needs a judge and a reference model."
     est_minutes: 30
@@ -209,7 +209,7 @@ labs:
     run:
       - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_online_dpo.py --max-steps 20", primary: true }
 
-  - id: 03_huggingface/08_gpt_oss_lora
+  - id: 03_llms/08_gpt_oss_lora
     title: "LoRA on a 20B model"
     summary: "Large-scale LoRA SFT. Needs 4 x 80 GB — most boxes cannot run it."
     est_minutes: 45
@@ -217,7 +217,7 @@ labs:
     run:
       - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=4 lora/train_ds.py --max-steps 20", primary: true }
 
-  - id: 03_huggingface/09_multi_agency
+  - id: 03_llms/09_multi_agency
     title: "Multi-agent GRPO"
     summary: "Drives TRL's GRPOTrainer directly — no deepspeed launcher."
     est_minutes: 25
@@ -230,7 +230,7 @@ labs:
       # preflight when clicked. See the note on needs_gpu at the top of this file.
       - { label: "Train (20 steps)", cmd: "uv run train_grpo_math.py --max-steps 20", primary: true, needs_gpu: true }
 
-  - id: 03_huggingface/10_deepseek_from_scratch
+  - id: 03_llms/10_deepseek_from_scratch
     title: "DeepSeek MLA from scratch"
     summary: "Multi-head Latent Attention, built from the paper and measured."
     est_minutes: 8

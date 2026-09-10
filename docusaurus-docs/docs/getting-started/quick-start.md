@@ -184,7 +184,7 @@ The recommended order:
 1. **[Basic Neural Network](/docs/tutorials/basic/neural-network)** — the training loop, loss functions as likelihoods, and a memory-accounting treatment of CUDA OOM
 2. **[DeepSpeed ZeRO Stages](/docs/getting-started/deepspeed-zero-stages)** — why partitioning works and what each stage costs. Everything else references this
 3. **[CIFAR-10](/docs/tutorials/basic/cifar10)** — a real debugging case study: `NaN` at 10% accuracy, diagnosed and repaired to 81%
-4. **[HuggingFace Integration](/docs/tutorials/huggingface/overview)** — where the `"auto"` mechanism and LoRA come in
+4. **[HuggingFace Integration](/docs/tutorials/llms/overview)** — where the `"auto"` mechanism and LoRA come in
 
 ## 6. If Something Breaks
 

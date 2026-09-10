@@ -919,7 +919,7 @@ For this page the point is practical: if your $T=1$ chain is well-mixed and stil
 ## Next Steps
 
 - [Stock Prediction](/docs/tutorials/intermediate/stock-prediction) - Real-world application
-- [HuggingFace Overview](/docs/tutorials/huggingface/overview) - Large model training
+- [HuggingFace Overview](/docs/tutorials/llms/overview) - Large model training
 - [Basic Neural Network](/docs/tutorials/basic/neural-network#3-loss-functions-what-they-assume-and-when-they-fail) - losses as likelihoods, the frequentist counterpart to this page
 
 ## References

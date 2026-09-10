@@ -23,7 +23,7 @@
   "zero_optimization": {
     "stage": 0
   },
-  "_zero_comment": "Stage 0 — no sharding. This model's optimizer state is well under a megabyte; sharding it would cost more in communication than it saves. ZeRO earns its keep in 03_huggingface and beyond, not here. The reason to run this under DeepSpeed at all is the LISTWISE data layout above.",
+  "_zero_comment": "Stage 0 — no sharding. This model's optimizer state is well under a megabyte; sharding it would cost more in communication than it saves. ZeRO earns its keep in 03_llms and beyond, not here. The reason to run this under DeepSpeed at all is the LISTWISE data layout above.",
   "steps_per_print": 200,
   "wall_clock_breakdown": false
 }

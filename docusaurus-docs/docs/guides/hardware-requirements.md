@@ -34,7 +34,7 @@ The tables below therefore give VRAM and memory bandwidth — unambiguous, verif
 | RTX 4080 | 16 GB | 717 GB/s | 48.7 TF | |
 | RTX 4090 | 24 GB | 1008 GB/s | 82.6 TF | Best consumer option for training |
 
-All Ampere and later consumer cards support **BF16**, which is what matters most for LLM work — see [BF16 over FP16](/docs/tutorials/huggingface/overview#bf16-over-fp16-for-llms).
+All Ampere and later consumer cards support **BF16**, which is what matters most for LLM work — see [BF16 over FP16](/docs/tutorials/llms/overview#bf16-over-fp16-for-llms).
 
 :::note Consumer cards and multi-GPU
 GeForce cards lack NVLink from the 40-series onward, so inter-GPU communication goes over PCIe — roughly an order of magnitude slower than the NVLink/NVSwitch fabric in datacenter parts.
@@ -152,9 +152,9 @@ flowchart TB
 |---|---|---|---|
 | `01`–`04` basics | < 1M params | 1× RTX 3060 | Any CUDA GPU |
 | `02_intermediate/02_rnn_stock_data` | ~5K params | 1× any GPU | 2× for the demo |
-| `03_huggingface/02_trl_sft` | Qwen3-0.6B | 1× RTX 3070 (8 GB) | 2× RTX 4090 |
-| `03_huggingface/03_ocr` | Qwen2-VL-2B | 2× 16 GB with LoRA | 2× RTX 4090 |
-| `03_huggingface/06_grpo` | Qwen-1.5B | 1× 8 GB + 64 GB RAM | 1× RTX 4090 |
+| `03_llms/02_trl_sft` | Qwen3-0.6B | 1× RTX 3070 (8 GB) | 2× RTX 4090 |
+| `03_llms/03_ocr` | Qwen2-VL-2B | 2× 16 GB with LoRA | 2× RTX 4090 |
+| `03_llms/06_grpo` | Qwen-1.5B | 1× 8 GB + 64 GB RAM | 1× RTX 4090 |
 | `07_..._gpt_oss` | gpt-oss-20b | 4× A100 80 GB | 4× H100 |
 | `07_..._multi_agency` | Qwen-1.5B | 1× RTX 4090 | — |
 | `04_video_text` LLaVA | LLaVA 7B | 2× A100 40 GB | 2× A100 80 GB |

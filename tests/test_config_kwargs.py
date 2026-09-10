@@ -15,7 +15,7 @@ Run:
 
 Why this suite exists
 ---------------------
-A learner on Clawdeck ran `03_huggingface/02_trl_sft` on two rented GPUs. Both
+A learner on Clawdeck ran `03_llms/02_trl_sft` on two rented GPUs. Both
 ranks launched, the model loaded (596M params), the dataset loaded, and then:
 
     TypeError: TrainingArguments.__init__() got an unexpected keyword argument
