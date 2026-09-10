@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 43 pages with
+The documentation site is the primary way to read this material: 44 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -143,7 +143,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 26 suites, no GPU and no downloads
+./tests/run_all.sh                  # 27 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -186,7 +186,8 @@ deepspeed-course/
 │   ├── 06_grpo/                 # GRPO on GSM8K — deletes the CRITIC
 │   ├── 07_online_dpo/           # Online DPO, Nash-MD, XPO — re-adds sampling, needs a judge
 │   ├── 08_gpt_oss_lora/         # LoRA SFT of a 20B model
-│   └── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
+│   ├── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
+│   └── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
 │
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers

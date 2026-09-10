@@ -1,0 +1,23 @@
+{
+  "_comment": "MLA vs GQA vs MHA. The unit of data is a SEQUENCE, so the micro batch below counts sequences. train_batch_size is deliberately OMITTED so DeepSpeed derives it and any --num_gpus works without editing this file.",
+
+  "train_micro_batch_size_per_gpu": 32,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 3e-3, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "Both disabled ON PURPOSE. The quantity being compared across variants is a loss difference of order 0.1 nats between three attention implementations; running one of them in reduced precision would be measuring the dtype. MLA's low-rank reconstruction also multiplies two learned matrices before the softmax, which is exactly where fp16's narrow range bites. These models are ~1.6M parameters -- fp32 costs nothing here.",
+  "fp16": { "enabled": false },
+  "bf16": { "enabled": false },
+
+  "_zero_comment": "Stage 0, and the reason is the point of the example. ZeRO shards optimizer state, gradients and parameters -- none of which is the KV cache. The cache is an INFERENCE cost that ZeRO never touches, which is precisely why MLA exists as a separate idea. Sharding a 1.6M-parameter model would add communication to save kilobytes and teach the wrong lesson.",
+  "zero_optimization": { "stage": 0 },
+
+  "steps_per_print": 200,
+  "wall_clock_breakdown": false
+}

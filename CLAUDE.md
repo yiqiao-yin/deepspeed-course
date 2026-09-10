@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 26 suites, no GPU, no downloads
+./tests/run_all.sh              # all 27 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -619,7 +619,7 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 40 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 41 diagram pages conform.
 
 - **The site's own background is `#000000`**, not the dark blue of the Mermaid
   palette above — `custom.css` sets `--ifm-background-color: #000000` and dark

@@ -125,6 +125,11 @@ EXAMPLES = {
                                             launcher="python",
                                             note="Multi-agent GRPO. Uses TRL directly, "
                                                  "NOT the deepspeed launcher."),
+    "03_huggingface/10_deepseek_from_scratch": dict(min_vram=8, gpus=1, disk=20,
+                                    script="train_deepseek_from_scratch.py",
+                                    note="MLA from the paper. Tiny model; the "
+                                         "KV cache is an INFERENCE cost, so "
+                                         "ZeRO does not touch it."),
     "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
                    script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),
