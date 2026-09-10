@@ -81,7 +81,7 @@ flowchart TB
 | **Vision** | [ConvNet](/docs/tutorials/basic/convnet) · [CIFAR-10](/docs/tutorials/basic/cifar10) |
 | **Sequences** | [RNN / LSTM](/docs/tutorials/basic/rnn) · [Stock Prediction](/docs/tutorials/intermediate/stock-prediction) |
 | **Probabilistic** | [Bayesian Neural Networks](/docs/tutorials/intermediate/bayesian-nn) |
-| **Language models** | [HuggingFace Integration](/docs/tutorials/llms/overview) · [TRL Function Calling](/docs/tutorials/llms/trl-function-calling) · [GRPO](/docs/tutorials/llms/grpo-training) · [GPT-OSS](/docs/tutorials/llms/gpt-oss-finetuning) |
+| **Language models** | [LLM Training with DeepSpeed](/docs/tutorials/llms/overview) · [TRL Function Calling](/docs/tutorials/llms/trl-function-calling) · [GRPO](/docs/tutorials/llms/grpo-training) · [GPT-OSS](/docs/tutorials/llms/gpt-oss-finetuning) |
 | **Multimodal** | [OCR Vision-Language](/docs/tutorials/llms/ocr-vision-language) · [Video-Text](/docs/tutorials/multimodal/video-text-training) · [Video-Speech](/docs/tutorials/multimodal/video-speech-training) |
 
 ## Start Here

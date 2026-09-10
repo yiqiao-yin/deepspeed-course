@@ -1,8 +1,9 @@
 ---
 sidebar_position: 1
+sidebar_label: Overview
 ---
 
-# HuggingFace Integration
+# LLM Training with DeepSpeed
 
 How the HuggingFace stack and DeepSpeed actually connect — who owns the optimizer, what `"auto"` resolves to and when it does not, and how to choose a memory strategy from parameter count.
 

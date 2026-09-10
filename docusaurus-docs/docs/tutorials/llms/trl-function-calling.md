@@ -246,7 +246,7 @@ Fine-tuning improves the *semantics* — choosing the right tool with the right 
 
 - [OCR Vision-Language](/docs/tutorials/llms/ocr-vision-language) — SFT extended to multimodal inputs
 - [GRPO Training](/docs/tutorials/llms/grpo-training) — when you can score outputs but not write them
-- [HuggingFace Integration](/docs/tutorials/llms/overview) — the `"auto"` mechanism and strategy selection
+- [LLM Training with DeepSpeed](/docs/tutorials/llms/overview) — the `"auto"` mechanism and strategy selection
 
 ## References
 

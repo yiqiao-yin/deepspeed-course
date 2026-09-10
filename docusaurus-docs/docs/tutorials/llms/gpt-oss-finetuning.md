@@ -244,7 +244,7 @@ $2\times10^{-4}$ is roughly 10× a typical full fine-tuning rate, which is stand
 ## Next Steps
 
 - [GRPO Training](/docs/tutorials/llms/grpo-training) — RL on top of an SFT'd model
-- [HuggingFace Integration](/docs/tutorials/llms/overview) — `"auto"`, and choosing a stage
+- [LLM Training with DeepSpeed](/docs/tutorials/llms/overview) — `"auto"`, and choosing a stage
 - [ZeRO Stages](/docs/getting-started/deepspeed-zero-stages) — why Stage 2 under LoRA
 
 ## References
