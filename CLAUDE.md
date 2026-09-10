@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 25 suites, no GPU, no downloads
+./tests/run_all.sh              # all 26 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -358,6 +358,37 @@ Two signatures worth recognising:
   the box advertising peer-to-peer it cannot perform. `nvidia-smi topo -m`
   showing `SYS` between cards is the tell; `NCCL_P2P_DISABLE=1` is the fix, at
   a real throughput cost. `tests/gpu/diagnose_nccl.sh` decides it in a minute.
+
+### Synthetic data must carry a signal, and the summary must not lie
+
+`01_basics/02_convnet` drew `x = randn(...)` and `y = randint(...)` — labels
+independent of the images, so **zero mutual information**. On 10 classes ~10%
+was not a poor result, it was the information-theoretic **ceiling**. The script
+none the less exited 0, printed "Finished Successfully", and advised *"Poor.
+Consider training longer or adjusting hyperparameters"* — sending a reader to
+tune a target that cannot be reached. Two 3090 runs returned 10.29% and 9.49%,
+unchanged from first epoch to last: a classifier collapsing to one class, the
+correct degenerate answer when there is nothing to learn.
+
+Every other lab in `01_basics` already used learnable synthetic data
+(`y = 2x + 1`, a sum of sines); this one was the exception. It now builds a
+fixed prototype per class plus noise, and the noise default is **calibrated,
+not guessed** — at 5.0 a plain MLP hits 99% in one epoch, because 784
+dimensions of signal average out per-pixel noise; 8.0 gives ~82% at one epoch
+rising to ~89%, so a short run visibly clears chance and longer runs still
+improve.
+
+Two rules follow:
+
+- **A short run must not be reported as a failure.** Clawdeck runs these with
+  `--epochs 1`; printing "Poor" under a "Finished Successfully" banner is how a
+  beginner concludes they broke something. Say the run was capped and what a
+  real one looks like.
+- **`tests/test_synthetic_data_is_learnable.py` asserts it**, on a HELD-OUT
+  split — memorising random labels on the training set is possible and proves
+  the opposite of learning. It carries the old generator as a counterexample
+  and asserts it FAILS, because a learnability check that never sees
+  unlearnable data would pass while returning True unconditionally.
 
 ### A custom torch index pins its companions too, or nothing works
 

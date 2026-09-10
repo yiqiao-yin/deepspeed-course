@@ -106,6 +106,9 @@ jobs:
       - name: torch-linked packages share torch's index
         run: uv run tests/test_torch_index_pins.py
 
+      - name: Synthetic data contains a learnable signal
+        run: uv run tests/test_synthetic_data_is_learnable.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
