@@ -562,6 +562,22 @@ suite enforcing its own checklist, not a broken scaffold.
   if a pipeline can be misconfigured into doing nothing, **assert that it did
   something** — the multimodal collators check that pixels and audio features
   actually arrived.
+- **Watch a checker fail before trusting it.** A check you have not seen reject
+  bad input is not a check. This is not hypothetical caution — three checkers
+  written in this repo shipped a bug that made them *unable to fail*:
+
+  | Checker | The bug |
+  |---|---|
+  | `gpu_guards()` in `test_clawdeck_manifest.py` | `walk()` took a node and recursed into its **children**, so a guard that was itself a statement of a block was never tested. The whole check silently passed everything. |
+  | `beats_chance()` in `test_synthetic_data_is_learnable.py` | passed `seed=` unconditionally and died with `TypeError` against the very generator it was written to catch — CI went red naming a signature mismatch, not the finding |
+  | the first `--num_gpus`/`gpu.count` check | over-flagged six entries that demonstrably run on CPU, because it keyed on the *presence* of a guard rather than its **reachability** |
+
+  So: run a new check against the **unfixed** tree first, and keep a
+  counterexample in the suite permanently. `test_config_kwargs.py` found 20
+  broken call sites that way when only 3 had been reported;
+  `test_synthetic_data_is_learnable.py` carries the old random-label generator
+  and asserts it fails.
+
 - **Never fabricate expected output.** If it has not been run, mark it *not yet
   verified on hardware*. A wrong published number costs a reader a day debugging
   their own correct setup.
