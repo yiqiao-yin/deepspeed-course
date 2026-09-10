@@ -40,7 +40,7 @@ from pathlib import Path
 import torch
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "03_huggingface" / "10_deepseek_from_scratch"))
+sys.path.insert(0, str(REPO / "03_llms" / "10_deepseek_from_scratch"))
 
 from mla import (AttnConfig, VARIANTS, build, cache_table,  # noqa: E402
                  MultiHeadLatentAttention)
@@ -154,7 +154,7 @@ def main() -> None:
               "a disconnected projection trains to nothing and is invisible")
 
     # ---- cross-check against the repo's own GLM-5.3 arithmetic -------------
-    # 03_huggingface/01_llm_finetuning/train_glm53_ds.py computes MLA's cache
+    # 03_llms/01_llm_finetuning/train_glm53_ds.py computes MLA's cache
     # from GLM-5.3's published config and reports a 57x saving. That figure was
     # derived independently, from a config file, by different code. If this
     # implementation is right, plugging the same dimensions in must reproduce

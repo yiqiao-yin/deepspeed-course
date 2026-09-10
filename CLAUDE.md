@@ -12,17 +12,17 @@ There *is* a regression suite in `tests/` (CPU-only, runs in CI) and a GPU tier 
 
 Contributions from outside are welcome and governed by `CONTRIBUTING.md`, which is written to double as a spec an agent can follow. Read it before adding an example — it encodes the three-platform contract below. Repo is MIT (`LICENSE`).
 
-### The alignment thread spans four topics in `03_huggingface/`
+### The alignment thread spans four topics in `03_llms/`
 
 `04`–`07` are not independent examples; they are one escalating argument about
 **what you can delete from the RLHF pipeline**, and the deletions are different:
 
 | Folder | Deletes | Reference model? |
 |---|---|---|
-| `03_huggingface/04_reward_model` | — (this IS the pipeline) | — |
-| `03_huggingface/05_dpo` | the **reward model** (`--method` covers 6 objectives) | LoRA removes it |
-| `03_huggingface/06_grpo` | the **critic** | yes |
-| `03_huggingface/07_online_dpo` | — (re-adds sampling; needs a judge) | yes |
+| `03_llms/04_reward_model` | — (this IS the pipeline) | — |
+| `03_llms/05_dpo` | the **reward model** (`--method` covers 6 objectives) | LoRA removes it |
+| `03_llms/06_grpo` | the **critic** | yes |
+| `03_llms/07_online_dpo` | — (re-adds sampling; needs a judge) | yes |
 
 > "DPO removes the reward model" and "GRPO removes the critic" are two different
 > claims about two different components. Conflating them is the most common
@@ -53,7 +53,7 @@ Two findings there are load-bearing and easy to undo by "tidying":
   and had a permutation error of 1.5e-01, i.e. it was reading candidate order,
   which at training time is label order. Only the property test caught it.
 
-### `03_huggingface/01_llm_finetuning` holds three entry points
+### `03_llms/01_llm_finetuning` holds three entry points
 
 Not one. `train_ds.py` (Llama SFT, the original), `train_glm53_ds.py` (GLM-5.3,
 a 755 GB sparse MoE) and `train_qwen38_ds.py` (Qwen3.8-27B, hybrid
@@ -167,7 +167,7 @@ They carry `launcher="python"` in `runpod/runpod_ctl.py`:
 
 | Example | Why |
 |---|---|
-| `03_huggingface/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
+| `03_llms/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
 | `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
 | `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
 | `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
@@ -200,8 +200,8 @@ them:**
 |---|---|
 | `02_intermediate/03_learning_to_rank/ranking_losses.py` | pointwise / RankNet / LambdaRank / ListNet, plus NDCG, MRR, MAP |
 | `02_intermediate/04_groupwise_ranking/groupwise.py` | GSF / SetRank, and the two property checks that police them |
-| `03_huggingface/05_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
-| `03_huggingface/04_reward_model/reward_modeling.py` | Bradley-Terry objective |
+| `03_llms/05_dpo/preference_losses.py` | DPO / IPO / CPO / KTO / ORPO / SimPO, plain tensors |
+| `03_llms/04_reward_model/reward_modeling.py` | Bradley-Terry objective |
 | `04_video_text/03_token_compression/token_compression.py` | ToMe / FastV / DyCoke |
 | `04_video_text/04_streaming_memory/star_memory.py` | STAR bounded memory bank |
 | `04_video_text/05_video_eval/video_mme_eval.py` | eval harness |
@@ -280,7 +280,7 @@ legitimately differ, and failing the build on those would water the checks down
 until they catch nothing. The non-negotiable subset (`EXAMPLES` registration,
 `bash -n`, `#SBATCH` presence) is in `tests/test_runpod_ctl.py` and does fail CI.
 
-It earns its keep: pointing it at the repo found `03_huggingface/03_ocr` requesting
+It earns its keep: pointing it at the repo found `03_llms/03_ocr` requesting
 `--ntasks-per-node=2` while running `deepspeed --num_gpus=2` (four processes for
 two GPUs — a hang), and 13 READMEs that never told a RunPod reader how to shut
 the pod down.
@@ -460,7 +460,7 @@ noticed.
 The subtle check is `gpu.count`. Where a `ds_config.json` hardcodes
 `train_batch_size`, `micro` and `grad_accum`, it has pinned the GPU count and
 DeepSpeed asserts it at startup. `01_basics/04_rnn` and
-`03_huggingface/02_trl_sft` both require **2** GPUs and were both registered in
+`03_llms/02_trl_sft` both require **2** GPUs and were both registered in
 `EXAMPLES` as needing 1 — fixed, and now cross-checked.
 
 Note that `scripts/check_contract.py` is **advisory and not in CI**, so the

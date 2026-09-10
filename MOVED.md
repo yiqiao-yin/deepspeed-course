@@ -12,7 +12,7 @@ The sections mirror the [book's tutorial sections](https://yiqiao-yin.github.io/
 |---|---|
 | `01_basics/` | MLP, CNN, CIFAR-10 CNN, RNN |
 | `02_intermediate/` | Bayesian MCMC, time-series forecasting |
-| `03_huggingface/` | LLM fine-tuning, TRL, OCR, and the full alignment thread |
+| `03_llms/` | LLM fine-tuning, TRL, OCR, and the full alignment thread |
 | `04_video_text/` | video-to-text |
 | `05_video_speech/` | video-speech-to-speech |
 
@@ -29,15 +29,15 @@ The sections mirror the [book's tutorial sections](https://yiqiao-yin.github.io/
 | `03_basic_rnn` | `01_basics/04_rnn` |
 | `04_bayesian_neuralnet` | `02_intermediate/01_bayesian_neuralnet` |
 | `04_intermediate_rnn_stock_data` | `02_intermediate/02_rnn_stock_data` |
-| `05_huggingface` | `03_huggingface/01_llm_finetuning` |
-| `05_huggingface_dpo` | `03_huggingface/05_dpo` |
-| `05_huggingface_ocr` | `03_huggingface/03_ocr` |
-| `05_huggingface_reward_model` | `03_huggingface/04_reward_model` |
-| `05_huggingface_trl` | `03_huggingface/02_trl_sft` |
-| `06_huggingface_grpo` | `03_huggingface/06_grpo` |
-| `06_huggingface_online_dpo` | `03_huggingface/07_online_dpo` |
-| `07_huggingface_openai_gpt_oss_finetune_sft` | `03_huggingface/08_gpt_oss_lora` |
-| `07_huggingface_trl_multi_agency` | `03_huggingface/09_multi_agency` |
+| `05_huggingface` | `03_llms/01_llm_finetuning` |
+| `05_huggingface_dpo` | `03_llms/05_dpo` |
+| `05_huggingface_ocr` | `03_llms/03_ocr` |
+| `05_huggingface_reward_model` | `03_llms/04_reward_model` |
+| `05_huggingface_trl` | `03_llms/02_trl_sft` |
+| `06_huggingface_grpo` | `03_llms/06_grpo` |
+| `06_huggingface_online_dpo` | `03_llms/07_online_dpo` |
+| `07_huggingface_openai_gpt_oss_finetune_sft` | `03_llms/08_gpt_oss_lora` |
+| `07_huggingface_trl_multi_agency` | `03_llms/09_multi_agency` |
 | `08_vtt` | `04_video_text` |
 | `08_vtt/01_qwen25vl_baseline` | `04_video_text/02_qwen25vl` |
 | `08_vtt/02_token_compression` | `04_video_text/03_token_compression` |

@@ -6,8 +6,8 @@ runpod_ctl — find a GPU, start a pod, and run a course example on it.
 
     export RUNPOD_API_KEY=...                       # https://console.runpod.io/user/settings
     uv run runpod/runpod_ctl.py gpus --min-vram 24
-    uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
-    uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --yes
+    uv run runpod/runpod_ctl.py recommend 03_llms/06_grpo
+    uv run runpod/runpod_ctl.py run 03_llms/06_grpo --yes
     uv run runpod/runpod_ctl.py pods
     uv run runpod/runpod_ctl.py terminate <podId>
 
@@ -92,40 +92,40 @@ EXAMPLES = {
                                            note="GSF / SetRank vs a pointwise "
                                                 "control. Memory is O(list_len^2) "
                                                 "activation, not parameters."),
-    "03_huggingface/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
+    "03_llms/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
                            script="train_ds.py",
                            note="HuggingFace LLM fine-tuning with ZeRO."),
-    "03_huggingface/02_trl_sft": dict(min_vram=24, gpus=2, disk=60,
+    "03_llms/02_trl_sft": dict(min_vram=24, gpus=2, disk=60,
                                script="train_trl_deepspeed.py",
                                note="Qwen3-0.6B SFT."),
-    "03_huggingface/03_ocr": dict(min_vram=24, gpus=1, disk=60,
+    "03_llms/03_ocr": dict(min_vram=24, gpus=1, disk=60,
                                script="train_ds.py",
                                note="Qwen2-VL-2B; cap max_pixels to bound memory."),
-    "03_huggingface/05_dpo": dict(min_vram=24, gpus=1, disk=60,
+    "03_llms/05_dpo": dict(min_vram=24, gpus=1, disk=60,
                                script="train_dpo.py",
                                note="Offline PO: no generation, so far cheaper "
                                     "than GRPO. The reference model is the "
                                     "swing factor; LoRA removes it."),
-    "03_huggingface/04_reward_model": dict(min_vram=24, gpus=1, disk=60,
+    "03_llms/04_reward_model": dict(min_vram=24, gpus=1, disk=60,
                                         script="train_reward_model.py",
                                         note="Pairs mean 2x forward passes per "
                                              "batch; halve micro_batch vs SFT."),
-    "03_huggingface/06_grpo": dict(min_vram=24, gpus=1, disk=80,
+    "03_llms/06_grpo": dict(min_vram=24, gpus=1, disk=80,
                                 script="grpo_gsm8k_train.py",
                                 note="RL; memory driven by G rollouts."),
-    "03_huggingface/07_online_dpo": dict(min_vram=24, gpus=2, disk=80,
+    "03_llms/07_online_dpo": dict(min_vram=24, gpus=2, disk=80,
                                       script="train_online_dpo.py",
                                       note="Generates during training AND holds "
                                            "a judge: budget like GRPO."),
-    "03_huggingface/08_gpt_oss_lora": dict(min_vram=80, gpus=4, disk=200,
+    "03_llms/08_gpt_oss_lora": dict(min_vram=80, gpus=4, disk=200,
                                                        script="lora/train_ds.py",
                                                        note="gpt-oss-20b MoE; ~40 GB of weights."),
-    "03_huggingface/09_multi_agency": dict(min_vram=24, gpus=1, disk=60,
+    "03_llms/09_multi_agency": dict(min_vram=24, gpus=1, disk=60,
                                             script="train_grpo_math.py",
                                             launcher="python",
                                             note="Multi-agent GRPO. Uses TRL directly, "
                                                  "NOT the deepspeed launcher."),
-    "03_huggingface/10_deepseek_from_scratch": dict(min_vram=8, gpus=1, disk=20,
+    "03_llms/10_deepseek_from_scratch": dict(min_vram=8, gpus=1, disk=20,
                                     script="train_deepseek_from_scratch.py",
                                     note="MLA from the paper. Tiny model; the "
                                          "KV cache is an INFERENCE cost, so "
@@ -597,7 +597,7 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
 
     for name, url in attachments.items():
         target = out_dir / name
-        # Example names are nested now ("03_huggingface/01_llm_finetuning"),
+        # Example names are nested now ("03_llms/01_llm_finetuning"),
         # and the log is named after the example, so the attachment filename
         # contains a "/". Without this the write fails with ENOENT and the log
         # -- the entire point of --collect -- is silently lost while the run

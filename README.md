@@ -14,7 +14,7 @@ diagrams. This README covers setup and cluster operations.
 | [DeepSpeed ZeRO Stages](https://yiqiao-yin.github.io/deepspeed-course/docs/getting-started/deepspeed-zero-stages) | Why partitioning works and what each stage costs — everything else references this |
 | [Basic Neural Network](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/basic/neural-network) | The training loop, losses as likelihoods, CUDA OOM as memory accounting |
 | [CIFAR-10](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/basic/cifar10) | A real debugging case study: NaN at 10% accuracy, repaired to 81% |
-| [GRPO Training](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/huggingface/grpo-training) | RL with verifiable rewards |
+| [GRPO Training](https://yiqiao-yin.github.io/deepspeed-course/docs/tutorials/llms/grpo-training) | RL with verifiable rewards |
 | [Troubleshooting](https://yiqiao-yin.github.io/deepspeed-course/docs/reference/troubleshooting) | Symptom-first diagnosis |
 
 ---
@@ -125,7 +125,7 @@ cargo cult:
 
 | Example | Why |
 |---|---|
-| `03_huggingface/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
+| `03_llms/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
 | `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
 | `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
 | `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
@@ -136,7 +136,7 @@ cargo cult:
 | Examples | Scale | Can you run it on one machine? |
 |---|---|---|
 | `01_basics`, `02_intermediate` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
-| `03_huggingface`, `04_video_text`, `05_video_speech` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
+| `03_llms`, `04_video_text`, `05_video_speech` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
 
 For the second group a full run is not a practical way to check a change. The
 repository therefore ships **logic tests** that exercise the code paths without a
@@ -177,7 +177,7 @@ deepspeed-course/
 │   ├── 03_learning_to_rank/     # RankNet / LambdaRank / ListNet — ranking lives in the LOSS
 │   └── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
 │
-├── 03_huggingface/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
+├── 03_llms/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
 │   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point
 │   ├── 02_trl_sft/              # TRL supervised fine-tuning for function calling
 │   ├── 03_ocr/                  # Vision-language OCR + a measured comparison of 5 modern OCR models

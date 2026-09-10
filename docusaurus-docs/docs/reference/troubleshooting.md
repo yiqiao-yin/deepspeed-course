@@ -189,7 +189,7 @@ Reduce `buffer_count`, or move to NVMe offload (local disk only).
 
 Usually not numerical — usually structural.
 
-1. **All labels masked.** With completion-only loss masking, if the response template fails to match, every label is `-100` and the loss is `0/0`. [Verify the mask](/docs/tutorials/huggingface/trl-function-calling#4-completion-only-loss-masking).
+1. **All labels masked.** With completion-only loss masking, if the response template fails to match, every label is `-100` and the loss is `0/0`. [Verify the mask](/docs/tutorials/llms/trl-function-calling#4-completion-only-loss-masking).
 2. **NaN in the data.** `assert torch.isfinite(batch["input_ids"]).all()`.
 3. **Unfused softmax/cross-entropy in FP16.** Use `nn.CrossEntropyLoss` on logits, never `log(softmax(z))`.
 

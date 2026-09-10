@@ -53,7 +53,7 @@ def main() -> int:
     # Every example folder in the repo should be represented.
     #
     # The taxonomy is two levels: NN_section/NN_topic. The top-level numbered
-    # directories are SECTIONS (01_basics, 03_huggingface, ...) and are pure
+    # directories are SECTIONS (01_basics, 03_llms, ...) and are pure
     # containers -- they hold no training script and are not registered. The
     # examples are their numbered children. Checking the top level instead, as
     # this did before the reorganisation, would demand that every section be
@@ -76,8 +76,8 @@ def main() -> int:
             "and every example fails with CUDA_HOME errors.")
 
     # ---- 3. Bootstrap command --------------------------------------------
-    spec = ctl.EXAMPLES["03_huggingface/06_grpo"]
-    boot = ctl.bootstrap("03_huggingface/06_grpo", spec, "main")
+    spec = ctl.EXAMPLES["03_llms/06_grpo"]
+    boot = ctl.bootstrap("03_llms/06_grpo", spec, "main")
     for needle, label in [
         ("git clone", "clones the repository"),
         ("astral.sh/uv/install.sh", "installs uv"),
@@ -186,7 +186,7 @@ def main() -> int:
                 f"the clone fallback does not put {cred} on the pod")
 
     # Collected logs are named after the example, and example names are nested
-    # ("03_huggingface/01_llm_finetuning"), so the attachment filename contains
+    # ("03_llms/01_llm_finetuning"), so the attachment filename contains
     # a "/". Writing it without creating the parent fails with ENOENT and loses
     # the log -- the entire point of --collect -- while the run still reports
     # success.
@@ -360,7 +360,7 @@ def main() -> int:
         # passes on a file whose only mention is the comment above the call.
         code = "\n".join(_re.sub(r"#.*$", "", ln) for ln in src.splitlines())
         # Match --local_rank ANYWHERE in the add_argument call, not just as
-        # the first option string: 03_huggingface/03_ocr declares it as
+        # the first option string: 03_llms/03_ocr declares it as
         # add_argument("--local-rank", "--local_rank", ...), which an anchored
         # pattern reads as missing. That was a checker bug, not a code bug.
         tolerant = (_re.search(r"\.parse_known_args\s*\(", code) is not None

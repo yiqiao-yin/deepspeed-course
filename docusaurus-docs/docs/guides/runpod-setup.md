@@ -65,8 +65,8 @@ example on it, and shut it down without touching the web console.
 export RUNPOD_API_KEY=...        # https://console.runpod.io/user/settings
 
 uv run runpod/runpod_ctl.py gpus --min-vram 24        # live catalogue + prices
-uv run runpod/runpod_ctl.py recommend 03_huggingface/06_grpo
-uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo --collect --wait --terminate --yes
+uv run runpod/runpod_ctl.py recommend 03_llms/06_grpo
+uv run runpod/runpod_ctl.py run 03_llms/06_grpo --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods                      # what am I paying for?
 uv run runpod/runpod_ctl.py terminate <podId>
 ```
@@ -77,7 +77,7 @@ Stdlib only — `uv run` handles everything, nothing to install.
 lists the cheapest GPUs that satisfy them:
 
 ```
-03_huggingface/06_grpo
+03_llms/06_grpo
   Needs: >= 24 GB VRAM x 1 GPU, 80 GB disk
 
   Cheapest options (1 GPU(s), on-demand):
@@ -89,7 +89,7 @@ lists the cheapest GPUs that satisfy them:
 ### The one-liner: launch, collect, shut down
 
 ```bash
-uv run runpod/runpod_ctl.py run 03_huggingface/06_grpo \
+uv run runpod/runpod_ctl.py run 03_llms/06_grpo \
     --dry-run --collect --wait --terminate --yes
 ```
 
@@ -156,7 +156,7 @@ backstop.
 ### Validating several topics at once
 
 ```bash
-uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_huggingface/06_grpo
+uv run runpod/runpod_ctl.py smoke 01_basics/01_neuralnet 01_basics/04_rnn 03_llms/06_grpo
 #   Combined burn rate: ~$0.48/hour
 #   Refusing without --yes.
 ```
@@ -262,7 +262,7 @@ tmux attach -t train
 jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
 ```
 
-Expose port 8888 in the pod configuration. Good for the notebook examples in `03_huggingface/02_trl_sft`; less good for long training runs, where a dropped browser connection can interrupt the kernel.
+Expose port 8888 in the pod configuration. Good for the notebook examples in `03_llms/02_trl_sft`; less good for long training runs, where a dropped browser connection can interrupt the kernel.
 
 ## 5. Cost Discipline
 

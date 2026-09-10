@@ -532,7 +532,7 @@ flowchart TB
 ```
 
 ```json
-// 03_huggingface/06_grpo/ds_config.json — LoRA means Psi_trainable is tiny, but the
+// 03_llms/06_grpo/ds_config.json — LoRA means Psi_trainable is tiny, but the
 // frozen base weights and the KL reference model still occupy memory. Offload
 // buys room for the rollout buffers GRPO needs.
 {
@@ -601,5 +601,5 @@ Changing `--num_gpus` without updating the config violates it. Set any one field
 ## Next Steps
 
 - [Basic Neural Network](/docs/tutorials/basic/neural-network) — the mechanics of a DeepSpeed training loop, and a memory-accounting treatment of CUDA OOM
-- [GRPO Training](/docs/tutorials/huggingface/grpo-training) — where the optimizer-state arithmetic meets LoRA and multi-model RL
+- [GRPO Training](/docs/tutorials/llms/grpo-training) — where the optimizer-state arithmetic meets LoRA and multi-model RL
 - [Hardware Requirements](/docs/guides/hardware-requirements) — mapping these formulas onto specific GPUs

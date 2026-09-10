@@ -78,7 +78,7 @@ Both scripts push results to the Hub, so `HF_TOKEN` and a user ID must be set.
 
 ## 3. Video Is a Sequence-Length Problem
 
-Everything in [the VLM memory analysis](/docs/tutorials/huggingface/ocr-vision-language#3-the-memory-problem-is-sequence-length-not-parameters) applies here, multiplied by the frame count.
+Everything in [the VLM memory analysis](/docs/tutorials/llms/ocr-vision-language#3-the-memory-problem-is-sequence-length-not-parameters) applies here, multiplied by the frame count.
 
 If one frame produces $T_{\text{frame}}$ visual tokens, then $N$ frames produce
 
@@ -238,7 +238,7 @@ The honest framing: **seq2seq is not a cheap approximation to video understandin
 
 ## 7. DeepSpeed Notes
 
-**LLaVA path.** LoRA plus ZeRO-2, as in the [OCR example](/docs/tutorials/huggingface/ocr-vision-language#7-deepspeed-configuration). Gradient checkpointing is essential given §3, and the micro-batch will usually be 1 — one sample can be many thousands of tokens. Cap frames and per-frame resolution before touching the ZeRO stage.
+**LLaVA path.** LoRA plus ZeRO-2, as in the [OCR example](/docs/tutorials/llms/ocr-vision-language#7-deepspeed-configuration). Gradient checkpointing is essential given §3, and the micro-batch will usually be 1 — one sample can be many thousands of tokens. Cap frames and per-frame resolution before touching the ZeRO stage.
 
 **Seq2Seq path.** Encoder–decoder models retain activations for both stacks plus cross-attention, so their activation footprint is somewhat higher than a decoder-only model of equal size. Still small at 600M.
 
@@ -261,7 +261,7 @@ The honest framing: **seq2seq is not a cheap approximation to video understandin
 ## Next Steps
 
 - [Video-Speech Training](/docs/tutorials/multimodal/video-speech-training) — adding audio, at 560B parameters
-- [OCR Vision-Language](/docs/tutorials/huggingface/ocr-vision-language) — the single-image case in more depth
+- [OCR Vision-Language](/docs/tutorials/llms/ocr-vision-language) — the single-image case in more depth
 - [ZeRO Stages](/docs/getting-started/deepspeed-zero-stages)
 
 ## References

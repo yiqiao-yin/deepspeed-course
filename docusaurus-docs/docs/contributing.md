@@ -256,7 +256,7 @@ In docs, READMEs, SLURM scripts and docstrings. `uv pip install X`, not `pip ins
 
 ### Use `deepspeed` — this is a DeepSpeed course
 
-An example that only calls `Trainer.train()` with no ZeRO config does not belong here. Two narrow exceptions exist already: `03_huggingface/09_multi_agency` drives TRL directly, and `04_video_text/04_streaming_memory` / `04_video_eval` are inference and evaluation — no optimizer, nothing to shard.
+An example that only calls `Trainer.train()` with no ZeRO config does not belong here. Two narrow exceptions exist already: `03_llms/09_multi_agency` drives TRL directly, and `04_video_text/04_streaming_memory` / `04_video_eval` are inference and evaluation — no optimizer, nothing to shard.
 
 If yours is a third exception, **say so explicitly in the PR and explain why**.
 

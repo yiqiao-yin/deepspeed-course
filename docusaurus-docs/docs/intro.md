@@ -81,8 +81,8 @@ flowchart TB
 | **Vision** | [ConvNet](/docs/tutorials/basic/convnet) · [CIFAR-10](/docs/tutorials/basic/cifar10) |
 | **Sequences** | [RNN / LSTM](/docs/tutorials/basic/rnn) · [Stock Prediction](/docs/tutorials/intermediate/stock-prediction) |
 | **Probabilistic** | [Bayesian Neural Networks](/docs/tutorials/intermediate/bayesian-nn) |
-| **Language models** | [HuggingFace Integration](/docs/tutorials/huggingface/overview) · [TRL Function Calling](/docs/tutorials/huggingface/trl-function-calling) · [GRPO](/docs/tutorials/huggingface/grpo-training) · [GPT-OSS](/docs/tutorials/huggingface/gpt-oss-finetuning) |
-| **Multimodal** | [OCR Vision-Language](/docs/tutorials/huggingface/ocr-vision-language) · [Video-Text](/docs/tutorials/multimodal/video-text-training) · [Video-Speech](/docs/tutorials/multimodal/video-speech-training) |
+| **Language models** | [HuggingFace Integration](/docs/tutorials/llms/overview) · [TRL Function Calling](/docs/tutorials/llms/trl-function-calling) · [GRPO](/docs/tutorials/llms/grpo-training) · [GPT-OSS](/docs/tutorials/llms/gpt-oss-finetuning) |
+| **Multimodal** | [OCR Vision-Language](/docs/tutorials/llms/ocr-vision-language) · [Video-Text](/docs/tutorials/multimodal/video-text-training) · [Video-Speech](/docs/tutorials/multimodal/video-speech-training) |
 
 ## Start Here
 
@@ -128,12 +128,12 @@ deepspeed-course/
 ├── 01_basics/04_rnn/                             # LSTM time series
 ├── 02_intermediate/01_bayesian_neuralnet/                    # Parallel tempering MCMC
 ├── 02_intermediate/02_rnn_stock_data/           # Real market data with yfinance
-├── 03_huggingface/01_llm_finetuning/                           # LLM fine-tuning
-├── 03_huggingface/02_trl_sft/                       # TRL SFT for function calling
-├── 03_huggingface/03_ocr/                       # Qwen2-VL vision-language
-├── 03_huggingface/06_grpo/                      # GRPO on GSM8K
-├── 03_huggingface/08_gpt_oss_lora/  # gpt-oss-20b MoE LoRA
-├── 03_huggingface/09_multi_agency/          # Multi-agent GRPO (exploratory)
+├── 03_llms/01_llm_finetuning/                           # LLM fine-tuning
+├── 03_llms/02_trl_sft/                       # TRL SFT for function calling
+├── 03_llms/03_ocr/                       # Qwen2-VL vision-language
+├── 03_llms/06_grpo/                      # GRPO on GSM8K
+├── 03_llms/08_gpt_oss_lora/  # gpt-oss-20b MoE LoRA
+├── 03_llms/09_multi_agency/          # Multi-agent GRPO (exploratory)
 ├── 04_video_text/                                   # Video-text training
 └── 05_video_speech/                                   # LongCat-Flash-Omni 560B
 ```
