@@ -76,7 +76,7 @@ labs:
 
   - id: 01_basics/02_convnet
     title: "ConvNet on MNIST"
-    summary: "A CNN with ZeRO, on synthetic MNIST-shaped data."
+    summary: "A CNN with ZeRO on learnable synthetic 28x28 images."
     est_minutes: 4
     gpu: { min_vram_gb: 6, count: 1 }
     run:

@@ -487,12 +487,15 @@ if WANDB_AVAILABLE and wandb_api_key:
    - Accuracy Gain: 4.50%
 
 🏆 Model Quality Assessment:
-   ❌ Poor. Consider training longer or adjusting hyperparameters
+   ✅ Good! Model achieved ≥70% accuracy
 
-💡 Note:
-   - This is trained on random synthetic data (not real MNIST)
-   - High accuracy on random data indicates the model is learning patterns
-   - For real MNIST, accuracy should approach 98-99%
+💡 What this number means:
+   - Synthetic data: each class is a fixed 28x28 prototype plus noise,
+     so the label IS recoverable from the image. Chance is 10%.
+   - A short run (1 epoch) may land well below the ceiling. That is the
+     run being short, not the model being wrong -- use --epochs 10 for a
+     result worth reading.
+   - Raise --noise to make the task harder; at 0 it is nearly trivial.
 
 ================================================================================
 🎉 Enhanced CNN Training Script Finished Successfully!
@@ -530,7 +533,14 @@ The script automatically evaluates model quality:
 | **Fair** | ≥50% | Parameters are reasonably close |
 | **Poor** | <50% | Consider training longer or adjusting hyperparameters |
 
-**Note**: With synthetic random data, expect "Poor" quality. With real MNIST data, expect 95-99% accuracy.
+**Note**: the synthetic data is **learnable** — each class is a fixed 28×28
+prototype plus noise — so accuracy is a real signal. Chance is 10%; a plain MLP
+reaches ~82% after one epoch and ~89% after eight at the default `--noise 8.0`.
+
+This was not always true. The generator used to draw labels *independently* of
+the images, which put the ceiling at chance and made every run report "Poor" —
+advice that could not be acted on, because no amount of training can beat
+10% when there is no signal to find.
 
 ## Model Usage After Training
 
@@ -629,9 +639,10 @@ DS_BUILD_OPS=1 uv add "deepspeed>=0.12.0"
 ```
 
 #### Loss Not Decreasing
-This is expected with random synthetic data. To see actual learning:
-- Use real MNIST dataset (see "Using with Real MNIST Data" section)
-- Check data loader is shuffling properly
+The data is learnable, so a flat loss is a real symptom rather than expected:
+- Lower `--noise` (default 8.0); above ~16 the classes genuinely overlap and
+  accuracy falls back toward the 10% chance floor
+- Check the data loader is shuffling properly
 - Verify learning rate is appropriate
 - Monitor gradient norms (should be neither too large nor too small)
 
