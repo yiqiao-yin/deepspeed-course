@@ -256,6 +256,39 @@ It is **advisory, not a gate** — it over-reports because teaching READMEs cont
 illustrative code and remediation advice that legitimately differ from the
 shipped source. Triage by hand; see `scripts/README.md`.
 
+### Check what hardware you actually have before declaring a thing unrunnable
+
+Three rounds of the CIFAR-10 multi-GPU fix went out verified only by static
+analysis, on the stated grounds of having no GPU. The dev box had one.
+`nvidia-smi` costs a second and would have caught a `TypeError` that instead
+surfaced on a rented two-GPU machine after both ranks had launched.
+
+### Multi-rank logic can be verified without multiple GPUs
+
+Most of what breaks in a distributed guard is not CUDA. It is control flow —
+who does the work, who waits, and whether the collective is even a legal call.
+All of that runs on **gloo, on CPU, in two processes**, and it runs against the
+*shipped* source rather than a paraphrase:
+
+```python
+# two processes, real process group, torchvision stubbed so nothing downloads
+dist.init_process_group(backend="gloo", rank=rank, world_size=2)
+fn = load_function(REPO / "01_basics/03_convnet_cifar10/cifar10_deepspeed.py",
+                   "download_cifar10",
+                   extra_globals={"torchvision": _stub, ...})   # tests/_srcload.py
+```
+
+That run proved: exactly one rank downloaded, rank 1 blocked for the entire
+4.0 s rank 0 spent, neither raised. The last of those is the one that matters
+most — it is a live check that `barrier(device_ids=...)` is a **legal call at
+the locked torch**, which is precisely what a `TypeError` had broken.
+
+What gloo does **not** cover is the NCCL device binding itself: two ranks
+colliding on cuda:0 needs two real CUDA devices. So this technique retires the
+control-flow risk and leaves exactly one question for real hardware. Say which
+is which when reporting — "verified" and "believed correct" are different
+claims, and a reader betting a GPU-hour deserves to know which they are getting.
+
 ## Two target platforms
 
 The README's central distinction, which shapes every launcher script:
@@ -384,6 +417,13 @@ Two rules follow:
   `--epochs 1`; printing "Poor" under a "Finished Successfully" banner is how a
   beginner concludes they broke something. Say the run was capped and what a
   real one looks like.
+  **This rule is not self-enforcing, and it recurred.** `03_convnet_cifar10`
+  shipped the identical defect months later: `--max-steps 20` — the command
+  Clawdeck offers by name as *"Quick (20 steps)"* — printed *"Poor. Consider
+  training longer"* directly above *"Finished Successfully"*. Twenty steps is
+  ~1,280 of 50,000 images and chance on CIFAR-10 is 10%, so ~10% was the
+  **expected** result. Unlike `02_convnet` the data was real and learnable; only
+  the reporting lied. It was found by *running the lab*, not by reading it.
 - **`tests/test_synthetic_data_is_learnable.py` asserts it**, on a HELD-OUT
   split — memorising random labels on the training set is possible and proves
   the opposite of learning. It carries the old generator as a counterexample
@@ -471,6 +511,24 @@ this reason, and normalises `2.11.0+cu128` to `2.11.0` when comparing.
 defect, `set_device` sitting *six lines below* its barrier. It had simply never
 been run cold on two GPUs. Copying a sibling is only as safe as the sibling's
 test coverage.
+
+**Derive `local_rank` from the environment, not from argv.** The same folder's
+`train_modern_cifar10.py` took its device from `args.local_rank`, which argparse
+defaults to `-1`. Under the `deepspeed` launcher that works — `launch.py` sets
+`RANK`, `LOCAL_RANK` and `WORLD_SIZE` in each child's environment *and* injects
+`--local_rank` into argv. Under `torchrun`, which sets only the environment
+variable, every rank computes `max(-1, 0) == 0` and binds cuda:0: the same hang,
+one launcher away. Read `LOCAL_RANK` first and fall back to argv.
+
+Two tools exist for the failure, and they answer different questions:
+
+| Tool | Question |
+|---|---|
+| `tests/gpu/probe_device_binding.py` | does each rank bind to its OWN GPU? (10 s, no data, no model) |
+| `tests/gpu/diagnose_nccl.sh` | is multi-GPU NCCL working on this box at all? |
+
+Run the probe first. Correct devices plus a hang means the binding is fine and
+the interconnect is not, which is the other script's territory.
 
 `tests/test_multigpu_download_guard.py` enforces both properties for every lab
 `clawdeck.yaml` declares as `gpu.count > 1`. It is **AST-based, not a grep**,
