@@ -692,8 +692,25 @@ def main() -> None:
         print(f"   ✅ Good! Model achieved ≥70% accuracy on CIFAR-10")
     elif quality_score == "fair":
         print(f"   ⚠️  Fair. Model achieved ≥60% accuracy on CIFAR-10")
+    elif args.epochs <= 2 or args.max_steps > 0:
+        # Do not tell a reader their smoke test failed. It did not. This is the
+        # path Clawdeck's "Quick (20 steps)" command takes, and printing
+        # "Poor. Consider training longer or adjusting hyperparameters" under a
+        # "Finished Successfully" banner is how a beginner concludes they broke
+        # something. 20 steps is ~1280 images of 50,000; chance on CIFAR-10 is
+        # 10%, so ~10% here is the expected result, not a failure.
+        # Same rule, and the same fix, as 01_basics/02_convnet.
+        short = (f"--max-steps {args.max_steps}" if args.max_steps > 0
+                 else f"{args.epochs} epoch(s)")
+        print(f"   ⏱️  Below 60%, but this run was capped at {short} -- far too")
+        print(f"      short to be meaningful. This is a PIPELINE smoke test:")
+        print(f"      success means DeepSpeed launched, the data downloaded once,")
+        print(f"      every rank ran, and the loss moved. Accuracy near 10% is")
+        print(f"      chance on CIFAR-10 and is exactly what 20 steps should give.")
+        print(f"      Use --epochs 20 for a number worth reading.")
     else:
-        print(f"   ❌ Poor. Consider training longer or adjusting hyperparameters")
+        print(f"   ❌ Poor after {args.epochs} epochs. Check the learning rate")
+        print(f"      and that the data downloaded correctly.")
 
     # CIFAR-10 specific notes
     print(f"\n💡 Note:")

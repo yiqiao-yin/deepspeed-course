@@ -212,7 +212,15 @@ def main() -> None:
     # cuda:0 on every rank. Both ranks then post to the same GPU and NCCL hangs
     # until the watchdog aborts. This used to sit six lines below the barrier,
     # which was a real hang waiting for the first cold multi-GPU run.
-    device = torch.device(f"cuda:{max(args.local_rank, 0)}")
+    # LOCAL_RANK (environment) first, --local_rank (argv) second. The deepspeed
+    # launcher sets both; torchrun sets only the environment variable, and
+    # falling back to argparse's -1 default would bind EVERY rank to cuda:0 --
+    # which is precisely the hang the device binding below exists to prevent.
+    local_rank = int(os.environ.get("LOCAL_RANK", "-1"))
+    if local_rank < 0:
+        local_rank = max(args.local_rank, 0)
+
+    device = torch.device(f"cuda:{local_rank}")
     if torch.cuda.is_available():
         torch.cuda.set_device(device)
 
@@ -226,7 +234,7 @@ def main() -> None:
         # Explicit device_ids. No timeout= -- torch 2.11, which every lab
         # here locks, does not accept one on barrier(); it lands in 2.13.
         torch.distributed.barrier(
-            device_ids=[max(args.local_rank, 0)] if torch.cuda.is_available() else None,
+            device_ids=[local_rank] if torch.cuda.is_available() else None,
         )
 
     train_x, train_y = as_tensors(True)
