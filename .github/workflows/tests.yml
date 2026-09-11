@@ -112,6 +112,9 @@ jobs:
       - name: Multi-head Latent Attention
         run: uv run tests/test_mla.py
 
+      - name: Multi-GPU labs rank-guard their downloads
+        run: uv run tests/test_multigpu_download_guard.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \
