@@ -49,6 +49,7 @@ CONTRIBUTING.md warns about.
 
 import os
 import sys
+from datetime import timedelta
 
 
 def require_gpu() -> None:
@@ -206,6 +207,16 @@ def main() -> None:
         images, labels = next(iter(loader))
         return images, labels
 
+    # Bind this rank to its own GPU BEFORE any collective is issued. NCCL's
+    # barrier is an all-reduce of a one-element tensor and, with no device set
+    # and no device_ids passed, torch falls back to "the current device" --
+    # cuda:0 on every rank. Both ranks then post to the same GPU and NCCL hangs
+    # until the watchdog aborts. This used to sit six lines below the barrier,
+    # which was a real hang waiting for the first cold multi-GPU run.
+    device = torch.device(f"cuda:{max(args.local_rank, 0)}")
+    if torch.cuda.is_available():
+        torch.cuda.set_device(device)
+
     if world_size > 1:
         # Only rank 0 downloads; everyone else waits, or they race on the same
         # files and one of them reads a half-written archive.
@@ -213,13 +224,15 @@ def main() -> None:
             deepspeed.init_distributed()
         if is_main:
             as_tensors(True), as_tensors(False)
-        torch.distributed.barrier()
+        # Explicit device_ids, and a per-call timeout so a rendezvous failure
+        # surfaces in two minutes rather than twelve.
+        torch.distributed.barrier(
+            device_ids=[max(args.local_rank, 0)] if torch.cuda.is_available() else None,
+            timeout=timedelta(seconds=120),
+        )
 
     train_x, train_y = as_tensors(True)
     test_x, test_y = as_tensors(False)
-
-    device = torch.device(f"cuda:{max(args.local_rank, 0)}")
-    torch.cuda.set_device(device)
     train_x = ((train_x - mean) / std).to(device)
     train_y = train_y.to(device)
     test_x = ((test_x - mean) / std).to(device)

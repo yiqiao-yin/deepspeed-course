@@ -157,6 +157,59 @@ def unguarded_downloads(src: str) -> list[tuple[int, str]]:
     return findings
 
 
+def unbound_barriers(src: str) -> list[tuple[int, str]]:
+    """
+    Return (lineno, reason) for every ``barrier()`` that may land on cuda:0 for
+    all ranks at once.
+
+    Found the hard way, on the very fix that closed the download race. The
+    guard worked -- rank 1 waited, the download happened once -- and then the
+    job died 12 minutes later in the barrier itself:
+
+        WorkNCCL(SeqNum=1, OpType=ALLREDUCE, NumelIn=1, NumelOut=1)
+          ran for 721595 milliseconds before timing out
+
+    NCCL implements barrier as an all-reduce of a one-element tensor, so it
+    must choose a device. torch picks, in order: (1) ``barrier(device_ids=)``,
+    (2) the device bound at ``init_process_group``, (3) CPU, and failing those
+    (4) *the current device* -- which, with nothing set, is cuda:0 on EVERY
+    rank. torch's own source says this "may use default device 0, causing
+    issues like hang or all processes creating context on device 0."
+
+    Normally ``deepspeed.initialize()`` binds the device for you. A download
+    guard that runs *before* initialize() -- which is the whole point of a
+    download guard -- is therefore exactly the window where this bites.
+
+    So: a barrier is safe if it passes ``device_ids``, or if a ``set_device``
+    call appears earlier in the file. Line order is a sound proxy here because
+    both live in the same straight-line preamble.
+    """
+    tree = ast.parse(src)
+    set_device_lines = [
+        n.lineno for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute) and n.func.attr == "set_device"
+    ]
+    findings = []
+    for n in ast.walk(tree):
+        if not isinstance(n, ast.Call):
+            continue
+        f = n.func
+        is_barrier = (isinstance(f, ast.Attribute) and f.attr == "barrier") or \
+                     (isinstance(f, ast.Name) and f.id == "barrier")
+        if not is_barrier:
+            continue
+        if any(kw.arg == "device_ids" for kw in n.keywords):
+            continue
+        if any(ln < n.lineno for ln in set_device_lines):
+            continue
+        findings.append(
+            (n.lineno,
+             "barrier() with no device_ids and no earlier set_device — "
+             "every rank may post the all-reduce to cuda:0 and hang"))
+    return findings
+
+
 def has_barrier(src: str) -> bool:
     for node in ast.walk(ast.parse(src)):
         if isinstance(node, ast.Call):
@@ -224,6 +277,23 @@ def main() -> None:
                       "sometimes, which is far harder to debug.")
     print(f"\n     ({checked} files mentioning a download were parsed)")
 
+    print("\n  -- every barrier names its device, or binds one first --")
+    for lab in labs:
+        for py in sorted((REPO / lab).glob("*.py")):
+            src = py.read_text(errors="ignore")
+            if "barrier" not in src:
+                continue
+            bad = unbound_barriers(src)
+            rel = py.relative_to(REPO)
+            detail = "\n".join(f"{rel}:{ln}  {why}" for ln, why in bad) + (
+                "\n\nPass device_ids=[local_rank], or call "
+                "torch.cuda.set_device(local_rank) BEFORE the collective. "
+                "deepspeed.initialize() would do it for you, but a download "
+                "guard runs before initialize() by design — which is exactly "
+                "when this hangs for 12 minutes and then SIGABRTs."
+            )
+            check(f"{rel}", not bad, detail if bad else "")
+
     # ---- the counterexamples ------------------------------------------------
     # Without these, a checker that returned [] unconditionally would pass
     # everything above and look perfect.
@@ -270,6 +340,34 @@ ds = torchvision.datasets.CIFAR10(root='./d', download=is_main)
     check("does NOT flag download=is_main (train_modern_cifar10.py's pattern)",
           unguarded_downloads(kwarg_derived) == [],
           "the rank test can live in the argument rather than in an if")
+
+    # The second bug, caught on real 2-GPU hardware by the fix for the first.
+    naked_barrier = '''
+import torch
+if world_size > 1:
+    deepspeed.init_distributed()
+torch.distributed.barrier()
+'''
+    check("flags a barrier with no device_ids and no set_device",
+          len(unbound_barriers(naked_barrier)) == 1,
+          "this shape hung for 721 s on 2x3090 and then SIGABRTed")
+
+    set_device_too_late = '''
+import torch
+torch.distributed.barrier()
+torch.cuda.set_device(local_rank)
+'''
+    check("flags set_device that comes AFTER the barrier",
+          len(unbound_barriers(set_device_too_late)) == 1,
+          "train_modern_cifar10.py had set_device six lines BELOW its barrier; "
+          "an order-insensitive check would have called that file correct")
+
+    check("does NOT flag a barrier that passes device_ids",
+          unbound_barriers(
+              "import torch\ntorch.distributed.barrier(device_ids=[0])\n") == [])
+    check("does NOT flag a barrier preceded by set_device",
+          unbound_barriers("import torch\ntorch.cuda.set_device(0)\n"
+                           "torch.distributed.barrier()\n") == [])
 
     check("barrier detection rejects a file with no barrier",
           not has_barrier(exact_shipped_bug))

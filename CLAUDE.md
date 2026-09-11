@@ -445,7 +445,28 @@ and races ahead to read a directory rank 0 is still writing, which fails only
 *sometimes*. `train_modern_cifar10.py` in the same folder had it right all
 along (`download=is_main`, then `barrier()`) and is the pattern to copy.
 
-`tests/test_multigpu_download_guard.py` enforces it for every lab
+**Fixing it exposed a second bug, in the fix itself.** The guard worked — rank 1
+waited, the download happened once — and the job then died twelve minutes later
+*in the barrier*, `ALLREDUCE` with `NumelIn=1` running for 721,595 ms. NCCL
+implements `barrier()` as an all-reduce of a one-element tensor, so it must pick
+a device, and torch chooses: (1) `barrier(device_ids=)`, (2) the device bound at
+`init_process_group`, (3) CPU, else (4) **the current device — cuda:0 on every
+rank.** torch's own source warns this "may use default device 0, causing issues
+like hang or all processes creating context on device 0."
+
+`deepspeed.initialize()` normally binds the device for you. **A download guard
+runs before `initialize()` by design, so it is precisely the window where this
+bites.** Call `torch.cuda.set_device(local_rank)` before the collective and pass
+`device_ids=` to the barrier. Note also that `barrier()` takes a **per-call**
+`timeout`, so the guard can fail in two minutes without shortening the process
+group that training then reuses for ten-minute collectives.
+
+`train_modern_cifar10.py` — held up above as the reference — had the same latent
+defect, `set_device` sitting *six lines below* its barrier. It had simply never
+been run cold on two GPUs. Copying a sibling is only as safe as the sibling's
+test coverage.
+
+`tests/test_multigpu_download_guard.py` enforces both properties for every lab
 `clawdeck.yaml` declares as `gpu.count > 1`. It is **AST-based, not a grep**,
 and that distinction is the whole point — several scripts here rank-guard their
 *printing* and *checkpoint saving* while downloading unguarded, so a file-wide
