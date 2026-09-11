@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 27 suites, no GPU, no downloads
+./tests/run_all.sh              # all 28 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -412,6 +412,47 @@ report.
 `tests/test_torch_index_pins.py` guards it by reading the **lock**, not the
 pyproject — the resolution rather than the declaration — so a lock regenerated
 against a different index fails even while `pyproject.toml` still looks right.
+
+### Only rank 0 downloads, and the others must wait on a barrier
+
+`01_basics/03_convnet_cifar10` had a `download_cifar10()` whose docstring read
+*"This prevents multiple processes from downloading simultaneously"* and whose
+body did no such thing. Under the lab's own manifest command,
+`deepspeed --num_gpus=2`, both ranks wrote the same 170 MB tarball into the same
+`./data` and extracted over each other:
+
+    RuntimeError: Dataset not found or corrupted. You can use download=True ...
+
+— a spectacularly misleading message for a file that downloaded fine, twice. The
+tell is **two interleaved progress bars both reaching 170M**.
+
+`torchvision.datasets.*(download=True)` does **no locking.** HuggingFace
+`from_pretrained` / `snapshot_download` / `load_dataset` go through
+`huggingface_hub`, which takes `.lock` files and survives concurrency — so this
+is specific to the torchvision path, not a general claim about downloads.
+
+Three things make it worth a static check:
+
+- **It passes on one GPU.** A single rank cannot race itself, so every 1-GPU
+  smoke test is green.
+- **It is syntactically valid**, so `compileall` cannot see it.
+- **It was masked for months by an accident.** The data used to be re-hydrated
+  onto the box at boot, so `./data` was already populated and neither rank ever
+  downloaded. Cleaning that up surfaced a race that had always been there.
+
+The barrier matters as much as the guard: without it rank 1 skips the download
+and races ahead to read a directory rank 0 is still writing, which fails only
+*sometimes*. `train_modern_cifar10.py` in the same folder had it right all
+along (`download=is_main`, then `barrier()`) and is the pattern to copy.
+
+`tests/test_multigpu_download_guard.py` enforces it for every lab
+`clawdeck.yaml` declares as `gpu.count > 1`. It is **AST-based, not a grep**,
+and that distinction is the whole point — several scripts here rank-guard their
+*printing* and *checkpoint saving* while downloading unguarded, so a file-wide
+`grep get_rank() == 0` passes them all. It asks instead whether each individual
+download call is lexically inside a rank-gated branch. Its permanent
+counterexamples include the bug exactly as it shipped **and** a file whose rank
+guard sits around the wrong statement.
 
 ### Library API drift is a CI gate, not a runtime surprise
 

@@ -147,14 +147,47 @@ class CIFAR10CNNEnhanced(nn.Module):
 
 def download_cifar10():
     """
-    Download CIFAR-10 dataset once before distributed training.
-    This prevents multiple processes from downloading simultaneously.
+    Download CIFAR-10 once, on rank 0 only, then release the other ranks.
+
+    torchvision's ``download=True`` does no locking. Under
+    ``deepspeed --num_gpus=2`` both ranks run this function, write the same
+    170 MB tarball into the same ``./data``, and extract over each other. The
+    integrity check then fails for BOTH with the thoroughly misleading
+    "Dataset not found or corrupted" — on a file that downloaded fine, twice.
+    The tell is two interleaved progress bars both reaching 170M.
+
+    The barrier matters as much as the guard. Without it rank 1 skips the
+    download and races ahead to read a directory rank 0 is still writing,
+    which fails the same way but only sometimes — far worse to debug.
+
+    ``deepspeed.init_distributed()`` is called here because this runs *before*
+    ``deepspeed.initialize()``, so no process group exists yet and there would
+    be nothing to barrier on. The whole block is gated on ``world_size > 1``
+    so single-GPU and ALLOW_CPU runs never touch the distributed machinery.
+
+    This mirrors the guard in ``train_modern_cifar10.py`` in this same folder.
     """
-    print(f"\n📥 Downloading CIFAR-10 dataset...")
-    # Download without transforms (faster)
-    torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
-    torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
-    print(f"✅ CIFAR-10 dataset ready")
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    is_main = int(os.environ.get("RANK", "0")) == 0
+
+    # No process group exists yet, so create one to barrier on. Single-GPU and
+    # ALLOW_CPU runs skip this entirely and never touch distributed machinery.
+    if world_size > 1 and not torch.distributed.is_initialized():
+        deepspeed.init_distributed()
+
+    if is_main:
+        print(f"\n📥 Downloading CIFAR-10 dataset...")
+        # Download without transforms (faster)
+        torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
+        torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
+        print(f"✅ CIFAR-10 dataset ready")
+    else:
+        print(f"\n⏳ Rank {os.environ.get('RANK')}: waiting for rank 0 to download...")
+
+    # Every rank reaches this line; the non-zero ranks block here until rank 0
+    # has finished writing AND extracting the archive.
+    if world_size > 1:
+        torch.distributed.barrier()
 
 
 def get_cifar10_dataloaders(batch_size: int = 32):
