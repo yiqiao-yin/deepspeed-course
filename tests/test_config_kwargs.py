@@ -4,6 +4,7 @@
 #   "transformers==5.16.1",
 #   "trl==1.12.0",
 #   "peft==0.20.0",
+#   "torch==2.11.0",
 #   "tomli; python_version < '3.11'",
 # ]
 # ///
@@ -71,7 +72,21 @@ SKIP_DIRS = {".venv", "node_modules", "build", ".git", "__pycache__",
 
 # The versions this suite validates against. They must equal what every lab's
 # uv.lock resolves, or the check is testing something no learner runs.
-PINNED = {"transformers": "5.16.1", "trl": "1.12.0", "peft": "0.20.0"}
+PINNED = {"transformers": "5.16.1", "trl": "1.12.0", "peft": "0.20.0",
+          "torch": "2.11.0"}
+
+# Free functions whose keyword arguments are worth checking, not just
+# constructors. torch.distributed.barrier() earned its place: a fix in this
+# repo passed it timeout=, which torch 2.13 accepts and torch 2.11 -- what
+# every lab here locks -- does not. It raised TypeError on rented GPUs after
+# both ranks had launched and rank 0 was 4 MB into a 170 MB download.
+#
+# The mistake underneath was reading the signature out of whichever torch a
+# `find` happened to return first. The cache held 2.9, 2.10, 2.11, 2.13 and
+# 2.14; timeout= exists in the last two only. That is precisely the failure
+# this suite's pin-vs-lock check exists to prevent, so the fix belongs here.
+TORCH_FUNCS = ("barrier", "init_process_group", "all_reduce", "broadcast",
+               "all_gather", "reduce_scatter", "new_group")
 
 PASS = FAIL = 0
 
@@ -114,6 +129,21 @@ def load_constructors() -> dict:
     for n in ("LoraConfig",):
         if hasattr(peft, n):
             add(n, getattr(peft, n))
+
+    # Free functions. Same contract: read the signature off the installed
+    # library so the check tracks the pin rather than a remembered snapshot.
+    import torch.distributed as dist
+    for n in TORCH_FUNCS:
+        fn = getattr(dist, n, None)
+        if fn is None:
+            continue
+        try:
+            sig = inspect.signature(fn)
+        except (ValueError, TypeError):
+            continue
+        var_kw = any(p.kind is inspect.Parameter.VAR_KEYWORD
+                     for p in sig.parameters.values())
+        out[n] = (set(sig.parameters), var_kw)
     return out
 
 
@@ -130,9 +160,12 @@ def main() -> None:
 
     # ---- the pins must match what the labs install ------------------------
     print("\n  -- this suite validates the version the labs actually use --")
-    import transformers, trl, peft
+    import transformers, trl, peft, torch
     installed = {"transformers": transformers.__version__,
-                 "trl": trl.__version__, "peft": peft.__version__}
+                 "trl": trl.__version__, "peft": peft.__version__,
+                 # 2.11.0+cu128 and 2.11.0+cu130 are the same API on different
+                 # CUDA builds; the local build need not match the labs' index.
+                 "torch": torch.__version__.split("+")[0]}
     for pkg, want in PINNED.items():
         check(f"{pkg} {installed[pkg]} is the pinned {want}",
               installed[pkg] == want,
@@ -142,6 +175,10 @@ def main() -> None:
     for lock in sorted(REPO.glob("*/*/uv.lock")):
         for pkg, want in PINNED.items():
             got = locked_version(lock, pkg)
+            # torch locks as 2.11.0+cu128; the API is the version, not the
+            # CUDA build, and this suite installs the PyPI wheel.
+            if got is not None:
+                got = got.split("+")[0]
             if got is not None and got != want:
                 drift.append(f"{lock.parent}: {pkg} {got} != {want}")
     check(f"every lab's uv.lock agrees with these pins "
@@ -153,7 +190,7 @@ def main() -> None:
     # ---- the constructors -------------------------------------------------
     print("\n  -- constructors under test --")
     ctors = load_constructors()
-    check(f"loaded {len(ctors)} config constructors", len(ctors) >= 8,
+    check(f"loaded {len(ctors)} config constructors and functions", len(ctors) >= 8,
           f"got {sorted(ctors)}")
     skipped = []
     for name in sorted(ctors):

@@ -457,9 +457,15 @@ like hang or all processes creating context on device 0."
 `deepspeed.initialize()` normally binds the device for you. **A download guard
 runs before `initialize()` by design, so it is precisely the window where this
 bites.** Call `torch.cuda.set_device(local_rank)` before the collective and pass
-`device_ids=` to the barrier. Note also that `barrier()` takes a **per-call**
-`timeout`, so the guard can fail in two minutes without shortening the process
-group that training then reuses for ten-minute collectives.
+`device_ids=` to the barrier. There is deliberately **no `timeout=`** on that barrier:
+torch 2.13 accepts one, and **torch 2.11 — what every lab here locks — does
+not.** Passing it raises `TypeError` on the rented GPU after both ranks have
+launched. I shipped exactly that bug by reading the signature out of whichever
+torch a `find` returned first; the uv cache held 2.9, 2.10, 2.11, 2.13 and
+2.14, and only the last two have the parameter. **Verify an API against the
+version the lab's `uv.lock` resolves, not against whatever is on the box.**
+`tests/test_config_kwargs.py` now covers `torch.distributed` free functions for
+this reason, and normalises `2.11.0+cu128` to `2.11.0` when comparing.
 
 `train_modern_cifar10.py` — held up above as the reference — had the same latent
 defect, `set_device` sitting *six lines below* its barrier. It had simply never
