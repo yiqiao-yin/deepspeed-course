@@ -49,7 +49,6 @@ CONTRIBUTING.md warns about.
 
 import os
 import sys
-from datetime import timedelta
 
 
 def require_gpu() -> None:
@@ -224,11 +223,10 @@ def main() -> None:
             deepspeed.init_distributed()
         if is_main:
             as_tensors(True), as_tensors(False)
-        # Explicit device_ids, and a per-call timeout so a rendezvous failure
-        # surfaces in two minutes rather than twelve.
+        # Explicit device_ids. No timeout= -- torch 2.11, which every lab
+        # here locks, does not accept one on barrier(); it lands in 2.13.
         torch.distributed.barrier(
             device_ids=[max(args.local_rank, 0)] if torch.cuda.is_available() else None,
-            timeout=timedelta(seconds=120),
         )
 
     train_x, train_y = as_tensors(True)

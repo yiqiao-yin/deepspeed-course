@@ -55,13 +55,16 @@ and the problem is the interconnect rather than the script. Go to
 `tests/gpu/diagnose_nccl.sh`, which walks up from topology to bare NCCL to
 NCCL_P2P_DISABLE=1.
 
-The 60-second timeout is deliberate: a probe that takes ten minutes to tell you
-it failed is not much of a probe.
+Note there is no timeout= on the barrier. torch 2.11 -- what every lab in this
+repo locks -- accepts only group, async_op and device_ids; the per-call timeout
+arrives in 2.13. Passing it raises TypeError, which is how this probe's own
+first version failed. If this probe hangs rather than returning, that IS the
+answer: the ranks are not rendezvousing, and NCCL's 600 s default is what you
+are waiting out. Ctrl-C after a few seconds and go to diagnose_nccl.sh.
 """
 
 import os
 import sys
-from datetime import timedelta
 
 
 def main() -> None:
@@ -97,10 +100,7 @@ def main() -> None:
               "Re-run with --num_gpus=2 for this to mean anything.", flush=True)
         return
 
-    torch.distributed.barrier(
-        device_ids=[local_rank],
-        timeout=timedelta(seconds=60),
-    )
+    torch.distributed.barrier(device_ids=[local_rank])
     print(f"RANK={rank} passed the barrier", flush=True)
 
 

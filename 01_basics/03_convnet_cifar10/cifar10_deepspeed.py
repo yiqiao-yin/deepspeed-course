@@ -25,7 +25,6 @@ import deepspeed
 import sys
 import argparse
 import os
-from datetime import timedelta
 
 # Optional Weights & Biases integration
 try:
@@ -207,14 +206,18 @@ def download_cifar10():
     #
     # device_ids pins the collective explicitly rather than relying on the
     # set_device above -- belt and braces, and it makes the choice visible to a
-    # reader. The timeout is per-CALL, not on the process group: a genuine
-    # rendezvous failure here surfaces in two minutes instead of the twelve
-    # that NCCL's default takes, while training keeps the normal 10-minute
-    # budget for its own collectives.
+    # reader.
+    #
+    # There is deliberately no timeout= here. torch 2.11 (what every lab in
+    # this repo locks) takes only group, async_op and device_ids; the per-call
+    # timeout arrives in 2.13. So this barrier inherits NCCL's 600 s default,
+    # and a genuine rendezvous failure costs ten minutes of silence before the
+    # watchdog fires. If that happens, do not debug it from here -- run
+    # tests/gpu/probe_device_binding.py, which answers the device question in
+    # ten seconds, and then tests/gpu/diagnose_nccl.sh for the interconnect.
     if world_size > 1:
         torch.distributed.barrier(
             device_ids=[local_rank] if torch.cuda.is_available() else None,
-            timeout=timedelta(seconds=120),
         )
 
 
