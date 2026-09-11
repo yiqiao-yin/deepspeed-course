@@ -71,6 +71,40 @@ The fix unwraps the batch dimension, and
 `tests/test_video_frames.py` now guards it **on CPU** with a fake processor that
 reproduces the nested shape — so the regression is caught in CI, without a GPU.
 
+## `probe_device_binding.py`
+
+```bash
+uv run deepspeed --num_gpus=2 tests/gpu/probe_device_binding.py
+```
+
+Ten seconds, no dataset, no model. Answers one question: **does each rank bind
+to its own GPU before the first collective?**
+
+Run it when a multi-GPU job hangs in a barrier near startup, before spending
+twenty minutes on a real training run. NCCL implements `barrier()` as an
+all-reduce of a one-element tensor and must pick a device for it; with nothing
+set and no `device_ids` passed, torch falls back to "the current device", which
+is **cuda:0 on every rank**, and the job hangs until the watchdog aborts.
+
+`deepspeed.initialize()` normally binds the device. Anything running *before*
+it — a dataset download guard, say — is exactly the window where this bites.
+`deepspeed.init_distributed()` does not bind it.
+
+| Output | Meaning |
+|---|---|
+| `current_device=0` and `=1`, both ranks pass | healthy |
+| both ranks report `current_device=0` | `set_device` is not taking; check the launcher exports `LOCAL_RANK` |
+| correct devices but hangs at the barrier | binding is fine, the interconnect is not — go to `diagnose_nccl.sh` |
+
+### The bug it found
+
+`01_basics/03_convnet_cifar10` was fixed so only rank 0 downloads CIFAR-10 and
+the others wait on a barrier. The guard worked — and the job then died twelve
+minutes later *inside that barrier*, `ALLREDUCE` with `NumelIn=1` running for
+721,595 ms. The fix (`set_device` before the collective, `device_ids=` on the
+barrier) is now enforced statically by
+`tests/test_multigpu_download_guard.py`.
+
 ## Adding a GPU script
 
 - Skip with exit 0 when `torch.cuda.is_available()` is false.
