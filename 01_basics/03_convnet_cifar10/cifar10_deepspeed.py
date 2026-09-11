@@ -25,6 +25,7 @@ import deepspeed
 import sys
 import argparse
 import os
+from datetime import timedelta
 
 # Optional Weights & Biases integration
 try:
@@ -168,12 +169,29 @@ def download_cifar10():
     This mirrors the guard in ``train_modern_cifar10.py`` in this same folder.
     """
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     is_main = int(os.environ.get("RANK", "0")) == 0
 
-    # No process group exists yet, so create one to barrier on. Single-GPU and
-    # ALLOW_CPU runs skip this entirely and never touch distributed machinery.
-    if world_size > 1 and not torch.distributed.is_initialized():
-        deepspeed.init_distributed()
+    if world_size > 1:
+        # Bind this rank to its own GPU BEFORE issuing any collective.
+        #
+        # NCCL implements barrier() as an all-reduce of a one-element tensor,
+        # so it has to put that tensor somewhere. torch picks the device by
+        # checking, in order: (1) barrier(device_ids=...), (2) the device bound
+        # at init_process_group, (3) CPU, and failing all three (4) "the current
+        # device" -- which, with nothing set, is cuda:0 on EVERY rank. Both
+        # ranks then post the collective to the same GPU and NCCL simply hangs
+        # until the 600 s watchdog aborts the job. torch's own source warns
+        # about this case in as many words.
+        #
+        # deepspeed.initialize() would assign the device for us, but this code
+        # runs before it on purpose, so it has to be done here.
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
+        # No process group exists yet, so create one to barrier on. Single-GPU
+        # and ALLOW_CPU runs skip all of this and never touch distributed.
+        if not torch.distributed.is_initialized():
+            deepspeed.init_distributed()
 
     if is_main:
         print(f"\n📥 Downloading CIFAR-10 dataset...")
@@ -186,8 +204,18 @@ def download_cifar10():
 
     # Every rank reaches this line; the non-zero ranks block here until rank 0
     # has finished writing AND extracting the archive.
+    #
+    # device_ids pins the collective explicitly rather than relying on the
+    # set_device above -- belt and braces, and it makes the choice visible to a
+    # reader. The timeout is per-CALL, not on the process group: a genuine
+    # rendezvous failure here surfaces in two minutes instead of the twelve
+    # that NCCL's default takes, while training keeps the normal 10-minute
+    # budget for its own collectives.
     if world_size > 1:
-        torch.distributed.barrier()
+        torch.distributed.barrier(
+            device_ids=[local_rank] if torch.cuda.is_available() else None,
+            timeout=timedelta(seconds=120),
+        )
 
 
 def get_cifar10_dataloaders(batch_size: int = 32):
