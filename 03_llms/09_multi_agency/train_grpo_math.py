@@ -252,7 +252,17 @@ class MultiAgentLLM:
         trainer.train()
 
         trainer.model.save_pretrained("./multi_agent_trained")
-        trainer.tokenizer.save_pretrained("./multi_agent_trained")
+        # self.tokenizer, NOT trainer.tokenizer: transformers 5.x removed
+        # Trainer.tokenizer in favour of processing_class. This is the very
+        # object passed in as processing_class above, so there is no need to
+        # reach into the trainer at all. Wrapped so a failure to write a few
+        # KB of tokenizer JSON cannot turn a completed training run red.
+        try:
+            self.tokenizer.save_pretrained("./multi_agent_trained")
+        except Exception as exc:  # noqa: BLE001 - never fatal
+            print(f"⚠️  Could not save the tokenizer ({exc}). The model in "
+                  f"./multi_agent_trained is complete; load the tokenizer "
+                  f"from the base model.")
 
 
 if __name__ == "__main__":
