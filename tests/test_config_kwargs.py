@@ -245,6 +245,72 @@ def main() -> None:
         print(f"        {rel}:{ln}  {cls}(... {kw}=...) is not accepted by the "
               f"installed library")
 
+    # ---- attributes the libraries have REMOVED ----------------------------
+    # Kwargs are only half of API drift. `trainer.tokenizer` is not a keyword
+    # argument -- it is an attribute read at the end of training, so nothing
+    # above sees it. It crashed a real 2-GPU GRPO run at the SAVE step, after
+    # the model had trained and the adapter was already on disk: the most
+    # expensive possible place to fail.
+    #
+    # The table is validated against the installed library rather than merely
+    # asserted, so it cannot rot into a snapshot. If transformers ever brings
+    # `tokenizer` back, the first check below fails and says so, instead of this
+    # suite quietly policing a rule that no longer exists.
+    print("\n  -- attributes removed by the installed libraries --")
+    from transformers import Trainer as _Trainer
+
+    REMOVED_ATTRS = {"tokenizer": "processing_class"}
+    live_removals = {}
+    for gone, replacement in REMOVED_ATTRS.items():
+        init_params = set(inspect.signature(_Trainer.__init__).parameters)
+        really_gone = not hasattr(_Trainer, gone) and gone not in init_params
+        check(f"Trainer.{gone} really is absent in transformers "
+              f"{transformers.__version__}",
+              really_gone,
+              f"it exists again -- drop {gone!r} from REMOVED_ATTRS rather than "
+              "leaving a check that polices a rule the library no longer has")
+        # The replacement is set on the INSTANCE (self.processing_class = ...),
+        # so it is absent from dir(cls) and must be looked for in __init__.
+        check(f"the replacement Trainer.{replacement} exists",
+              replacement in init_params or hasattr(_Trainer, replacement),
+              f"{replacement!r} is not accepted either; the advice this check "
+              "prints would send someone to a second dead attribute")
+        if really_gone:
+            live_removals[gone] = replacement
+
+    def _is_trainer_ish(node: ast.AST) -> bool:
+        """`trainer`, `self.trainer`, `grpo_trainer` -- but not `self.tokenizer`."""
+        if isinstance(node, ast.Name):
+            return "trainer" in node.id.lower()
+        if isinstance(node, ast.Attribute):
+            return "trainer" in node.attr.lower()
+        return False
+
+    attr_findings = []
+    for path in sorted(REPO.rglob("*.py")):
+        rel = path.relative_to(REPO)
+        if any(p in SKIP_DIRS for p in rel.parts) or rel.parts[0] == "tests":
+            continue
+        try:
+            tree = ast.parse(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Attribute)
+                    and node.attr in live_removals
+                    and _is_trainer_ish(node.value)):
+                attr_findings.append((rel, node.lineno, node.attr,
+                                      live_removals[node.attr]))
+
+    check(f"no removed Trainer attributes in use ({len(attr_findings)} found)",
+          not attr_findings,
+          "; ".join(f"{p}:{ln} .{a} -> use .{r}"
+                    for p, ln, a, r in attr_findings[:6]))
+    for rel, ln, attr, repl in attr_findings:
+        print(f"        {rel}:{ln}  trainer.{attr} was removed — "
+              f"use getattr(trainer, {repl!r}, None), or keep your own "
+              f"reference to the tokenizer you passed in")
+
     print("\n" + bar)
     print(f"  {PASS} passed, {FAIL} failed")
     print(bar)

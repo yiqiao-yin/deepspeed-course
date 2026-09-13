@@ -184,7 +184,9 @@ def format_gsm8k_example(example: dict) -> dict:
 #     save_path = "./grpo-trained-qwen-gsm8k"
 #     logger.info("Saving model and tokenizer to %s", save_path)
 #     trainer.model.save_pretrained(save_path)
-#     trainer.tokenizer.save_pretrained(save_path)
+#     # NB: trainer.tokenizer was removed in transformers 5.x; use
+#     # getattr(trainer, "processing_class", None) as below in main().
+#     trainer.processing_class.save_pretrained(save_path)
 #     logger.info("Model and tokenizer saved.")
 
 def parse_args() -> "argparse.Namespace":
@@ -283,8 +285,34 @@ def main() -> None:
     save_path = "./grpo-trained-qwen-gsm8k-lora"
     logger.info("Saving LoRA adapter and tokenizer to %s", save_path)
     trainer.model.save_pretrained(save_path)
-    trainer.tokenizer.save_pretrained(save_path)
-    logger.info("LoRA adapter and tokenizer saved.")
+
+    # `trainer.tokenizer` no longer exists. transformers renamed it to
+    # `processing_class` -- the generalisation that also covers image and audio
+    # processors -- and 5.x removed the old attribute outright. The interpreter
+    # unhelpfully suggests `_tokenizer`; that is private and will move again.
+    #
+    # Read whichever name the installed version offers, and note that the model
+    # here is passed to GRPOTrainer as a bare string, so TRL builds the
+    # tokenizer internally and there is no local variable to fall back on.
+    tokenizer = (getattr(trainer, "processing_class", None)
+                 or getattr(trainer, "tokenizer", None))
+
+    # Saving the tokenizer is wrapped because training is the expensive part.
+    # This exact call crashed a real 2-GPU run AFTER training had completed and
+    # the adapter was already on disk -- turning a successful, paid-for run into
+    # a red one over a few KB of JSON. A failure here must be a warning.
+    try:
+        if tokenizer is not None:
+            tokenizer.save_pretrained(save_path)
+            logger.info("LoRA adapter and tokenizer saved.")
+        else:
+            logger.warning(
+                "No tokenizer on the trainer, so only the adapter was saved to "
+                "%s. Load the tokenizer from the base model instead.", save_path)
+    except Exception as exc:                      # noqa: BLE001 - never fatal
+        logger.warning(
+            "Could not save the tokenizer (%s). The adapter in %s is complete; "
+            "load the tokenizer from the base model.", exc, save_path)
     logger.info("To use the model, load both the base model and this LoRA adapter.")
 
 
