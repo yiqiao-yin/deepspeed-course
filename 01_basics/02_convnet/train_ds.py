@@ -137,7 +137,7 @@ class CNNModelEnhanced(nn.Module):
 
 
 def get_data_loader(batch_size: int, num_samples: int = 10000,
-                    noise: float = 8.0, seed: int = 42,
+                    noise: float = 2.5, seed: int = 42,
                     task_seed: int = 12345) -> DataLoader:
     """
     Synthetic 28x28 images whose labels are LEARNABLE from the pixels.
@@ -174,13 +174,24 @@ def get_data_loader(batch_size: int, num_samples: int = 10000,
     Args:
         batch_size: Number of samples per batch
         num_samples: Total number of training samples
-        noise: Gaussian noise added to each prototype. The default of 8.0 is
-            CALIBRATED, not guessed: a plain MLP reaches ~82% after one epoch
-            and ~89% after eight, so a single-epoch smoke test visibly clears
-            the 10% chance floor while longer runs still improve. Lower values
-            are trivial -- at 5.0 the task is solved to 99% in one epoch,
-            because 784 dimensions of signal average out a lot of per-pixel
-            noise. Above ~16 it falls back toward chance.
+        noise: Gaussian noise added to each prototype. The default of 2.5 is
+            CALIBRATED against THIS LAB'S CNN, at the batch size and sample
+            count this lab actually runs: ~77% after one epoch and ~98% after
+            ten, so a smoke test clearly succeeds while a real run is still
+            better.
+
+            The previous default of 8.0 was calibrated against a plain MLP, and
+            that was the bug. The two architectures behave oppositely on this
+            data. The signal is a fixed per-class prototype and the noise is
+            i.i.d. per pixel, so an MLP averages 784 weakly-informative
+            dimensions and reaches ~88% in one epoch. A CNN cannot: 3x3 and 5x5
+            kernels see too few pixels to average the noise away, and
+            max-pooling over noisy pixels selects the largest NOISE value.
+            Measured at 8.0, the shipped CNN scored 8.85% -- BELOW the 10%
+            chance floor -- while the MLP scored 88.75% on identical data.
+
+            A model that fits this data trivially is not evidence that the
+            lab's model can. Calibrate against the architecture that ships.
         seed: Draws the noise and the label sequence
         task_seed: Draws the class prototypes -- the task itself
 
@@ -257,10 +268,40 @@ def parse_args() -> "argparse.Namespace":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--epochs", type=int, default=50,
                         help="Training epochs (default: 50).")
-    parser.add_argument("--noise", type=float, default=8.0,
+    parser.add_argument("--noise", type=float, default=2.5,
                         help="Gaussian noise added to each class prototype. "
                              "At 0 the task is nearly trivial; raise it to "
-                             "make the classes overlap.")
+                             "make the classes overlap. Calibrated against THIS "
+                             "lab's CNN (see below) -- 2.5 gives ~77%% after one "
+                             "epoch and ~98%% after ten, so a smoke test clearly "
+                             "succeeds and a real run is still better.")
+    # Why 2.0 and not 8.0, which this shipped with:
+    #
+    # 8.0 was calibrated against a plain MLP, but this lab trains a CNN, and the
+    # two have opposite inductive biases for this data. The signal is a fixed
+    # per-class prototype and the noise is i.i.d. per pixel, so an MLP averages
+    # 784 weakly-informative dimensions and wins easily. A CNN cannot: 3x3
+    # kernels see too few pixels to average the noise away, and max-pooling over
+    # noisy pixels selects the largest NOISE value, actively destroying signal.
+    #
+    # Measured held-out, on the shipped CNNModelEnhanced, at the conditions
+    # this lab actually runs (batch 32 from ds_config.json, 10,000 samples):
+    #
+    #     noise    1 epoch   3 epochs  10 epochs
+    #       8.0      ~9%        ~11%      ~14%     <- chance is 10%
+    #       4.0     15.15%     61.25%    83.20%
+    #       3.0     44.35%     89.25%    92.05%
+    #       2.5     77.25%     95.15%    98.05%    <- calibrated here
+    #       2.0     92.65%     98.35%    99.45%    <- one epoch nearly saturates
+    #
+    # 2.5 is chosen over 2.0 so the one-epoch number still has somewhere to go;
+    # if a smoke test already reads 92% the accuracy stops discriminating and
+    # the run length teaches nothing.
+    #
+    # At the old default the lab's own model sat AT CHANCE, so a full 50-epoch
+    # run reported "Poor" and was right to -- there was nothing reachable.
+    # tests/test_synthetic_data_is_learnable.py now measures with this lab's
+    # CNN rather than a generic MLP, which is why it never caught this.
     parser.add_argument("--max-steps", type=int, default=-1,
                         help="Stop after this many optimizer steps. -1 means "
                              "no cap. Used by the dry-run path; a handful of "
@@ -417,7 +458,16 @@ def main() -> None:
         epoch_grad_norms = []
 
         # Get learning rate for this epoch
-        current_lr = get_lr_schedule(epoch, initial_lr=0.001, warmup_epochs=5, total_epochs=total_epochs)
+        # Warmup must scale with the run, not be fixed at 5. Hardcoded, a
+        # `--epochs 1` smoke test spent its ONLY epoch at 0.001 * 1/5 -- a fifth
+        # of the target rate -- and scored 24% where a full-rate epoch scores
+        # ~77%. The schedule was written for the 50-epoch default and silently
+        # crippled every short run, which is exactly the run Clawdeck offers.
+        # min(5, ...) keeps the 50-epoch behaviour identical to before.
+        warmup_epochs = min(5, max(1, total_epochs // 5))
+        current_lr = get_lr_schedule(epoch, initial_lr=0.001,
+                                     warmup_epochs=warmup_epochs,
+                                     total_epochs=total_epochs)
 
         # Update optimizer learning rate
         for param_group in optimizer.param_groups:

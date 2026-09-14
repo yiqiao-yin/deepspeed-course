@@ -407,9 +407,38 @@ Every other lab in `01_basics` already used learnable synthetic data
 (`y = 2x + 1`, a sum of sines); this one was the exception. It now builds a
 fixed prototype per class plus noise, and the noise default is **calibrated,
 not guessed** — at 5.0 a plain MLP hits 99% in one epoch, because 784
-dimensions of signal average out per-pixel noise; 8.0 gives ~82% at one epoch
-rising to ~89%, so a short run visibly clears chance and longer runs still
-improve.
+dimensions of signal average out per-pixel noise.
+
+**That calibration was done against the wrong model, and it shipped.** The
+numbers came from a plain MLP; the lab trains a **CNN**, and on this data the
+two behave oppositely. The signal is a fixed per-class prototype, the noise is
+i.i.d. per pixel — an MLP averages 784 weakly-informative dimensions and wins,
+while a CNN's small kernels see too few pixels to average anything and
+max-pooling over noisy pixels selects the largest *noise* value. Measured
+held-out at the old default of 8.0:
+
+| model | 1 epoch | 10 epochs |
+|---|---|---|
+| MLP (what the *test* used) | 88.75% | 90.95% |
+| **CNN (what the *lab* ships)** | **8.85%** | 13.70% |
+
+Chance is 10%, so the lab's own model sat **at chance** for months. A full
+50-epoch production run reached 35.19% and reported "Poor" — and was *right* to,
+because nothing better was reachable. The default is now **2.5**, calibrated
+against the shipped CNN at the batch size `ds_config.json` actually uses: ~77%
+at one epoch, ~98% at ten. 2.0 was rejected because one epoch reaches 92.65%,
+and a smoke test that already saturates stops discriminating.
+
+`tests/test_synthetic_data_is_learnable.py` passed throughout, because
+`beats_chance()` built its own small MLP. **A learnability test that measures a
+model no learner runs is the same failure as validating a library version no
+learner installs** — the sibling mistake this file already warned about for
+`test_config_kwargs.py`. It now takes a `model_fn` and the 02_convnet checks
+pass the lab's own `CNNModelEnhanced`, at the lab's batch size and sample count;
+measuring at batch 256 gave ~23 gradient steps per epoch against the lab's ~312
+and under-reported badly. It also asserts that `--noise`'s argparse default and
+`get_data_loader`'s own `noise=` default agree, because they are different
+numbers and the suite reads the second while the lab runs the first.
 
 Two rules follow:
 
