@@ -534,8 +534,17 @@ The script automatically evaluates model quality:
 | **Poor** | <50% | Consider training longer or adjusting hyperparameters |
 
 **Note**: the synthetic data is **learnable** — each class is a fixed 28×28
-prototype plus noise — so accuracy is a real signal. Chance is 10%; a plain MLP
-reaches ~82% after one epoch and ~89% after eight at the default `--noise 8.0`.
+prototype plus noise — so accuracy is a real signal. Chance is 10%; at the
+default `--noise 2.5` **this lab's CNN** reaches ~77% after one epoch and ~98%
+after ten.
+
+Those numbers are measured with the CNN the lab ships, at the batch size in
+`ds_config.json`. That distinction is not pedantry: the default used to be 8.0,
+calibrated against a plain MLP, and at that setting the MLP scored 88.75% while
+the shipped CNN scored **8.85% — below the 10% chance floor**. The signal is a
+fixed per-class prototype and the noise is per-pixel, which an MLP averages
+away across 784 dimensions and a CNN cannot, because small kernels see too few
+pixels and max-pooling over noise selects the largest noise value.
 
 This was not always true. The generator used to draw labels *independently* of
 the images, which put the ceiling at chance and made every run report "Poor" —

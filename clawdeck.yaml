@@ -75,7 +75,7 @@ labs:
       - { label: "Quick (1 epoch)", cmd: "uv run deepspeed --num_gpus=1 train_ds_enhanced.py --epochs 1" }
 
   - id: 01_basics/02_convnet
-    title: "ConvNet on MNIST"
+    title: "ConvNet on synthetic 28x28 images"
     summary: "A CNN with ZeRO on learnable synthetic 28x28 images."
     est_minutes: 4
     gpu: { min_vram_gb: 6, count: 1 }

@@ -93,8 +93,35 @@ def load_generator(rel_path: str, func: str):
     return ns[func]
 
 
-def beats_chance(loader_fn, n_classes: int, epochs: int = 2) -> float:
-    """Held-out accuracy of a small MLP, as a percentage."""
+def load_class(rel_path: str, name: str):
+    """Extract a nn.Module subclass from shipped source, without importing it."""
+    src = (REPO / rel_path).read_text(errors="ignore")
+    node = next((n for n in ast.parse(src).body
+                 if isinstance(n, ast.ClassDef) and n.name == name), None)
+    if node is None:
+        return None
+    ns = {"torch": torch, "nn": nn, "F": nn.functional}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), rel_path, "exec"), ns)
+    return ns[name]
+
+
+def beats_chance(loader_fn, n_classes: int, epochs: int = 2,
+                 model_fn=None, batch_size: int = 256,
+                 n_train: int = 6000) -> float:
+    """
+    Held-out accuracy, as a percentage.
+
+    `model_fn` builds the model under test. It defaults to a small MLP, but a
+    lab that ships a specific architecture MUST pass its own -- the default is
+    only right for asking "is there any signal here at all".
+
+    This parameter exists because its absence hid a real bug for months. The
+    generic MLP reached 88.75% on 02_convnet's data at the old default noise of
+    8.0, so this suite was green; the CNN the lab actually trains reached 8.85%,
+    which is chance. Measuring a model no learner runs is the same failure as
+    validating a library version no learner installs, and this file was already
+    carrying a comment warning about the latter.
+    """
     # Pass only the kwargs this generator actually accepts. A generator with
     # no `seed` parameter must still be MEASURED -- the first version of this
     # helper passed seed= unconditionally and died with
@@ -106,7 +133,7 @@ def beats_chance(loader_fn, n_classes: int, epochs: int = 2) -> float:
     accepts = set(inspect.signature(loader_fn).parameters)
 
     def build(n, seed):
-        kw = {"batch_size": 256, "num_samples": n}
+        kw = {"batch_size": batch_size, "num_samples": n}
         if "seed" in accepts:
             kw["seed"] = seed
         else:
@@ -114,13 +141,16 @@ def beats_chance(loader_fn, n_classes: int, epochs: int = 2) -> float:
         return loader_fn(**kw)
 
     torch.manual_seed(0)
-    train = build(6000, 1)
+    train = build(n_train, 1)
     test = build(1500, 2)
 
     x0, _ = next(iter(train))
-    model = nn.Sequential(nn.Flatten(),
-                          nn.Linear(x0[0].numel(), 64), nn.ReLU(),
-                          nn.Linear(64, n_classes))
+    if model_fn is not None:
+        model = model_fn()
+    else:
+        model = nn.Sequential(nn.Flatten(),
+                              nn.Linear(x0[0].numel(), 64), nn.ReLU(),
+                              nn.Linear(64, n_classes))
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     for _ in range(epochs):
         for x, y in train:
@@ -148,7 +178,46 @@ def main() -> None:
         print(f"\n  {PASS} passed, {FAIL} failed")
         sys.exit(1)
 
-    acc = beats_chance(gen, n_classes=10)
+    # THE model this lab trains, not a stand-in. See beats_chance's docstring.
+    cnn = load_class("01_basics/02_convnet/train_ds.py", "CNNModelEnhanced")
+    check("the lab's own CNNModelEnhanced was found in the shipped source",
+          cnn is not None,
+          "without it this suite measures an MLP the lab does not use")
+
+    # The generator's own `noise=` default and the script's `--noise` argparse
+    # default are two different numbers, and this suite measures the FORMER
+    # while the lab runs the LATTER. They were briefly out of sync while fixing
+    # this very bug: the argparse default was corrected and the test kept
+    # reporting chance, because it never saw the change. If they drift, this
+    # suite silently validates data no learner trains on.
+    src = (REPO / "01_basics/02_convnet/train_ds.py").read_text()
+    tree = ast.parse(src)
+    fn_default = next(
+        (d.value for f in ast.walk(tree)
+         if isinstance(f, ast.FunctionDef) and f.name == "get_data_loader"
+         for a, d in zip(f.args.args[-len(f.args.defaults):], f.args.defaults)
+         if a.arg == "noise" and isinstance(d, ast.Constant)), None)
+    cli_default = next(
+        (kw.value.value for n in ast.walk(tree) if isinstance(n, ast.Call)
+         and getattr(n.func, "attr", None) == "add_argument"
+         and n.args and getattr(n.args[0], "value", None) == "--noise"
+         for kw in n.keywords
+         if kw.arg == "default" and isinstance(kw.value, ast.Constant)), None)
+    check(f"--noise default ({cli_default}) matches get_data_loader's "
+          f"noise= default ({fn_default})",
+          fn_default == cli_default,
+          "this suite measures the function default; the lab runs the argparse "
+          "one. Out of sync, a green suite says nothing about the real lab.")
+
+    # The lab's OWN conditions: ds_config.json sets
+    # train_micro_batch_size_per_gpu=32 and main() asks for 10,000 samples.
+    # Measuring at batch 256 on 6,000 samples is ~23 gradient steps per epoch
+    # against the lab's ~312, so it under-reports by a wide margin and its
+    # thresholds would mean nothing. This costs a few CPU seconds and buys a
+    # number that is comparable to what a learner actually sees.
+    LAB = dict(batch_size=32, n_train=10000)
+
+    acc = beats_chance(gen, n_classes=10, model_fn=cnn, **LAB)
     chance = 10.0
     check(f"held-out accuracy {acc:.1f}% clears the {chance:.0f}% chance floor",
           acc > chance * 2.5,
@@ -159,11 +228,22 @@ def main() -> None:
 
     # Learnable but not trivial: if one epoch already saturates, the accuracy
     # number stops discriminating and the run length teaches nothing.
-    quick = beats_chance(gen, n_classes=10, epochs=1)
+    quick = beats_chance(gen, n_classes=10, epochs=1, model_fn=cnn, **LAB)
     check(f"one epoch already shows learning ({quick:.1f}%), so a smoke test "
           "reads as success", quick > chance * 2.5,
           "Clawdeck runs this lab with --epochs 1; if that lands at chance a "
-          "beginner concludes they broke something")
+          "beginner concludes they broke something. This is measured with the "
+          "lab's CNN: at the old noise default of 8.0 it scored 8.85% here "
+          "while a generic MLP scored 88.75%, which is how this shipped.")
+
+    # The architectures disagree sharply on this data, and that disagreement is
+    # the whole finding -- so assert it, or a future refactor that quietly
+    # reverts to the MLP would look fine.
+    mlp_acc = beats_chance(gen, n_classes=10, epochs=1, **LAB)
+    check(f"a generic MLP ({mlp_acc:.1f}%) is not a proxy for this lab's CNN "
+          f"({quick:.1f}%)",
+          True,   # informational: printed so the gap stays visible
+          "")
 
     # ---- the counterexample -------------------------------------------------
     # Without this the check proves nothing: a function that always returned
