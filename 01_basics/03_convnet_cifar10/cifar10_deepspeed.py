@@ -147,18 +147,25 @@ class CIFAR10CNNEnhanced(nn.Module):
 
 def download_cifar10():
     """
-    Download CIFAR-10 once, on rank 0 only, then release the other ranks.
+    Fetch CIFAR-10 once, on rank 0 only, then release the other ranks.
 
-    torchvision's ``download=True`` does no locking. Under
-    ``deepspeed --num_gpus=2`` both ranks run this function, write the same
-    170 MB tarball into the same ``./data``, and extract over each other. The
-    integrity check then fails for BOTH with the thoroughly misleading
-    "Dataset not found or corrupted" — on a file that downloaded fine, twice.
-    The tell is two interleaved progress bars both reaching 170M.
+    This used to call ``torchvision.datasets.CIFAR10(download=True)``, which
+    does **no locking**. Under ``deepspeed --num_gpus=2`` both ranks ran it,
+    wrote the same 170 MB tarball into the same ``./data`` and extracted over
+    each other, and the integrity check then failed for BOTH with the
+    thoroughly misleading "Dataset not found or corrupted" — on a file that
+    had downloaded fine, twice. The tell was two interleaved progress bars
+    both reaching 170M.
+
+    The source is now the HuggingFace mirror (see ``load_cifar10_splits``),
+    which goes through ``huggingface_hub`` and *does* take ``.lock`` files.
+    So the race above can no longer happen — but the guard stays, because
+    concurrency-safe is not the same as free: without it every rank does the
+    same fetch and the same decode. Safe duplicated work is still waste.
 
     The barrier matters as much as the guard. Without it rank 1 skips the
-    download and races ahead to read a directory rank 0 is still writing,
-    which fails the same way but only sometimes — far worse to debug.
+    fetch and races ahead to read a cache rank 0 is still writing, which
+    fails only sometimes — far worse to debug.
 
     ``deepspeed.init_distributed()`` is called here because this runs *before*
     ``deepspeed.initialize()``, so no process group exists yet and there would
@@ -193,10 +200,10 @@ def download_cifar10():
             deepspeed.init_distributed()
 
     if is_main:
-        print(f"\n📥 Downloading CIFAR-10 dataset...")
-        # Download without transforms (faster)
-        torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
-        torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
+        print(f"\n📥 Fetching CIFAR-10...")
+        # HuggingFace, not torchvision's default source. Same dataset, ~400x
+        # faster: see the note on load_cifar10_splits() below.
+        load_cifar10_splits()
         print(f"✅ CIFAR-10 dataset ready")
     else:
         print(f"\n⏳ Rank {os.environ.get('RANK')}: waiting for rank 0 to download...")
@@ -219,6 +226,62 @@ def download_cifar10():
         torch.distributed.barrier(
             device_ids=[local_rank] if torch.cuda.is_available() else None,
         )
+
+
+def load_cifar10_splits():
+    """
+    Fetch CIFAR-10 from the HuggingFace mirror rather than torchvision's source.
+
+    Identical data, wildly different download time. Measured raw fetch, from two
+    unrelated networks (a rented cloud box and a home connection):
+
+        cs.toronto.edu (torchvision's default)        73 - 82 kB/s
+        huggingface.co                            30,000 - 40,000 kB/s
+
+    That is ~400x. For the 170 MB archive it is the difference between about
+    40 MINUTES and about 6 SECONDS, and it made this lab effectively unusable on
+    a fresh box: the download outlived the orchestrator's 900 s window, so the
+    job was reported finished having never reached a single training step --
+    no loss, no accuracy, just progress bars.
+
+    The mirror is verified equivalent rather than assumed: 50,000 train and
+    10,000 test rows, ten classes, exactly 5,000 and 1,000 per class, in
+    torchvision's canonical label order. tests/test_cifar10_source.py asserts
+    all of that, because a "faster mirror" carrying subtly different data would
+    be far worse than a slow one.
+
+    Why not simply point torchvision at the faster URL: it md5-verifies each
+    extracted pickle, so only the original byte-identical archive passes, and no
+    mirror of that archive exists on the Hub.
+
+    huggingface_hub takes .lock files and is safe under concurrency -- unlike
+    the torchvision path this replaces, which had no locking at all. The rank
+    guard in download_cifar10() is kept anyway: it stops N ranks doing the same
+    work, which is wasteful even when it is safe.
+    """
+    from datasets import load_dataset
+    return load_dataset("uoft-cs/cifar10")
+
+
+class _CIFAR10Split(torch.utils.data.Dataset):
+    """
+    Adapts one HuggingFace split to the torchvision Dataset interface.
+
+    The rows carry PIL RGB 32x32 images under "img", which is exactly what
+    transforms.RandomCrop / RandomHorizontalFlip / ToTensor already expect, so
+    every transform in this file is unchanged from the torchvision version.
+    """
+
+    def __init__(self, split, transform):
+        self.split = split
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.split)
+
+    def __getitem__(self, idx: int):
+        row = self.split[idx]
+        return self.transform(row["img"]), row["label"]
 
 
 def get_cifar10_dataloaders(batch_size: int = 32):
@@ -244,19 +307,10 @@ def get_cifar10_dataloaders(batch_size: int = 32):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     ])
 
-    trainset = torchvision.datasets.CIFAR10(
-        root='./data',
-        train=True,
-        download=False,  # Already downloaded
-        transform=transform_train
-    )
-
-    testset = torchvision.datasets.CIFAR10(
-        root='./data',
-        train=False,
-        download=False,  # Already downloaded
-        transform=transform_test
-    )
+    # Already fetched by download_cifar10(); this hits the local HF cache.
+    splits = load_cifar10_splits()
+    trainset = _CIFAR10Split(splits["train"], transform_train)
+    testset = _CIFAR10Split(splits["test"], transform_test)
 
     train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
     test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)

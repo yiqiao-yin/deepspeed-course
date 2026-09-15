@@ -229,6 +229,12 @@ def main() -> None:
     # Learnable but not trivial: if one epoch already saturates, the accuracy
     # number stops discriminating and the run length teaches nothing.
     quick = beats_chance(gen, n_classes=10, epochs=1, model_fn=cnn, **LAB)
+    # This harness is not the lab: it uses a constant LR and fp32, where the
+    # lab warms up and may use fp16, so its number runs HIGH. The threshold is
+    # deliberately far below any measured value (25% against 48-92% observed
+    # across three setups) -- the claim is "signal exists", not a reproduction
+    # of the lab's score. Pinning a tight number here would fail on hardware
+    # whose optimizer backend differs.
     check(f"one epoch already shows learning ({quick:.1f}%), so a smoke test "
           "reads as success", quick > chance * 2.5,
           "Clawdeck runs this lab with --epochs 1; if that lands at chance a "

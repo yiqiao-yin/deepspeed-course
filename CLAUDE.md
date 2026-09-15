@@ -234,7 +234,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 28 suites, no GPU, no downloads
+./tests/run_all.sh              # all 29 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -481,6 +481,46 @@ report.
 `tests/test_torch_index_pins.py` guards it by reading the **lock**, not the
 pyproject — the resolution rather than the declaration — so a lock regenerated
 against a different index fails even while `pyproject.toml` still looks right.
+
+### A slow data source can make a lab unrunnable, and it looks like success
+
+`01_basics/03_convnet_cifar10` fetched CIFAR-10 through
+`torchvision.datasets.CIFAR10(download=True)`, i.e. from `cs.toronto.edu`.
+Measured raw fetch from two unrelated networks — a rented cloud box and a home
+connection:
+
+| source | speed | 170 MB takes |
+|---|---|---|
+| `cs.toronto.edu` | 73–82 kB/s | **~40 minutes** |
+| `huggingface.co` | 30–40 MB/s | **~6 seconds** |
+
+~400×. The lab was **unusable on a cold box**: the download outlived the
+orchestrator's 900 s window, so the job was reported *finished* having never
+reached a single training step — no loss, no accuracy, no verdict, just
+progress bars. A lab that cannot finish is worse than one that fails, because
+it fails silently.
+
+It now loads from the HuggingFace mirror. Three things worth keeping in mind:
+
+- **Capping steps does not cap the download.** `--max-steps 20` already trains
+  on ~1,280 of 50,000 images, but `torchvision` fetches the entire archive
+  before it can read one image. You cannot subset an archive fetch; only
+  changing the *source* helps.
+- **You cannot just point torchvision at a faster URL.** It md5-verifies each
+  extracted pickle, so only the original byte-identical archive passes, and no
+  mirror of that archive exists on the Hub. The dataset has to be loaded
+  differently, not merely fetched from elsewhere.
+- **A mirror is a trust decision, so assert it.** Data that is *nearly*
+  CIFAR-10 — a different split boundary, a subset, permuted label indices —
+  trains fine and quietly produces numbers comparable to nothing.
+  `tests/test_cifar10_source.py` checks 50,000/10,000 rows, exactly 5,000 and
+  1,000 per class, RGB 32×32, and torchvision's canonical **label order**. That
+  last one matters most: the same images under permuted indices score
+  identically and caption every prediction wrong.
+
+`huggingface_hub` takes `.lock` files, so the rank-guard race below can no
+longer happen here — but the guard stays, because concurrency-safe is not free.
+Without it every rank does the same fetch and decode.
 
 ### Only rank 0 downloads, and the others must wait on a barrier
 

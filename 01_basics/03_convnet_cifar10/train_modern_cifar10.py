@@ -136,7 +136,10 @@ def parse_args() -> "argparse.Namespace":
     p.add_argument("--tta", default="mirror", choices=["none", "mirror"],
                    help="Test-time augmentation. 'mirror' averages the logits "
                         "of each test image and its horizontal flip.")
-    p.add_argument("--data-dir", default="./data")
+    # No --data-dir: the data now comes from the HuggingFace cache, not a
+    # directory this script manages. Point HF_HOME or HF_DATASETS_CACHE
+    # somewhere else if you need to relocate it. A flag that silently did
+    # nothing would be worse than no flag.
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--deepspeed", default="ds_config_modern.json")
     p.add_argument("--local_rank", type=int, default=-1,
@@ -199,11 +202,16 @@ def main() -> None:
     std = torch.tensor([0.2470, 0.2435, 0.2616]).view(1, 3, 1, 1)
 
     def as_tensors(train: bool):
-        ds = torchvision.datasets.CIFAR10(
-            root=args.data_dir, train=train, download=is_main,
-            transform=transforms.ToTensor())
-        loader = torch.utils.data.DataLoader(ds, batch_size=len(ds), shuffle=False)
-        images, labels = next(iter(loader))
+        # HuggingFace rather than torchvision's default source: identical data,
+        # ~400x faster to fetch (73-82 kB/s vs 30-40 MB/s measured from two
+        # unrelated networks), which is 40 minutes against 6 seconds for the
+        # 170 MB archive. cifar10_deepspeed.py in this folder carries the full
+        # note; tests/test_cifar10_source.py asserts the mirror is equivalent.
+        from datasets import load_dataset
+        split = load_dataset("uoft-cs/cifar10")["train" if train else "test"]
+        to_tensor = transforms.ToTensor()
+        images = torch.stack([to_tensor(r["img"]) for r in split])
+        labels = torch.tensor(split["label"], dtype=torch.long)
         return images, labels
 
     # Bind this rank to its own GPU BEFORE any collective is issued. NCCL's

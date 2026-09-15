@@ -176,9 +176,15 @@ def get_data_loader(batch_size: int, num_samples: int = 10000,
         num_samples: Total number of training samples
         noise: Gaussian noise added to each prototype. The default of 2.5 is
             CALIBRATED against THIS LAB'S CNN, at the batch size and sample
-            count this lab actually runs: ~77% after one epoch and ~98% after
-            ten, so a smoke test clearly succeeds while a real run is still
-            better.
+            count this lab actually runs. End to end it lands around 48-61%
+            after one epoch and 100% after the full fifty, so a smoke test
+            clearly succeeds while a real run is still better.
+
+            The one-epoch figure is a RANGE because it depends on the optimizer
+            backend: two machines measured 61.2% and 48.4% on the same commit,
+            fused Adam with fp16 against torch Adam without. Both converge by
+            fifty epochs. Treat "well clear of chance" as the property, not a
+            number -- a test pinned to 61% would fail on half the hardware.
 
             The previous default of 8.0 was calibrated against a plain MLP, and
             that was the bug. The two architectures behave oppositely on this
