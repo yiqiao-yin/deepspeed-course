@@ -115,6 +115,9 @@ jobs:
       - name: Multi-GPU labs rank-guard their downloads
         run: uv run tests/test_multigpu_download_guard.py
 
+      - name: The CIFAR-10 mirror really is CIFAR-10
+        run: uv run tests/test_cifar10_source.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

@@ -47,6 +47,7 @@ TESTS=(
     tests/test_synthetic_data_is_learnable.py
     tests/test_mla.py
     tests/test_multigpu_download_guard.py
+    tests/test_cifar10_source.py
 )
 
 for test in "${TESTS[@]}"; do

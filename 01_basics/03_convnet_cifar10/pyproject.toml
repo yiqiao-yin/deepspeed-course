@@ -23,7 +23,12 @@ requires-python = ">=3.10"
 dependencies = [
     "deepspeed>=0.14",
     "torch>=2.2",
+    # torchvision is still used for transforms (RandomCrop, ToTensor, ...).
+    # It is NOT used to fetch the data any more -- see load_cifar10_splits().
     "torchvision>=0.17",
+    # CIFAR-10 now comes from the HuggingFace mirror: ~400x faster to fetch
+    # than torchvision's default source, and it locks under concurrency.
+    "datasets>=2.19",
 ]
 
 [project.optional-dependencies]

@@ -535,8 +535,15 @@ The script automatically evaluates model quality:
 
 **Note**: the synthetic data is **learnable** — each class is a fixed 28×28
 prototype plus noise — so accuracy is a real signal. Chance is 10%; at the
-default `--noise 2.5` **this lab's CNN** reaches ~77% after one epoch and ~98%
-after ten.
+default `--noise 2.5` **this lab's CNN** reaches roughly **48-61% after one
+epoch** and ~98-100% after a full run.
+
+That one-epoch figure is a range on purpose. Two machines measured 61.2% and
+48.4% on the same commit, and the difference is the optimizer backend and
+precision: DeepSpeed's fused Adam with fp16 versus torch's Adam with fp16 off,
+which is what you get on a box with no CUDA toolkit. By fifty epochs both
+converge to 100%. **The durable property is "well clear of the 10% chance
+floor", not any particular number**, so do not pin a regression test to one.
 
 Those numbers are measured with the CNN the lab ships, at the batch size in
 `ds_config.json`. That distinction is not pedantry: the default used to be 8.0,
