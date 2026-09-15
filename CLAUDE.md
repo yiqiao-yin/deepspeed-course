@@ -425,9 +425,28 @@ held-out at the old default of 8.0:
 Chance is 10%, so the lab's own model sat **at chance** for months. A full
 50-epoch production run reached 35.19% and reported "Poor" — and was *right* to,
 because nothing better was reachable. The default is now **2.5**, calibrated
-against the shipped CNN at the batch size `ds_config.json` actually uses: ~77%
-at one epoch, ~98% at ten. 2.0 was rejected because one epoch reaches 92.65%,
-and a smoke test that already saturates stops discriminating.
+against the shipped CNN at the batch size `ds_config.json` actually uses. 2.0
+was rejected because one epoch reaches 92.65%, and a smoke test that already
+saturates stops discriminating.
+
+**Then the replacement number was wrong too, in the same way.** "~77% at one
+epoch" was published here from a *clean-room* harness — plain torch, constant
+LR, fp32 — not from the lab. Measured end to end, two machines got **61.2%**
+and **48.4%** on the same commit: DeepSpeed's fused Adam with fp16 against
+torch's Adam without. Both reach ~100% by fifty epochs.
+
+So the docs now give a **range**, and say that the durable property is *"well
+clear of the 10% chance floor"* rather than any particular number.
+`tests/test_synthetic_data_is_learnable.py` keeps a deliberately loose `>25%`
+threshold and explains why it is loose — a test pinned to 61% would fail on
+half the hardware, and tightening it would trade a real property for a fragile
+one.
+
+**Measure the thing that ships, in the way it ships.** The first version of this
+bug used the wrong *model*; the second used the right model with the wrong
+*optimizer and precision*. Both produced a confident number that no learner
+would ever see, and a published number a reader cannot reproduce costs them a
+day deciding their own correct setup is broken.
 
 `tests/test_synthetic_data_is_learnable.py` passed throughout, because
 `beats_chance()` built its own small MLP. **A learnability test that measures a
@@ -439,6 +458,17 @@ measuring at batch 256 gave ~23 gradient steps per epoch against the lab's ~312
 and under-reported badly. It also asserts that `--noise`'s argparse default and
 `get_data_loader`'s own `noise=` default agree, because they are different
 numbers and the suite reads the second while the lab runs the first.
+
+**A second defect surfaced only by running the lab end to end**, and no static
+check would have found it: `warmup_epochs` was hardcoded to `5` at the call site
+while `total_epochs` was passed through. A `--epochs 1` run therefore spent its
+*only* epoch at `0.001 x 1/5` — a fifth of the target rate. The schedule was
+written for the 50-epoch default and silently crippled every short run, which is
+precisely the run the manifest offers. Measured at one epoch: **24.32% before,
+61.21% after**. Warmup now scales as `min(5, max(1, total_epochs // 5))`, which
+leaves the 50-epoch schedule identical. **Any hyperparameter expressed in epochs
+is a bug waiting for a short run** — check `--max-steps` and low `--epochs`
+paths against every schedule, not just the default.
 
 Two rules follow:
 
