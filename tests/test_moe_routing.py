@@ -51,6 +51,7 @@ The four properties, and what breaks if each is wrong
    would notice.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -76,6 +77,60 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         if detail:
             for line in detail.splitlines():
                 print(f"          {line}")
+
+
+
+def _rank_worker(rank: int, world: int, port: int, q) -> None:
+    """One rank: train a few steps, report its bias buffer and local counts."""
+    import torch
+    import torch.distributed as dist
+    import torch.nn.functional as F
+
+    os.environ.update({"RANK": str(rank), "LOCAL_RANK": str(rank),
+                       "WORLD_SIZE": str(world), "MASTER_ADDR": "127.0.0.1",
+                       "MASTER_PORT": str(port)})
+    dist.init_process_group("gloo", rank=rank, world_size=world)
+
+    torch.manual_seed(0)                      # identical init on every rank
+    cfg = MoEConfig(n_routed=16)
+    layer = MoELayer(cfg, balance="bias")
+    opt = torch.optim.AdamW(layer.parameters(), lr=3e-3)
+
+    # DIFFERENT data per rank on purpose: local counts must diverge, so that
+    # identical biases can only come from the all-reduce.
+    x, y, _ = synthetic_groups(2048, cfg, n_groups=4, seed=100 + rank)
+    for step in range(20):
+        lo = (step * 128) % (x.shape[0] - 128)
+        loss = F.mse_loss(layer(x[lo:lo + 128].unsqueeze(0)).squeeze(0),
+                          y[lo:lo + 128])
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        layer.update_bias()
+
+    q.put({"rank": rank, "bias": layer.bias.tolist(),
+           "counts": layer.last_counts.tolist()})
+    dist.destroy_process_group()
+
+
+def _run_two_ranks():
+    """Two processes on a gloo group. Returns (rank0, rank1) or None."""
+    import multiprocessing as mp
+    try:
+        ctx = mp.get_context("spawn")
+        q = ctx.Queue()
+        procs = [ctx.Process(target=_rank_worker, args=(r, 2, 29622, q))
+                 for r in range(2)]
+        for pr in procs:
+            pr.start()
+        for pr in procs:
+            pr.join(240)
+        if any(pr.exitcode not in (0, None) for pr in procs) or q.empty():
+            return None
+        out = sorted([q.get() for _ in procs], key=lambda r: r["rank"])
+        return (out[0], out[1]) if len(out) == 2 else None
+    except Exception:                          # noqa: BLE001
+        return None
 
 
 def main() -> None:
@@ -279,6 +334,36 @@ def main() -> None:
           p64["total"] > 3 * p16["total"],
           "4x the experts should be ~4x the parameters; that is the capacity "
           "MoE is buying.")
+
+    # ---- the bias must be IDENTICAL across ranks --------------------------
+    # Verified by actually running two processes on a real (gloo, CPU) process
+    # group against the shipped source. `bias` is a BUFFER, so no optimizer and
+    # no ZeRO stage synchronises it: without the all-reduce in update_bias()
+    # every rank nudges a private copy from its own local token counts and the
+    # ranks silently drift to different routers. Nothing raises; the loss curve
+    # looks normal. This does NOT cover NCCL device binding -- that needs two
+    # real CUDA devices -- but it does cover the control flow, which is what
+    # the all-reduce changed.
+    print("\n  -- the bias buffer stays in sync across ranks (2 procs, gloo) --")
+    ranks = _run_two_ranks()
+    if ranks is None:
+        print("  SKIP  could not start a gloo process group in this "
+              "environment")
+    else:
+        r0, r1 = ranks
+        check("local token counts DIFFER between ranks "
+              "(so the next check is not vacuous)",
+              r0["counts"] != r1["counts"],
+              "both ranks saw identical data, so an unsynced bias would ALSO "
+              "match and this section would prove nothing")
+        delta = max(abs(a - b) for a, b in zip(r0["bias"], r1["bias"]))
+        check(f"bias buffers are bit-identical across ranks "
+              f"(max delta {delta:.2e})",
+              delta == 0.0,
+              "update_bias() is not all-reducing its counts. Each rank is "
+              "steering its own private router. DeepSeek-V3 measures load 'on "
+              "the whole batch of each training step' -- across ranks, not "
+              "within one.")
 
     print("\n" + bar)
     print(f"  {PASS} passed, {FAIL} failed")
