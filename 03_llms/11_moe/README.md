@@ -34,9 +34,11 @@ it." Measured on CPU over 300 steps — numbers you can reproduce with
 12 experts receive nothing at all — paid for, never trained. At 16 experts
 nothing dies, but one expert still handles 264× the traffic of another.
 
-**Balancing is a tax, not an improvement.** Read the loss column: balancing
-makes the model *worse* in every configuration, and specialisation drops with
-it. That is not a defect in this implementation — it is the trade DeepSeek-V3
+**Balancing is a tax, not an improvement — at world size 1.** Read the loss
+column: balancing makes the model *worse* in every configuration measured here,
+and specialisation drops with it. That scope is load-bearing: **a 2-GPU run
+reported the opposite**, with `--balance none` 33× worse and diverging. See
+_[An unresolved disagreement](#an-unresolved-disagreement)_ below. That is not a defect in this implementation — it is the trade DeepSeek-V3
 names explicitly, and the reason they went looking for a cheaper mechanism:
 
 > "However, too large an auxiliary loss will impair the model performance."
@@ -53,6 +55,32 @@ course.** The balancing mechanism is not there to make the model better. It is
 there to make the model *schedulable*.
 
 ---
+
+## An unresolved disagreement
+
+Everything in the table above was measured **single-process, at world size 1**.
+A 2 × RTX 3090 run of `train_moe_ds.py` under DeepSpeed reported the reverse:
+
+| world size 2, NCCL, 500 steps, one run each | eval loss |
+|---|---:|
+| `--balance bias` | 0.024 |
+| `--balance none` | **0.795** — and *rising* through training (0.515 → 0.827) |
+
+A rising loss is divergence, not poor specialisation, so this is a different
+phenomenon rather than a louder version of the same one.
+
+- At world size 1 the table holds across **six seeds**, no overlap between the
+  groups (none 0.138–0.206, bias 0.246–0.315). Not seed luck.
+- Reproducing it on **two gloo ranks on CPU**, with gradients all-reduced as
+  data parallelism does, did **not** reverse the ordering (none 0.0044 vs bias
+  0.0170). Plain data parallelism does not explain it.
+- The 2-GPU observation is **one run per arm**.
+
+The ordering is established at world size 1 and **unresolved above it**. If the
+reversal holds under repetition, it is a stronger version of this topic's
+thesis — balancing would be a requirement for convergence once experts span
+ranks, not merely a tax paid for schedulability — and this folder will be
+rewritten around it.
 
 ## Hardware
 

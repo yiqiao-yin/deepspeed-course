@@ -320,57 +320,87 @@ def main() -> None:
         if stopped_early:
             break
 
-    if not is_main:
-        return
-
-    print(f"\n{bar}")
-    print("  Result")
-    print(bar)
-
+    # EVERY rank runs the eval forward. Only rank 0 PRINTS it.
+    #
+    # This used to `return` early on non-zero ranks, which is fine for a layer
+    # that does no communicating and fatal for one that does. Under
+    # --expert-parallel the forward below is an ALL-TO-ALL: it needs every rank
+    # present. With the others already gone, the remaining rank sat in a
+    # collective until NCCL's watchdog aborted it -- about eleven minutes of
+    # silence after a training run that had completed perfectly, then a
+    # SIGABRT and a non-zero exit. Verified on two independent 2-GPU boxes.
+    #
+    # The failure is worse than a crash because the training SUCCEEDS first: a
+    # learner watches 500 steps of falling loss, then eleven minutes of
+    # nothing, then "failed". Guard the PRINTING, never the COLLECTIVE.
     xe, ye, ge = synthetic_groups(2048, cfg, n_groups=args.groups, seed=9999)
     xe, ye = xe.to(device), ye.to(device)
     model_engine.eval()
     with torch.no_grad():
         eval_loss = float(F.mse_loss(
             model_engine(xe.unsqueeze(0)).squeeze(0), ye))
-    print(f"  eval loss           {eval_loss:.4f}")
 
-    if args.expert_parallel:
-        # DeepSpeed's gate keeps its own statistics and does not expose this
-        # module's counters. Saying so beats printing a zero and implying the
-        # router was perfectly balanced.
-        print("  expert utilisation  not reported under --expert-parallel:")
-        print("                      DeepSpeed's gate owns the counters, not")
-        print("                      this script. Use the default path (or")
-        print("                      `uv run moe.py`) to see utilisation.")
-    else:
-        blk = model_engine.module.blocks[0]
-        m = blk.balance_metrics()
-        purity = routing_purity(blk, xe, ge.to(device), args.groups)
-        mm = "inf" if m["maxmin"] == float("inf") else f"{m['maxmin']:.1f}"
-        print(f"  balance strategy    {args.balance}")
-        print(f"  entropy             {m['entropy']:.3f}   (1.0 = uniform)")
-        print(f"  max/min load        {mm}")
-        print(f"  dead experts        {m['dead']} of {args.experts}")
-        print(f"  routing purity      {purity:.3f}   (task structure recovered)")
+    if is_main:
+        print(f"\n{bar}")
+        print("  Result")
+        print(bar)
+        print(f"  eval loss           {eval_loss:.4f}")
 
-    # A capped run must not be reported as a failure. This is the path the lab
-    # manifest offers by name, and a beginner who sees a bad number under a
-    # success banner concludes they broke something.
-    if stopped_early or args.epochs <= 2:
-        cap = (f"--max-steps {args.max_steps}" if stopped_early
-               else f"{args.epochs} epoch(s)")
-        print(f"\n  NOTE: this run was capped at {cap}. That is a PIPELINE")
-        print(f"  smoke test -- success means DeepSpeed launched, every rank")
-        print(f"  ran, and the loss moved. The routing numbers above need a")
-        print(f"  full run to mean anything. Drop --max-steps for that.")
+        if args.expert_parallel:
+            # DeepSpeed's gate keeps its own statistics and does not expose this
+            # module's counters. Saying so beats printing a zero and implying the
+            # router was perfectly balanced.
+            print("  expert utilisation  not reported under --expert-parallel:")
+            print("                      DeepSpeed's gate owns the counters, not")
+            print("                      this script. Use the default path (or")
+            print("                      `uv run moe.py`) to see utilisation.")
+        else:
+            blk = model_engine.module.blocks[0]
+            m = blk.balance_metrics()
+            purity = routing_purity(blk, xe, ge.to(device), args.groups)
+            mm = "inf" if m["maxmin"] == float("inf") else f"{m['maxmin']:.1f}"
+            print(f"  balance strategy    {args.balance}")
+            print(f"  entropy             {m['entropy']:.3f}   (1.0 = uniform)")
+            print(f"  max/min load        {mm}")
+            print(f"  dead experts        {m['dead']} of {args.experts}")
+            print(f"  routing purity      {purity:.3f}   (task structure recovered)")
 
-    print(f"\n  What to compare: run --balance none against --balance bias.")
-    print(f"  Balancing makes the LOSS WORSE and the load EVEN. That trade is")
-    print(f"  the entire topic -- see the measured table in moe.py.")
-    print(bar)
+        # A capped run must not be reported as a failure. This is the path the lab
+        # manifest offers by name, and a beginner who sees a bad number under a
+        # success banner concludes they broke something.
+        if stopped_early or args.epochs <= 2:
+            cap = (f"--max-steps {args.max_steps}" if stopped_early
+                   else f"{args.epochs} epoch(s)")
+            print(f"\n  NOTE: this run was capped at {cap}. That is a PIPELINE")
+            print(f"  smoke test -- success means DeepSpeed launched, every rank")
+            print(f"  ran, and the loss moved. The routing numbers above need a")
+            print(f"  full run to mean anything. Drop --max-steps for that.")
 
-    if use_wandb:
+        print(f"\n  What to compare: run --balance none against --balance bias.")
+        print(f"  Balancing makes the LOSS WORSE and the load EVEN. That trade is")
+        print(f"  the entire topic -- see the measured table in moe.py.")
+        print(bar)
+
+
+    # Tear down on EVERY rank, together. Without the barrier a fast rank can
+    # exit while a slow one is still inside a collective, which is the same
+    # class of bug as the early `return` above -- just at shutdown instead of
+    # at eval. destroy_process_group() also stops torch warning that the group
+    # was never cleaned up.
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        # device_ids is explicit even though deepspeed.initialize() has already
+        # bound this rank's device. NCCL implements barrier() as an all-reduce
+        # of a one-element tensor and must choose somewhere to put it; with
+        # nothing passed it falls back to "the current device", which is cuda:0
+        # on EVERY rank if anything upstream failed to bind. That is a 10-minute
+        # watchdog hang for a line that costs nothing to write explicitly --
+        # and tests/test_multigpu_download_guard.py flags the implicit form,
+        # having been written after exactly that hang in 03_convnet_cifar10.
+        torch.distributed.barrier(
+            device_ids=[local_rank] if torch.cuda.is_available() else None)
+        torch.distributed.destroy_process_group()
+
+    if is_main and use_wandb:
         wandb.finish()
 
 
