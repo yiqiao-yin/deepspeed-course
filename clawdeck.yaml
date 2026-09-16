@@ -243,6 +243,20 @@ labs:
   # ---------------------------------------------------------------------------
   # 04_video_text — every frontier technique here is a memory technique
   # ---------------------------------------------------------------------------
+  - id: 03_llms/11_moe
+    title: "Mixture of Experts"
+    summary: "Routing, load balancing, and why balancing makes the model worse."
+    est_minutes: 12
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      # No --num_gpus, and that is correct: moe.py is pure PyTorch on CPU and
+      # needs no GPU at all, so Clawdeck may advertise it as "Runs now".
+      - { label: "The routing comparison (CPU)", cmd: "uv run moe.py" }
+      - { label: "Train (balanced router)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --balance bias", primary: true }
+      - { label: "Train (NO balancing)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --balance none" }
+      - { label: "Expert parallelism (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --expert-parallel --deepspeed_config ds_config_ep.json" }
+      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --max-steps 20" }
+
   - id: 04_video_text/01_hf_baseline
     title: "Video-text baseline"
     summary: "LLaVA-style video trainer; the reference point for 02-05."

@@ -1,0 +1,23 @@
+{
+  "_comment": "Expert-parallel path, for --expert-parallel with --num_gpus >= 2. Identical to ds_config.json except for the ZeRO stage, so a diff between the two files shows exactly what expert parallelism changes -- which is the point of shipping two files instead of one with a flag.",
+
+  "train_micro_batch_size_per_gpu": 256,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 3e-3, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "Same reasoning as ds_config.json: fp32, because the numbers being compared are small loss differences and the router is a sigmoid over small logits.",
+  "fp16": { "enabled": false },
+  "bf16": { "enabled": false },
+
+  "_zero_comment": "Stage 1, NOT stage 2 or 3, and this is the one setting a reader should not casually raise. Under expert parallelism the expert parameters are already partitioned across ranks by a DIFFERENT mechanism, and each expert's gradients are reduced only within its own expert-parallel group rather than across the whole world. ZeRO's higher stages partition gradients and parameters across the FULL data-parallel group, which overlaps with that partitioning in ways that need DeepSpeed's MoE-aware parameter groups to get right. Stage 1 shards optimizer state only and composes cleanly.",
+  "zero_optimization": { "stage": 1 },
+
+  "steps_per_print": 50,
+  "wall_clock_breakdown": false
+}

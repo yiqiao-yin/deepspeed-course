@@ -1,0 +1,45 @@
+# =============================================================================
+# 03_llms/11_moe as a self-contained uv project.
+#
+#     cd 03_llms/11_moe
+#     uv sync                    # creates .venv, installs the LOCKED versions
+#     uv run moe.py                                   # CPU, no GPU needed
+#     uv run deepspeed --num_gpus=1 train_moe_ds.py   # the DeepSpeed path
+#
+# The committed uv.lock is required (CONTRIBUTING.md section 4): it is what
+# makes every reader install the same versions. torch is pinned to an explicit
+# CUDA index (cu128) below -- PyPI's DEFAULT torch is a CUDA 13 wheel, which
+# installs fine on a pre-CUDA-13 driver (550/570) and then reports
+# cuda.is_available() == False, silently, while nvidia-smi shows the card.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-03-llms-11-moe"
+version = "0.1.0"
+description = "Mixture of Experts: routing, load balancing, expert parallelism"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.2",
+    "deepspeed>=0.14",
+]
+
+[project.optional-dependencies]
+# W&B stays OPTIONAL: train_moe_ds.py wraps `import wandb` in try/except and
+# only tracks when WANDB_API_KEY is set. Making it required contradicts the code.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Runnable example, not a distributable library. Without this uv tries to BUILD
+# the folder as a package and `uv sync` fails.
+package = false
+
+# Pin the CUDA build rather than inheriting PyPI's default -- see the header.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
