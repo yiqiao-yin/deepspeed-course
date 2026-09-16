@@ -133,10 +133,31 @@ spreading tokens evenly?
 12 experts receive nothing at all. At 16 experts nothing dies, but one expert
 still handles 264× the traffic of another.
 
-**Balancing is a tax, not an improvement.** Read the loss column: balancing
-makes the model *worse* in every configuration, and specialisation falls with
-it. Forcing 16 experts to share a 4-group task means splitting each group
-across four experts that each learn a blurrier version of it.
+**Balancing is a tax, not an improvement — at world size 1.** Read the loss
+column: balancing makes the model *worse* in every configuration measured
+there, and specialisation falls with it. Forcing 16 experts to share a 4-group
+task means splitting each group across four experts that each learn a blurrier
+version of it.
+
+:::caution A 2-GPU measurement disagrees, and it is not yet resolved
+Everything in that table is **single-process, world size 1**. A 2 × RTX 3090
+run of the same script under DeepSpeed reported the reverse — `--balance bias`
+at 0.024 against `--balance none` at **0.795**, with the unbalanced run's loss
+*rising* through training (0.515 → 0.827). A rising loss is divergence, not
+poor specialisation.
+
+What is known: the world-size-1 table holds across **six seeds** with no
+overlap between groups, so it is not seed luck. Reproducing the reversal on
+**two gloo ranks on CPU**, with gradients all-reduced exactly as data
+parallelism does, did **not** reverse it. And the 2-GPU observation is **one
+run per arm**.
+
+So the ordering is established at world size 1 and **open above it**. If the
+reversal holds under repetition it is a *stronger* version of this page's
+thesis — balancing would be required for convergence once experts span ranks,
+not merely a tax paid for schedulability. This page will be rewritten around it
+if so. Treating it as settled either way would be fabrication.
+:::
 
 That is not a defect. It is the trade the DeepSeek-V3 authors name, and the
 reason they went looking for a cheaper mechanism:
@@ -245,6 +266,10 @@ flowchart TB
 A 264:1 token imbalance is one GPU doing 264× the work while its peers idle at
 a barrier. You accept a measurable loss penalty to avoid a far larger
 wall-clock penalty.
+
+That is the argument *if* the loss penalty is real at scale. The caution above
+is the reason for the "if": on the one multi-GPU measurement available,
+balancing did not cost loss — it was the only arm that converged at all.
 
 **That is why MoE belongs in a DeepSpeed course rather than an architecture
 course.** The balancing mechanism is not there to make the model better. It is

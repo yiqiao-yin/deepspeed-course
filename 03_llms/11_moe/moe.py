@@ -43,9 +43,10 @@ At 16 experts the same router leaves nothing dead but hands one expert 264x
 the traffic of another. Collapse is what happens when you buy far more experts
 than the task has structure to fill.
 
-**2. Balancing is a TAX, not an improvement.** Look down the loss column: in
-every configuration, balancing makes the model *worse*. 0.144 to 0.246. 0.310
-to 0.634. Specialisation drops with it -- purity 0.975 to 0.793 -- because
+**2. Balancing is a TAX, not an improvement -- at world size 1.** Look down the
+loss column: in every configuration measured here, balancing makes the model
+*worse*. 0.144 to 0.246. 0.310 to 0.634. (Read the scope carefully; a 2-GPU
+measurement disagrees, and the section below says so.) Specialisation drops with it -- purity 0.975 to 0.793 -- because
 forcing 16 experts to share a 4-group task means splitting each group across
 four experts that each learn a blurrier version of it.
 
@@ -55,6 +56,39 @@ mechanism in the first place:
 
     "However, too large an auxiliary loss will impair the model performance."
                                                         -- arXiv:2412.19437 §2.1.2
+
+An open question, and a measurement that disagrees
+--------------------------------------------------
+**Everything in the table above was measured single-process, at world size 1.**
+That scope matters, because a 2x RTX 3090 run of `train_moe_ds.py` under
+DeepSpeed reported the opposite ordering:
+
+    world size 2, NCCL, 500 steps, one run each
+        --balance bias    eval 0.024
+        --balance none    eval 0.795      <- 33x WORSE, and RISING during
+                                             training (0.515 -> 0.827)
+
+A rising loss is divergence, not poor specialisation, so this is a different
+phenomenon from anything above rather than a louder version of it.
+
+What has been checked, and what has not:
+
+  * At world size 1 the table holds across **six seeds**, with no overlap
+    between the two groups (none 0.138-0.206, bias 0.246-0.315). So it is not
+    seed luck.
+  * Reproducing it on **two gloo ranks on CPU**, with gradients all-reduced
+    exactly as data parallelism does, did **not** reverse the ordering:
+    none 0.0044 against bias 0.0170. So plain data parallelism alone does not
+    explain the 2-GPU result.
+  * The 2-GPU observation is **one run per arm**, on hardware not available
+    here.
+
+So the honest position is that the ordering is established at world size 1 and
+**unresolved above it**. Do not read the table as a claim about multi-rank
+training. If the reversal holds under repetition it is a stronger version of
+this topic's thesis -- balancing would not be a tax you pay for schedulability
+but a requirement for convergence once experts span ranks -- and this file will
+be rewritten around it. It is not yet that.
 
 So why balance at all? **Because the unbalanced router is a better model and a
 much worse program**, and that only becomes visible once the experts live on
