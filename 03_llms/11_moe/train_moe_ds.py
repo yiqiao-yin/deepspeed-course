@@ -388,7 +388,16 @@ def main() -> None:
     # at eval. destroy_process_group() also stops torch warning that the group
     # was never cleaned up.
     if torch.distributed.is_available() and torch.distributed.is_initialized():
-        torch.distributed.barrier()
+        # device_ids is explicit even though deepspeed.initialize() has already
+        # bound this rank's device. NCCL implements barrier() as an all-reduce
+        # of a one-element tensor and must choose somewhere to put it; with
+        # nothing passed it falls back to "the current device", which is cuda:0
+        # on EVERY rank if anything upstream failed to bind. That is a 10-minute
+        # watchdog hang for a line that costs nothing to write explicitly --
+        # and tests/test_multigpu_download_guard.py flags the implicit form,
+        # having been written after exactly that hang in 03_convnet_cifar10.
+        torch.distributed.barrier(
+            device_ids=[local_rank] if torch.cuda.is_available() else None)
         torch.distributed.destroy_process_group()
 
     if is_main and use_wandb:
