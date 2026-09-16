@@ -48,6 +48,7 @@ const sidebars = {
             'tutorials/llms/glm53-moe-finetuning',
             'tutorials/llms/qwen38-hybrid-attention',
             'tutorials/llms/deepseek-mla',
+            'tutorials/llms/moe-routing',
             'tutorials/llms/trl-function-calling',
             'tutorials/llms/ocr-vision-language',
             // The alignment thread, in the order the literature arrived:

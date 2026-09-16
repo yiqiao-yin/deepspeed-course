@@ -1,0 +1,23 @@
+{
+  "_comment": "Default path: this repository's own MoELayer, every expert on every rank. The unit of data is a TOKEN, so the micro batch below counts tokens. train_batch_size is deliberately OMITTED so DeepSpeed derives it and any --num_gpus works without editing this file.",
+
+  "train_micro_batch_size_per_gpu": 256,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 3e-3, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "Both disabled ON PURPOSE. The quantity this example compares is a loss difference of order 0.1 between three load-balancing strategies; running one in reduced precision would be measuring the dtype instead. The router is also a sigmoid over small logits, which is exactly where fp16's narrow range bites. These models are ~2M parameters -- fp32 costs nothing here.",
+  "fp16": { "enabled": false },
+  "bf16": { "enabled": false },
+
+  "_zero_comment": "Stage 1, and the contrast is the point. ZeRO shards OPTIMIZER STATE across ranks while every rank still holds every expert and runs every layer. Expert parallelism shards the EXPERTS THEMSELVES, so each rank holds a different subset of the model. They are different axes and they compose -- see ds_config_ep.json. Stage 1 is enough here: the model is 2M parameters, so sharding more would add communication to save kilobytes.",
+  "zero_optimization": { "stage": 1 },
+
+  "steps_per_print": 50,
+  "wall_clock_breakdown": false
+}

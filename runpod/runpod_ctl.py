@@ -130,6 +130,14 @@ EXAMPLES = {
                                     note="MLA from the paper. Tiny model; the "
                                          "KV cache is an INFERENCE cost, so "
                                          "ZeRO does not touch it."),
+    "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
+                                    script="train_moe_ds.py",
+                                    launcher="deepspeed",
+                                    note="MoE routing and load balancing. TWO "
+                                         "GPUs because --expert-parallel "
+                                         "PARTITIONS the experts across ranks; "
+                                         "the routing lesson itself runs on CPU "
+                                         "via `uv run moe.py`."),
     "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
                    script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),
