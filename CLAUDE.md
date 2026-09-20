@@ -114,7 +114,7 @@ internally**, so each holds several numbered subtopics:
 
 ```
 04_video_text/{01_hf_baseline, 02_qwen25vl, 03_token_compression,
-               04_streaming_memory, 05_video_eval}
+               04_streaming_memory, 05_video_eval, 06_qwen3vl}
 05_video_speech/{01_longcat_omni, 02_thinker_talker,
                  03_duplex_streaming, 04_omni_eval, data/}
 ```
@@ -218,7 +218,7 @@ it will not fit, and a partial run proves nothing. Write or extend a **logic tes
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
-### The big exception: twelve modules ARE fully CPU-runnable
+### The big exception: thirteen modules ARE fully CPU-runnable
 
 Their substance is *algorithms, objectives and policy* rather than weights, so
 they need no GPU and no download. **Run these directly rather than mocking
@@ -238,6 +238,7 @@ them:**
 | `05_video_speech/04_omni_eval/omni_eval.py` | modality-ablation grid |
 | `03_llms/10_deepseek_from_scratch/mla.py` | MHA / GQA / MLA behind one interface, and the cache arithmetic |
 | `03_llms/11_moe/moe.py` | top-k routing, three load-balancing strategies, the params-vs-active table |
+| `04_video_text/06_qwen3vl/verify_arch.py` | builds Qwen3-VL-8B on the **meta device** — DeepStack, and whether LoRA targets resolve |
 
 **Assert mathematical properties, not shapes.** Every bug this repo has shipped
 in these areas ran fine and was quietly wrong, and a shape assertion would have
@@ -738,7 +739,69 @@ the inconvenient measurement would have been worse than both.
 **"Measured at X" is a different claim from "true in general", and the docs
 should say which one they are making.**
 
-### Library API drift is a CI gate, not a runtime surprise
+### A verification harness that does not install the artifact verifies nothing
+
+`runpod/runpod_ctl.py run` is the tool that proves an example works on real
+hardware. For most of its life it did:
+
+```bash
+uv pip install --system deepspeed        # and nothing else
+deepspeed --num_gpus=N train_x.py        # the SYSTEM interpreter
+```
+
+It never ran `uv sync`. So it exercised whatever the **container image**
+happened to ship, not the example's committed lock — and the six-file contract
+is built entirely around that lock. The harness was verifying the image.
+
+What that hid: **eight labs could not start from a fresh clone.** Every lab
+calling `AutoProcessor.from_pretrained` was missing `pillow`, `torchvision` or
+both, because a transformers image/video processor imports them and nothing
+declared it:
+
+    ValueError: Could not load any image processor class for ...
+    ImportError: Qwen2VLVideoProcessor requires the Torchvision library
+
+Neither message names the missing package. All eight were advertised in
+`clawdeck.yaml`. CI's `compileall` cannot see it — an import that only runs
+inside `main()` is never executed — and the labs "worked" every time anyone
+tested them, on a box that already had the packages.
+
+Three things to carry:
+
+- **Run the command the README documents, not a convenient approximation.**
+  The bootstrap now does `cd <example> && uv sync && uv run deepspeed ...`
+  because that is the contract; anything else tests a different system.
+- **`uv sync` from the committed lock is the only honest check.** A fresh
+  `uv sync` into a temp dir takes two minutes and is how both failure modes
+  above were *reproduced* rather than inferred.
+- **`tests/test_torch_index_pins.py` now enforces it statically**: a lab whose
+  code builds a processor must lock both packages. It reads the lock, not the
+  pyproject — the resolution rather than the declaration.
+
+### Library API drift comes in three classes, and only one is obvious
+
+`tests/test_config_kwargs.py` covers all three. Each is syntactically valid, so
+`compileall` catches none of them:
+
+| class | example | when it fails |
+|---|---|---|
+| a rejected **kwarg** | `logging_dir=` | when the config object is constructed |
+| a removed **attribute** | `trainer.tokenizer` | at the *save step*, after training |
+| a vanished **symbol** | `AutoModelForVision2Seq` | at **import**, before anything runs |
+
+The third arrived last and is the cheapest to hit: `03_llms/03_ocr` imported a
+name transformers 5.x had renamed — **and never used it.** A dead import took
+the whole lab down, while `run_modern_ocr.py` in the same folder had already
+migrated. Sweeping for the class found a second live site: `05_dpo`'s
+`--method orpo`, because trl 1.x moved ORPO (and CPO) to `trl.experimental`.
+
+**The subtle part is deciding which imports are allowed to fail.** The first
+version of that check skipped anything inside `try/except ImportError` — and
+therefore missed the very bug it was written for, because `03_ocr` wraps its
+whole import block in one that prints "Missing required package" and exits 1.
+**A try/except with no alternative import is not a fallback; it is a crash with
+better formatting.** The rule now requires a *genuine* alternative — the same
+symbol imported from a different module elsewhere in the file.
 
 `logging_dir=` is syntactically valid, so `compileall` cannot catch it — it
 fails only when `TrainingArguments` is constructed. A learner discovered exactly
