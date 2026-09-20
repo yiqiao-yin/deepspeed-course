@@ -151,6 +151,12 @@ EXAMPLES = {
                                         script="train_qwen25vl.py",
                                         note="Qwen2.5-VL-3B + LoRA fits 16 GB; "
                                              "2 GPUs to exercise ZeRO-3."),
+    "04_video_text/06_qwen3vl": dict(min_vram=48, gpus=1, disk=120,
+                                    script="train_qwen3vl.py",
+                                    note="Qwen3-VL-8B LoRA. MEASURED: 18.8 GB "
+                                         "floor + 11.97 GB per 1k visual "
+                                         "tokens, so ~33 frames on 48 GB. A "
+                                         "24 GB card cannot hold the floor."),
     "04_video_text/03_token_compression": dict(min_vram=24, gpus=1, disk=60,
                                         script="train_compressed.py",
                                         note="ONE GPU on purpose — measures peak "
@@ -314,8 +320,15 @@ def bootstrap(example: str, spec: dict, branch: str,
               topic: str = "", dry_run: bool = False,
               max_hours: float = DEFAULT_MAX_HOURS) -> str:
     """Shell run inside the pod: clone, install with uv, run, push results out."""
-    launch = (f"python {spec['script']}" if spec.get("launcher") == "python"
-              else f"deepspeed --num_gpus={spec['gpus']} {spec['script']}")
+    # `uv run`, so the example's OWN locked dependencies are used. Without it
+    # the launcher ran the system interpreter against whatever the container
+    # image happened to ship, and any example needing peft / transformers /
+    # datasets died with ModuleNotFoundError after the pod was already paid
+    # for. CONTRIBUTING.md documents the contract as
+    #     cd <example> && uv sync && uv run deepspeed ...
+    # so the harness that verifies examples must run exactly that.
+    launch = (f"uv run python {spec['script']}" if spec.get("launcher") == "python"
+              else f"uv run deepspeed --num_gpus={spec['gpus']} {spec['script']}")
 
     # A dry run proves the pod can reach the code and the stack imports, without
     # paying for a full training job. It still executes the real launcher, but
@@ -411,6 +424,11 @@ def bootstrap(example: str, spec: dict, branch: str,
         # A missing example directory must not silently become "run the
         # launcher from wherever we happen to be standing".
         f'cd {example} || {{ report "[6/6] FAILED: no such example dir {example}"; exit 1; }}',
+        # Install the example's own locked dependencies. This is the step the
+        # six-file contract is built around, and its absence made the harness
+        # unable to verify any example whose deps were not already in the image.
+        'uv sync 2>&1 | tail -3',
+        'report "[5b/6] uv sync done: $(uv run python -c \'import sys;print(sys.executable)\' 2>&1 | tail -1)"',
         # Capture rc IMMEDIATELY. It used to be read after `push_log`, so
         # `rc=$?` reported the exit code of the log-upload curl -- which is
         # essentially always 0. Every run reported success regardless of

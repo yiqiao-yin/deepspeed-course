@@ -273,6 +273,19 @@ labs:
     run:
       - { label: "Train (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_qwen25vl.py --max-steps 20", primary: true }
 
+  - id: 04_video_text/06_qwen3vl
+    title: "Qwen3-VL fine-tuning"
+    summary: "LoRA on an 8B video-language model, with a measured memory curve."
+    est_minutes: 15
+    gpu: { min_vram_gb: 48, count: 1 }
+    run:
+      # No --num_gpus, and that is correct: verify_arch.py builds the model on
+      # torch's meta device, so it needs no GPU and downloads no weights.
+      - { label: "The architecture (CPU)", cmd: "uv run verify_arch.py --compare" }
+      - { label: "Train + memory sweep", cmd: "uv run deepspeed --num_gpus=1 train_qwen3vl.py", primary: true }
+      - { label: "Memory sweep only", cmd: "uv run deepspeed --num_gpus=1 train_qwen3vl.py --probe-only" }
+      - { label: "Quick (4 steps)", cmd: "uv run deepspeed --num_gpus=1 train_qwen3vl.py --max-steps 4" }
+
   - id: 04_video_text/03_token_compression
     title: "Visual token compression"
     summary: "ToMe / FastV / DyCoke — shrink what the model looks at."

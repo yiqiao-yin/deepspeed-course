@@ -1,0 +1,28 @@
+{
+  "_comment": "Qwen3-VL-8B LoRA. train_batch_size is OMITTED so DeepSpeed derives it and any --num_gpus works without editing this file.",
+
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 1e-4, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.0 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "bf16, not fp16. Qwen3-VL ships bf16 weights and the vision tower's activations have the dynamic range that makes fp16 loss-scaling awkward. Every Ampere-and-later card supports bf16.",
+  "bf16": { "enabled": true },
+  "fp16": { "enabled": false },
+
+  "_zero_comment": "Stage 3, and it is load-bearing here. 8.77 B parameters is 17.5 GB of bf16 weights -- more than a 24 GB card can hold alongside video activations. Stage 3 shards the PARAMETERS so each of N ranks holds 17.5/N GB. CLAUDE.md's warning applies: activations, gather buffers and fragmentation do NOT shard, so budget per GPU as weights/N + overhead, never in aggregate.",
+  "zero_optimization": {
+    "stage": 3,
+    "stage3_gather_16bit_weights_on_model_save": true,
+    "overlap_comm": true,
+    "contiguous_gradients": true
+  },
+
+  "steps_per_print": 2,
+  "wall_clock_breakdown": false
+}

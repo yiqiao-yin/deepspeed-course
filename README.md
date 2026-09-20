@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 45 pages with
+The documentation site is the primary way to read this material: 46 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -195,7 +195,8 @@ deepspeed-course/
 │   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME
 │   ├── 03_token_compression/    # ToMe, FastV, DyCoke — 'ZeRO for activations'
 │   ├── 04_streaming_memory/     # STAR: unbounded video in O(1) memory
-│   └── 05_video_eval/           # Did compression break understanding? Reports the TEMPORAL GAP
+│   ├── 05_video_eval/           # Did compression break understanding? Reports the TEMPORAL GAP
+│   └── 06_qwen3vl/              # Qwen3-VL-8B LoRA: DeepStack, and a measured memory curve
 │
 └── 05_video_speech/       # Video AND audio in, speech out
     ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
