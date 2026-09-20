@@ -72,7 +72,8 @@ const sidebars = {
               'tutorials/multimodal/video-text-training',   // 01_hf_baseline
               'tutorials/multimodal/qwen-video-baseline',   // 02_qwen25vl
               'tutorials/multimodal/token-compression',     // 03_token_compression
-              'tutorials/multimodal/streaming-video',       // 04_streaming_memory
+              'tutorials/multimodal/streaming-video',
+            'tutorials/multimodal/qwen3vl-finetuning',       // 04_streaming_memory
               'tutorials/multimodal/video-evaluation',      // 05_video_eval
             ],
           },
