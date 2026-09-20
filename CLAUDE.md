@@ -79,6 +79,34 @@ stores them per expert. **Checkpoint layout and runtime module tree are not the
 same thing**, and peft can only wrap `Linear`/`Embedding`/`Conv1D`, so freezing
 the experts there is the only expressible option rather than merely the wise one.
 
+### `03_llms/10` and `11` are the two halves of one paper
+
+DeepSeek-V2 and V3 each make **two** architectural contributions, and the course
+covers them in adjacent folders that only make sense read together:
+
+| Folder | Shrinks | Mechanism |
+|---|---|---|
+| `10_deepseek_from_scratch` | what the model **remembers** | MLA: cache a latent, reconstruct K/V |
+| `11_moe` | what the model **computes** | MoE: hold N experts, fire k |
+
+Both ship a CPU-runnable pure-algorithm module (`mla.py`, `moe.py`) beside a
+DeepSpeed training script, which is the shape to copy for anything whose
+substance is an algorithm rather than weights.
+
+The distinction that took a reader asking to surface: **MLA is not the router.**
+The MLA page cites the DeepSeek-V2 paper — whose title contains
+"Mixture-of-Experts" — and has no routing content at all. Conflating them is
+the same class of error as conflating "DPO removes the reward model" with
+"GRPO removes the critic".
+
+**`11_moe` is also where expert parallelism lives**, and EP is a *different
+axis* from ZeRO: ZeRO shards optimizer state, gradients and parameters of the
+same model while every rank runs every layer on different data; EP shards the
+**experts**, so each rank holds a different subset of the model and tokens
+reach it by all-to-all. DeepSpeed ships `deepspeed/moe/` (`ep_router.py`,
+`sharded_moe.py`) for this. It is the reason the topic belongs in this course
+rather than an architecture course.
+
 ### Sections 04 and 05 are multi-subtopic
 
 Most sections hold flat topics. **`04_video_text/` and `05_video_speech/` escalate
@@ -190,7 +218,7 @@ it will not fit, and a partial run proves nothing. Write or extend a **logic tes
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
-### The big exception: ten modules ARE fully CPU-runnable
+### The big exception: twelve modules ARE fully CPU-runnable
 
 Their substance is *algorithms, objectives and policy* rather than weights, so
 they need no GPU and no download. **Run these directly rather than mocking
@@ -208,6 +236,8 @@ them:**
 | `05_video_speech/02_thinker_talker/tmrope.py` | the 40 ms shared clock — pure integer arithmetic |
 | `05_video_speech/03_duplex_streaming/duplex.py` | turn-taking policy, barge-in, RTF |
 | `05_video_speech/04_omni_eval/omni_eval.py` | modality-ablation grid |
+| `03_llms/10_deepseek_from_scratch/mla.py` | MHA / GQA / MLA behind one interface, and the cache arithmetic |
+| `03_llms/11_moe/moe.py` | top-k routing, three load-balancing strategies, the params-vs-active table |
 
 **Assert mathematical properties, not shapes.** Every bug this repo has shipped
 in these areas ran fine and was quietly wrong, and a shape assertion would have
@@ -637,6 +667,76 @@ and that distinction is the whole point — several scripts here rank-guard thei
 download call is lexically inside a rank-gated branch. Its permanent
 counterexamples include the bug exactly as it shipped **and** a file whose rank
 guard sits around the wrong statement.
+
+### Guard the output, never the collective
+
+The section above is about making sure only rank 0 does the *work*. This is its
+mirror image, and it cost eleven minutes of silence on two independent boxes
+before anyone could see it.
+
+`03_llms/11_moe/train_moe_ds.py` ended its training loop with:
+
+```python
+if not is_main:
+    return                                   # other ranks leave
+...
+model_engine(xe.unsqueeze(0))                # rank 0 runs the eval forward
+```
+
+On the default path that is harmless, because `MoELayer.forward` contains no
+collectives. Under `--expert-parallel` the identical call is an **all-to-all
+requiring every rank**, and the others had already gone. Training completed,
+then the surviving rank sat in the collective until NCCL's watchdog aborted
+it: a `SIGABRT` and a non-zero exit, with **no Python traceback anywhere.**
+
+Two things make it worth its own entry:
+
+- **It is invisible on the path you test.** Single-GPU runs pass. The
+  non-EP multi-GPU runs pass, on the same box, in 60 s. Only the communicating
+  layer fails, and only above one rank.
+- **The job SUCCEEDS first.** A learner watches 500 steps of falling loss, then
+  eleven minutes of nothing, then "failed". That reads as *"I broke it"* about
+  a run that worked, which is worse than a fast crash.
+
+The rule generalises past MoE: **a rank guard may wrap printing, logging and
+saving; it must never wrap a collective.** Run the collective on every rank and
+guard only what it prints. And tear down deliberately — `barrier()` then
+`destroy_process_group()` on every rank — or a fast rank exits while a slow one
+is still inside a collective, which is the same bug moved to shutdown.
+
+Related, found while building a two-rank harness for this: **an unused expert
+produces no gradient, so `if p.grad is not None` makes ranks disagree on how
+many all-reduces to issue** and gloo dies with "Connection reset by peer".
+Sync every parameter unconditionally, materialising zeros.
+
+### A measured claim is scoped to the configuration it was measured in
+
+`11_moe` published, from six seeds and two expert counts, that load balancing
+makes the model strictly *worse* — a tax paid for schedulability rather than a
+quality improvement. A 2-GPU run then reported the exact reverse, with the
+unbalanced arm 33x worse and its loss **rising** through training.
+
+Neither number was wrong. The claim was: it had been measured only
+single-process, and said "every configuration".
+
+What was done about it is the point. Before touching the thesis:
+
+- the world-size-1 result was re-checked across **six seeds** — no overlap
+  between groups, so not seed luck;
+- the same script was run at world size 1 to rule out "two different
+  experiments" — the ordering held, so the reversal really is a world-size
+  effect;
+- an attempt to reproduce it on **two gloo ranks on CPU**, with gradients
+  all-reduced exactly as data parallelism does, did **not** reverse it.
+
+So the claim was **scoped** to world size 1 and the disagreement written into
+`moe.py`, the folder README and the docs page as explicitly unresolved — in
+neither direction. Rewriting the thesis around one unreplicated run would have
+been as wrong as leaving the over-broad claim standing, and quietly dropping
+the inconvenient measurement would have been worse than both.
+
+**"Measured at X" is a different claim from "true in general", and the docs
+should say which one they are making.**
 
 ### Library API drift is a CI gate, not a runtime surprise
 
