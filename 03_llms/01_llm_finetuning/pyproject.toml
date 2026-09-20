@@ -34,6 +34,12 @@ dependencies = [
     # LoRA. train_glm53_ds.py adapts attention only — the 256 expert MLPs are
     # 97% of GLM-5.3's parameters and are deliberately left frozen.
     "peft>=0.10",
+    # An image/video processor imports BOTH of these. Without them
+    # AutoProcessor.from_pretrained fails with "Could not load any image
+    # processor class" or "requires the Torchvision library" -- messages
+    # that name neither missing package. Verified by syncing this lock.
+    "pillow>=10.0",
+    "torchvision>=0.17",
 ]
 
 [project.optional-dependencies]
@@ -63,4 +69,9 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
+# torchvision ships a compiled extension linked against a SPECIFIC
+# torch build. Pin torch and not torchvision and, with explicit =
+# true, torchvision resolves from PyPI against a different torch:
+#     RuntimeError: operator torchvision::nms does not exist
 torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }

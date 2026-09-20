@@ -50,6 +50,24 @@ A package belongs here only if it ships a compiled extension linked against
 torch. `torchvision` and `torchaudio` are the ones this repo uses; the set is
 listed explicitly rather than inferred, because a wrong guess in either
 direction is worse than a short list.
+
+A second failure of the same family, found later and the reason this file also
+checks PRESENCE and not only the index
+-----------------------------------------------------------------------------
+Eight shipped labs called `AutoProcessor.from_pretrained` while locking neither
+`pillow` nor `torchvision`. A transformers image/video processor imports both,
+so a fresh `uv sync` produced an environment where the lab could not start:
+
+    ValueError: Could not load any image processor class for ...
+    ImportError: Qwen2VLVideoProcessor requires the Torchvision library
+
+Neither message names the missing package, and CONTRIBUTING.md section 4 makes
+"`uv sync` must work from a fresh clone" the whole point of committing a lock.
+
+It hid for so long because `runpod/runpod_ctl.py` never ran `uv sync` -- it
+installed deepspeed system-wide and used the container image's Python, which
+happens to ship both packages. The harness built to verify the labs was
+verifying the image. Fixing the harness is what surfaced this.
 """
 
 import re
@@ -85,6 +103,21 @@ def resolved(lock_text: str, pkg: str):
     version, url = m.groups()
     host = url.split("/")[2] if "//" in url else url
     return version, host
+
+
+def processor_labs():
+    """Labs whose code actually builds an image/video processor."""
+    import re as _re
+    out = []
+    for pj in sorted(REPO.glob("0*/*/pyproject.toml")):
+        lab = pj.parent
+        if not (lab / "uv.lock").exists():
+            continue
+        src = "\n".join(f.read_text(errors="ignore") for f in lab.glob("*.py"))
+        if _re.search(r"(AutoProcessor|AutoImageProcessor|AutoVideoProcessor)"
+                      r"\.from_pretrained", src):
+            out.append(lab)
+    return out
 
 
 def main() -> None:
@@ -146,6 +179,23 @@ def main() -> None:
                   f"torch is pinned to a custom index but {pkg} is not, so "
                   "`uv lock` will draw it from PyPI and the mismatch returns "
                   "the next time the lock is regenerated")
+
+    # ---- a processor lab must lock what its processor imports -------------
+    print("\n  -- labs that build a processor lock pillow AND torchvision --")
+    labs = processor_labs()
+    check(f"found {len(labs)} lab(s) that call *Processor.from_pretrained",
+          len(labs) > 0,
+          "the detector found nothing, so the checks below are vacuous")
+    for lab in labs:
+        text = (lab / "uv.lock").read_text()
+        missing = [p for p in ("pillow", "torchvision")
+                   if resolved(text, p) is None]
+        check(f"{lab.relative_to(REPO)}",
+              not missing,
+              f"missing from the lock: {', '.join(missing)}. A transformers "
+              "image/video processor imports both; without them a fresh "
+              "`uv sync` gives an environment where this lab cannot start, and "
+              "the error names neither package.")
 
     print("\n" + bar)
     print(f"  {PASS} passed, {FAIL} failed")
