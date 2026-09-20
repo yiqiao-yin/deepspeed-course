@@ -53,8 +53,13 @@ try:
     from torch.utils.data import Dataset, DataLoader
     import deepspeed
     from transformers import (
-        AutoProcessor, 
-        AutoModelForVision2Seq,
+        AutoProcessor,
+        # AutoModelForVision2Seq was REMOVED in transformers 5.x (renamed to
+        # AutoModelForImageTextToText). It was imported here and never used, so
+        # a dead name took the whole lab down with
+        #     cannot import name 'AutoModelForVision2Seq' from 'transformers'
+        # on the committed lock, which pins 5.16.1. run_modern_ocr.py in this
+        # same folder had already migrated to the new name; this file had not.
         AutoModelForCausalLM,
         TrainingArguments,
         Trainer,

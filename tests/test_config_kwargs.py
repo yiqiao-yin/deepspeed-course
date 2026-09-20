@@ -152,6 +152,38 @@ def locked_version(lock: Path, pkg: str):
     return m.group(1) if m else None
 
 
+
+def fallback_imports(tree) -> set:
+    """
+    Line numbers of imports that have a GENUINE alternative elsewhere in the
+    file -- i.e. the same symbol imported from a different module.
+
+    That is what a real version fallback looks like:
+
+        try:    from trl.experimental.cpo import CPOConfig
+        except: from trl import CPOConfig
+
+    Being inside a try/except is NOT sufficient, and assuming it was is how the
+    first version of this check missed a live bug. 03_ocr wrapped its whole
+    import block in `try/except ImportError` that printed "Missing required
+    package" and exited 1. That is not a fallback -- it is a crash with better
+    formatting, and the lab died on it. Only the presence of an ALTERNATIVE
+    source for the same name makes an import safe to skip.
+    """
+    from collections import defaultdict
+    sources = defaultdict(set)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                sources[alias.name].add(node.module)
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if all(len(sources[a.name]) > 1 for a in node.names):
+                out.add(node.lineno)
+    return out
+
+
 def main() -> None:
     bar = "=" * 74
     print(bar)
@@ -310,6 +342,65 @@ def main() -> None:
         print(f"        {rel}:{ln}  trainer.{attr} was removed — "
               f"use getattr(trainer, {repl!r}, None), or keep your own "
               f"reference to the tokenizer you passed in")
+
+    # ---- every imported symbol must EXIST in the pinned library ----------
+    # Kwargs and attributes were only two thirds of API drift. The third is a
+    # symbol that simply vanishes: AutoModelForVision2Seq was renamed to
+    # AutoModelForImageTextToText in transformers 5.x, and 03_ocr imported the
+    # old name -- and never used it. A dead import took the whole lab down with
+    #     cannot import name 'AutoModelForVision2Seq' from 'transformers'
+    # on a lock pinning the very version this suite validates. compileall
+    # cannot see it; only resolving the name against the real module can.
+    #
+    # Imports inside `try/except ImportError` are SKIPPED. Those are deliberate
+    # version fallbacks and flagging them would punish the defensive pattern.
+    print("\n  -- every imported symbol exists in the pinned libraries --")
+    import importlib
+    libs = {"transformers": transformers, "trl": trl, "peft": peft}
+    missing, files, skipped_guarded = [], 0, 0
+    for path in sorted(REPO.rglob("*.py")):
+        rel = path.relative_to(REPO)
+        if any(p in SKIP_DIRS for p in rel.parts):
+            continue
+        # archive/ is explicitly superseded code, run by nothing. Skipping it
+        # is a real gap, so it is reported rather than silently dropped.
+        if "archive" in rel.parts:
+            continue
+        try:
+            tree = ast.parse(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        files += 1
+        guarded = fallback_imports(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            if node.lineno in guarded:
+                skipped_guarded += 1
+                continue
+            root = node.module.split(".")[0]
+            if root not in libs:
+                continue
+            try:
+                mod = (libs[root] if node.module == root
+                       else importlib.import_module(node.module))
+            except Exception:                              # noqa: BLE001
+                continue
+            for alias in node.names:
+                if alias.name != "*" and not hasattr(mod, alias.name):
+                    missing.append((rel, node.lineno, node.module, alias.name))
+
+    check(f"scanned {files} files ({skipped_guarded} genuine fallbacks skipped)",
+          files > 50)
+    check(f"no removed symbols imported ({len(missing)} found)", not missing,
+          "; ".join(f"{r}:{ln} from {m} import {n}"
+                    for r, ln, m, n in missing[:5]))
+    for rel, ln, mod, name in missing:
+        print(f"        {rel}:{ln}  `from {mod} import {name}` — that name does "
+              f"not exist in the pinned version")
+    n_archive = sum(1 for p in REPO.rglob("*.py") if "archive" in p.parts)
+    print(f"        (not scanned: {n_archive} file(s) under archive/, "
+          f"superseded code run by nothing)")
 
     print("\n" + bar)
     print(f"  {PASS} passed, {FAIL} failed")
