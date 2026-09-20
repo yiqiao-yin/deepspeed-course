@@ -370,7 +370,22 @@ def main() -> None:
         )
 
     elif spec["trainer"] == "orpo":
-        from trl import ORPOConfig, ORPOTrainer
+        # Same migration as CPO above: trl 1.x moved ORPO to trl.experimental.
+        # A bare `from trl import ORPOConfig` raises ImportError on the pinned
+        # 1.12.0, so --method orpo was dead while --method cpo survived on its
+        # fallback. Try the new location first, then the old one.
+        try:
+            from trl.experimental.orpo import ORPOConfig, ORPOTrainer
+        except ImportError:
+            try:
+                from trl import ORPOConfig, ORPOTrainer
+            except ImportError as exc:
+                raise ImportError(
+                    "ORPOTrainer not found in trl.experimental.orpo or trl. It "
+                    "has moved between releases; check "
+                    "`python -c \"import trl; print(dir(trl))\"` and pin a "
+                    "version. --method orpo needs it."
+                ) from exc
         cfg = ORPOConfig(beta=args.beta, **common)
         trainer = ORPOTrainer(
             model=args.model, args=cfg, train_dataset=dataset,
