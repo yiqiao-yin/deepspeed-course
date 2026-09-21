@@ -486,7 +486,17 @@ def main():
             model=model,
             args=training_args,
             train_dataset=train_dataset,
-            tokenizer=processor,
+            # processing_class, NOT tokenizer. `tokenizer=` was deprecated in
+            # transformers 4.x and REMOVED in 5.x, which is what this lab's
+            # uv.lock pins. processing_class is the generalisation that also
+            # covers image and audio processors -- and `processor` here is a
+            # Qwen2VLProcessor, so it is the right object to hand it.
+            #
+            # This failed at the Trainer construction, AFTER the model and
+            # dataset had loaded, on rented GPUs. It is the same root cause as
+            # the AutoModelForVision2Seq import above: 4.x-era code meeting a
+            # 5.x lock.
+            processing_class=processor,
         )
         
         # Train

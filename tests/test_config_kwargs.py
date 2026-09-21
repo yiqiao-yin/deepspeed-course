@@ -117,12 +117,25 @@ def load_constructors() -> dict:
         out[name] = (set(sig.parameters) - {"self"}, var_kw)
 
     import transformers
+    # The CONFIG classes...
     for n in ("TrainingArguments", "Seq2SeqTrainingArguments"):
+        if hasattr(transformers, n):
+            add(n, getattr(transformers, n))
+    # ...and the TRAINERS themselves, which this file did not check for far
+    # too long. `Trainer(tokenizer=...)` was deprecated in 4.x and REMOVED in
+    # 5.x for `processing_class=`; 03_ocr called it and died at the Trainer
+    # construction, after the model and dataset had loaded, on rented GPUs.
+    # The kwarg scan below would have caught it the day it was written -- it
+    # simply never knew to look at Trainer. None of these take **kwargs, so
+    # every one of them is checkable.
+    for n in ("Trainer", "Seq2SeqTrainer"):
         if hasattr(transformers, n):
             add(n, getattr(transformers, n))
     import trl
     for n in ("SFTConfig", "DPOConfig", "GRPOConfig", "RewardConfig",
-              "OnlineDPOConfig", "CPOConfig", "KTOConfig", "ORPOConfig"):
+              "OnlineDPOConfig", "CPOConfig", "KTOConfig", "ORPOConfig",
+              "SFTTrainer", "DPOTrainer", "GRPOTrainer", "RewardTrainer",
+              "OnlineDPOTrainer", "KTOTrainer"):
         if hasattr(trl, n):
             add(n, getattr(trl, n))
     import peft
@@ -243,9 +256,19 @@ def main() -> None:
     print("\n  -- every config constructor call in the repo --")
     findings = []
     scanned = 0
+    n_archive = 0
     for path in sorted(REPO.rglob("*.py")):
         rel = path.relative_to(REPO)
         if any(p in SKIP_DIRS for p in rel.parts):
+            continue
+        # archive/ holds superseded scripts that nothing runs -- not the
+        # manifest, not runpod_ctl, not CI. They are NOT maintained against the
+        # current pins and three of them still call Trainer(tokenizer=...).
+        # Excluded here for the same reason the symbol scan excludes them, and
+        # REPORTED for the same reason: an exclusion nobody can see is how a
+        # checker starts lying about its own coverage.
+        if "archive" in rel.parts:
+            n_archive += 1
             continue
         try:
             tree = ast.parse(path.read_text(errors="ignore"))
@@ -270,6 +293,9 @@ def main() -> None:
                     findings.append((rel, kw.lineno, name, kw.arg))
 
     check(f"scanned {scanned} python files", scanned > 50)
+    print(f"        (not scanned: {n_archive} file(s) under archive/, "
+          f"superseded code run by nothing — they DO still call "
+          f"Trainer(tokenizer=...))")
     check(f"no rejected kwargs ({len(findings)} found)", not findings,
           "; ".join(f"{p}:{ln} {c}(... {k}=...)"
                     for p, ln, c, k in findings[:6]))
