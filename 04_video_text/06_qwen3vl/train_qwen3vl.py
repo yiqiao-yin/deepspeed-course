@@ -105,6 +105,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--sweep", default="4,8,16,24",
                    help="Frame counts to probe for peak VRAM. The point of "
                         "this build: find where it stops fitting.")
+    p.add_argument("--load-only", action="store_true",
+                   help="Load the model under ZeRO-3, report per-rank memory, "
+                        "and exit. Answers 'does it shard across my GPUs?' "
+                        "without a training run or a memory sweep.")
+    p.add_argument("--no-p2p", action="store_true",
+                   help="Set NCCL_P2P_DISABLE=1 before any collective. Rented "
+                        "boxes often advertise peer-to-peer they cannot "
+                        "perform; the tell is a collective that hangs until "
+                        "the watchdog fires. Costs throughput, unblocks the "
+                        "box. See tests/gpu/diagnose_nccl.sh.")
     p.add_argument("--probe-only", action="store_true",
                    help="Run the memory sweep and exit, no training.")
     p.add_argument("--max-steps", type=int, default=8)
@@ -115,6 +125,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.no_p2p:
+        # Must be set before torch touches NCCL, which happens on the first
+        # collective -- so before require_gpu()'s torch import is safest.
+        os.environ["NCCL_P2P_DISABLE"] = "1"
     require_gpu()
 
     import deepspeed
@@ -205,6 +219,25 @@ def main() -> None:
     after_load = torch.cuda.max_memory_allocated(local_rank) / 1e9
     say(f"\n  peak after load+init   {after_load:5.1f} GB  "
         f"({100*after_load/(props.total_memory/1e9):.0f}% of the card)")
+
+    if args.load_only:
+        # The question a multi-GPU reader actually has: did ZeRO-3 shard the
+        # weights across ranks, or did every rank materialise all 17.5 GB?
+        # weights/N + unshardable overhead is the model CLAUDE.md prescribes;
+        # a peak at or above the FULL weight size means zero.Init never fired.
+        shard = 17.5 / max(world, 1)
+        say(f"\n  expected weights/rank   {shard:5.1f} GB  (17.5 / {world})")
+        say(f"  measured peak/rank      {after_load:5.1f} GB")
+        verdict = ("SHARDED" if after_load < 17.5 * 0.9 or world == 1
+                   else "NOT SHARDED -- every rank holds the whole model")
+        say(f"  verdict                 {verdict}")
+        say(f"\n{bar}")
+        say("  Load-only probe complete.")
+        say(bar)
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.barrier(device_ids=[local_rank])
+            torch.distributed.destroy_process_group()
+        return
 
     # ---- the sweep: where does it stop fitting? ---------------------------
     def one_step(n_frames: int) -> tuple:
