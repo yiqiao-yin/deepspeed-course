@@ -131,7 +131,7 @@ EXAMPLES = {
                                          "KV cache is an INFERENCE cost, so "
                                          "ZeRO does not touch it."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
-                                    script="train_moe_ds.py",
+                                    script="train_moe_ds.py --balance bias --max-steps 20",
                                     launcher="deepspeed",
                                     note="MoE routing and load balancing. TWO "
                                          "GPUs because --expert-parallel "
