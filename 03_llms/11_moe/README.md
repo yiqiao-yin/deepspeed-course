@@ -244,10 +244,13 @@ says plainly that the run was capped and they do not yet mean anything. **A
 short run is a pipeline check, not a result** — success there means DeepSpeed
 launched, every rank ran, and the loss moved.
 
-> The EP path (`--expert-parallel`) is **not yet verified on multi-GPU
-> hardware**. The single-GPU paths and the whole CPU comparison are verified
-> end to end; the 2-GPU all-to-all is believed correct from the DeepSpeed API
-> and is not the same claim.
+> **Every path here is now verified on hardware.** The expert-parallel entry
+> was run on 2 x RTX 3090 and 8/8 on 2 x H100 80 GB, with `expert-parallel`,
+> `ds_config_ep` and `ep_size` markers confirmed in the output — so the
+> all-to-all genuinely ran rather than the control entry. The default path was
+> separately measured on 2 x A40 (eval loss 0.7036, entropy 0.933, 0 dead
+> experts, purity 0.866, rc=0), which also confirms the `update_bias`
+> all-reduce works under NCCL and not only under the gloo suite.
 
 ---
 
