@@ -153,14 +153,7 @@ labs:
     est_minutes: 15
     gpu: { min_vram_gb: 24, count: 2 }
     run:
-      # --use-lora is NOT optional here. Without it this is a FULL-parameter
-      # fine-tune of Qwen2-VL-2B: 4.4 GB of fp16 weights, 4.4 GB of
-      # gradients and ~24 GB of Adam state, which ZeRO-2 shards to ~12 GB
-      # per rank. That totals ~19 GB before activations and OOMs on a
-      # 24 GB card -- measured, at 23.56 GiB. The script has documented
-      # --use-lora in its own header all along; the manifest just never
-      # passed it.
-      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --use-lora --max-steps 20", primary: true }
+      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
       - { label: "GLM-5.3 analysis (no GPU)", cmd: "uv run train_glm53_ds.py --plan" }
       - { label: "Qwen3.8 analysis (no GPU)", cmd: "uv run train_qwen38_ds.py --plan" }
 
@@ -180,7 +173,11 @@ labs:
     est_minutes: 20
     gpu: { min_vram_gb: 24, count: 2 }
     run:
-      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
+      # --use-lora is NOT optional: without it this is a FULL-parameter
+      # fine-tune of Qwen2-VL-2B (~19 GB before activations) and OOMs on
+      # a 24 GB card -- measured, at 23.56 GiB. The script has documented
+      # --use-lora in its own header all along.
+      - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --use-lora --max-steps 20", primary: true }
 
   - id: 03_llms/04_reward_model
     title: "Reward modelling"

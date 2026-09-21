@@ -52,6 +52,28 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent
+
+# Flags consumed by the `deepspeed` LAUNCHER, not by the training script.
+LAUNCHER_FLAGS = {"--num_gpus", "--num-gpus", "--num_nodes", "--hostfile",
+                  "--master_port", "--master_addr", "--include", "--exclude"}
+
+
+def script_flags(path: Path) -> set:
+    """Every --flag the script defines via add_argument. Empty if unparsable."""
+    import ast as _ast
+    try:
+        tree = _ast.parse(path.read_text(errors="ignore"))
+    except (SyntaxError, OSError):
+        return set()
+    out = set()
+    for node in _ast.walk(tree):
+        if (isinstance(node, _ast.Call)
+                and getattr(node.func, "attr", None) == "add_argument"):
+            for a in node.args:
+                if (isinstance(a, _ast.Constant) and isinstance(a.value, str)
+                        and a.value.startswith("--")):
+                    out.add(a.value)
+    return out
 MANIFEST = REPO / "clawdeck.yaml"
 
 # The picker renders in a ~320px sidebar. These are the widths that fit.
@@ -263,6 +285,31 @@ def main() -> None:
             if script:
                 check(f"{i}: {script} exists", (d / script).is_file(),
                       "a rename updated the folder but not the command")
+                # Every flag the cmd passes must be one the script DEFINES.
+                #
+                # The script existing is not enough. `--use-lora` was once added to
+                # the WRONG lab's entry: both labs hold a file called train_ds.py and
+                # a string replace hit the first match. The script existed, the cmd
+                # was valid, every check here passed -- and the flag did nothing while
+                # the lab it was meant for kept OOMing on a learner's box.
+                #
+                # It is silent because these scripts use parse_known_args() by
+                # contract (the launcher injects --local_rank), so an unrecognised
+                # flag is IGNORED rather than rejected. The contract that makes the
+                # labs robust is what makes this mistake invisible at runtime.
+                defined = script_flags(d / script)
+                if defined:                    # empty => unparsable; do not assert
+                    unknown = sorted(t.split("=")[0] for t in toks
+                                     if t.startswith("--")
+                                     and t.split("=")[0] not in LAUNCHER_FLAGS
+                                     and t.split("=")[0] not in defined)
+                    check(f"{i}: every flag is defined by {script} "
+                          f"({r.get('label')!r})",
+                          not unknown,
+                          f"{script} does not define {', '.join(unknown)}. "
+                          "parse_known_args() IGNORES it silently, so the command "
+                          "looks right and does nothing. Check whether the flag "
+                          "belongs on a different lab.")
 
     # ---- --num_gpus must match the declared count --------------------------
     # This is the batch-invariant trap. Two EXAMPLES entries in this repo were
