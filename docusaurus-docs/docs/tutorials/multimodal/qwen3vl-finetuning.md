@@ -167,12 +167,17 @@ uv run deepspeed --num_gpus=1 train_qwen3vl.py           # needs 48 GB
 uv run deepspeed --num_gpus=1 train_qwen3vl.py --sweep 8,16,32,48
 ```
 
-:::warning Multi-GPU is not verified
-A 2-GPU run confirmed `zero.Init` fires and shards correctly, then hung in a
-`broadcast` inside it until NCCL's watchdog aborted — the interconnect
-signature `tests/gpu/diagnose_nccl.sh` exists to diagnose, on a rented
-community-cloud box. Single-GPU is measured end to end; multi-GPU is not. Those
-are different claims and this course does not blur them.
+:::tip Multi-GPU works, and the number is the lesson
+Measured on 2 × A40: **10.1 GB per rank** against the 8.8 GB that `17.5 / 2`
+predicts. The 1.3 GB gap is the overhead that does *not* shard — activations,
+gather buffers, fragmentation — which is why you budget **per GPU** as
+`weights/N + overhead` and never in aggregate.
+
+It needed `--no-p2p` to get there. Two independent A40 boxes hung identically
+in `WorkNCCL(SeqNum=6, OpType=BROADCAST)` inside `_zero_init_param` without it.
+Reproducing on different hardware rules out a bad host: those boxes advertise
+peer-to-peer they cannot perform, and `NCCL_P2P_DISABLE=1` is the documented
+fix. It costs throughput, and hardware with working P2P does not need it.
 :::
 
 ## References

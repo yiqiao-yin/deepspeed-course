@@ -151,8 +151,8 @@ EXAMPLES = {
                                         script="train_qwen25vl.py",
                                         note="Qwen2.5-VL-3B + LoRA fits 16 GB; "
                                              "2 GPUs to exercise ZeRO-3."),
-    "04_video_text/06_qwen3vl": dict(min_vram=48, gpus=2, disk=120,
-                                    script="train_qwen3vl.py --load-only --no-p2p",
+    "04_video_text/06_qwen3vl": dict(min_vram=48, gpus=1, disk=120,
+                                    script="train_qwen3vl.py",
                                     note="Qwen3-VL-8B LoRA. MEASURED: 18.8 GB "
                                          "floor + 11.97 GB per 1k visual "
                                          "tokens, so ~33 frames on 48 GB. A "
