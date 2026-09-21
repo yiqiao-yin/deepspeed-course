@@ -669,6 +669,94 @@ download call is lexically inside a rank-gated branch. Its permanent
 counterexamples include the bug exactly as it shipped **and** a file whose rank
 guard sits around the wrong statement.
 
+### A lab is its COMMAND, not just its code
+
+`03_llms/03_ocr` OOMed on the 24 GB it advertised. The obvious readings were
+"declare 48 GB" or "shrink the config". Both were wrong. The manifest ran
+
+```bash
+uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20
+```
+
+while the script's **own header** had always documented
+
+```bash
+deepspeed --num_gpus=2 train_ds.py --use-4bit --use-lora
+```
+
+Both flags are `action="store_true"`, so the lab had been doing a
+**full-parameter** fine-tune of Qwen2-VL-2B: 4.4 GB weights + 4.4 GB gradients
++ ~24 GB Adam state, which ZeRO-2 shards to ~12 GB/rank — ~19 GB before
+activations, on a 23.56 GiB card. Measured, to the gigabyte. The lab's own
+summary says *"cap max_pixels to bound memory"* and the command skipped the
+memory-bounding feature.
+
+**`min_vram_gb` was never wrong. The command was.** Adding `--use-lora` made the
+lab cheaper, not more expensive: verified at 20/20 steps, rc=0, zero OOM on the
+same 2 × RTX 3090 that had failed.
+
+**Then the fix landed on the wrong lab**, and that is the part worth keeping.
+`03_llms/01_llm_finetuning` and `03_llms/03_ocr` both contain a file called
+`train_ds.py`, so their manifest commands were **byte-identical**. A
+`str.replace(old, new, 1)` hit the first match. The tell was in the comment I
+wrote with it — it describes Qwen2-VL-2B, the *OCR* model, while sitting under
+the Llama SFT lab.
+
+Two rules fall out:
+
+- **Edit by index, not by string match, when the string is not unique.** Locate
+  the block by its `- id:` and act on line numbers. Anchoring on text that
+  appears twice is how a correct fix reaches the wrong target.
+- **`parse_known_args()` makes a misplaced flag SILENT.** The labs use it by
+  contract, because the launcher injects `--local_rank`. So an unrecognised flag
+  is ignored rather than rejected: one lab quietly carried a no-op, the other
+  kept OOMing, and nothing raised anywhere.
+
+`tests/test_clawdeck_manifest.py` now resolves every `--flag` in a cmd against
+the `add_argument` names that script actually defines, skipping those the
+`deepspeed` launcher consumes. 804 checks. **It cannot catch the original
+omission** — a missing flag is an absence, and absences are not checkable — but
+it catches every misplacement, which is the failure mode `parse_known_args()`
+guarantees will be quiet.
+
+### Three green checkers, one broken lab
+
+That bug was invisible to every static check on both sides of the integration
+at once:
+
+| checker | what it saw |
+|---|---|
+| Clawdeck's catalog check | a valid, bookable, priced command |
+| `test_clawdeck_manifest.py` | a `.py` file that exists |
+| the runtime | a flag it was contractually obliged to ignore |
+
+Three green signals, one lab that OOMs for a learner. Only *running it* found
+it. A passing static suite is evidence about the questions it asks, never
+coverage of the ones it does not.
+
+### "Rent a bigger box" was the wrong answer three times running
+
+Twice the symptom looked like size and was not, and a larger machine would have
+**masked** each rather than fixed it:
+
+| symptom | looked like | actually was |
+|---|---|---|
+| `03_ocr` OOM at 24 GB | needs 48 GB | a command missing `--use-lora` |
+| `06_qwen3vl` 2-GPU hang | 8.77 B too big | NCCL peer-to-peer |
+
+The second is the cleaner case. The hang was
+`WorkNCCL(SeqNum=6, OpType=BROADCAST, **NumelIn=1152**)` — a few kilobytes.
+**A collective whose payload is tiny cannot be a memory event.** It is the box
+advertising peer-to-peer it cannot perform, and `NCCL_P2P_DISABLE=1` fixed it
+immediately. Loaded, the model used 10.1 GB of a 47.7 GB card — 21%. Memory was
+never near the constraint.
+
+What settled it was reproducing on **two independent boxes**. One hang is a
+bad-host lottery; the same hang on different hardware is a property of the code
+or the provider, and that is a different investigation. `06_qwen3vl` carries
+`--no-p2p` and `--load-only` for exactly this, and `--load-only` answers "will
+this shard on my GPUs" in one step without a training run.
+
 ### Guard the output, never the collective
 
 The section above is about making sure only rank 0 does the *work*. This is its
