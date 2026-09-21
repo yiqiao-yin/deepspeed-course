@@ -176,11 +176,37 @@ variable is what springs it.
 trainable params: 15,335,424 || all params: 8,782,459,120 || trainable%: 0.1746
 ```
 
-> **Multi-GPU is not verified.** A 2-GPU run confirmed `zero.Init` fires and
-> shards correctly, then hung in a `broadcast` inside it until NCCL's watchdog
-> aborted — the interconnect signature described in `tests/gpu/diagnose_nccl.sh`,
-> on a rented community-cloud box. Single-GPU is measured end to end; multi-GPU
-> is not, and those are different claims.
+## Multi-GPU: works, but needs `--no-p2p` on rented boxes
+
+Measured on 2 × A40:
+
+    world size              2
+    peak after load+init    10.1 GB   (21% of the card)
+    expected weights/rank    8.8 GB   (17.5 / 2)
+    verdict                 SHARDED
+
+10.1 GB against a predicted 8.8 GB — the 1.3 GB gap is the overhead that does
+**not** shard, exactly as `weights/N + overhead` predicts. ZeRO-3 is doing its
+job.
+
+**But it only got there with `--no-p2p`.** Two *independent* A40 boxes hung
+identically without it:
+
+    WorkNCCL(SeqNum=6, OpType=BROADCAST, NumelIn=1152)  inside _zero_init_param
+
+Reproducing on different hardware rules out a bad-host lottery. The flag sets
+`NCCL_P2P_DISABLE=1` before any collective — the documented fix for a box that
+advertises peer-to-peer it cannot perform. It costs real throughput and it is
+not needed on hardware with working P2P (the H100 pairs in this course's other
+labs do fine without it).
+
+```bash
+uv run deepspeed --num_gpus=2 train_qwen3vl.py --load-only            # does it shard?
+uv run deepspeed --num_gpus=2 train_qwen3vl.py --load-only --no-p2p   # if that hangs
+```
+
+If `--load-only` hangs and `--no-p2p` fixes it, your box's interconnect is the
+problem, not this lab. `tests/gpu/diagnose_nccl.sh` confirms it in a minute.
 
 ---
 
