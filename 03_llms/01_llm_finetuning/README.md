@@ -887,20 +887,24 @@ cards. This one only analyses, and the reason is arithmetic:
 |---|---|
 | parameters | 2.78 T total, 104 B activated per token |
 | weights on the Hub | **1,561 GB** across 96 safetensors shards |
-| at 4-bit NF4 | ~390 GB → **~5 × H100-80GB for the weights alone** |
-| realistic floor | 8 × H200 (1,128 GB), ~$29/hour |
+| as shipped | **0.56 bytes/parameter** — already quantised, 2.72 T of them in `U8` |
+| realistic floor | **> 1,561 GB.** 8 × B200 is 1,440 GB and falls **121 GB short** |
 
-And that is the *optimistic* number, because it is weights-only. This course's
-own rule is `weights/N + overhead that does not shard`, and activations, gather
-buffers and fragmentation are all excluded from it.
+**Quantisation is not the way out, because it has already been taken.** The
+checkpoint is denser than fp8 on arrival, so there is no 4× left. Even true
+4-bit across all 2.78 T parameters is ~1,390 GB — still eight B200s for the
+weights alone, before a single activation.
+
+That is still the *optimistic* number, because it is weights-only — this
+course's rule is `weights/N + overhead that does not shard`.
 
 Two further blockers no amount of hardware fixes:
 
 - **The remote code does not import on the transformers this course pins.** K3
   ships custom modelling code whose `auto_map` points at
   `modeling_kimi_k3.py`, which imports `OutputRecorder` from
-  `transformers.utils.generic`. That symbol existed in 4.56–5.0 and was
-  **removed by 5.10**; every lab here pins **5.16.1**, and
+  `transformers.utils.generic`. That symbol survives in 5.1.0 and is **gone in
+  5.2.0** (verified by installing each); every lab here pins **5.16.1**, and
   `tests/test_config_kwargs.py` fails CI if any lock disagrees. So
   `--verify-arch` needs its own pinned environment, while `--plan` always works.
 - **It needs `fla-core`** (flash-linear-attention) for Kimi Delta Attention,
@@ -908,6 +912,29 @@ Two further blockers no amount of hardware fixes:
 
 **This is the honest outcome, not a shortfall.** A lab that pretends a 1.5 TB
 model is rentable would waste a reader's money before it taught them anything.
+
+### "Could I just rent 8 Blackwells?"
+
+The obvious question, and worth answering with real prices rather than
+intuition. RunPod's largest card is a **B200 at 180 GB, $5.98/GPU/hr**:
+
+| | VRAM | $/hr |
+|---|---:|---:|
+| 8 × B200 | **1,440 GB** | ~$48 |
+| 8 × H200 | 1,128 GB | ~$29 |
+| 8 × RTX PRO 6000 Blackwell (96 GB) | 768 GB | ~$14 |
+
+Eight B200s is **121 GB short** of just holding the weights as they ship. And
+the usual escape — quantise harder — is already spent, because K3 arrives at
+0.56 bytes/parameter. You would need nine, which in practice means sixteen.
+
+**This is the rare case where "rent a bigger box" is the right diagnosis** —
+which is worth stating plainly, because in this course it has been the *wrong*
+one three times running (an OOM that was a missing `--use-lora`, a hang that
+was NCCL peer-to-peer, a capacity model that was wrong). Here the arithmetic
+really does say the machine is too small. It also does not matter, because the
+remote code would not import even if the machine were big enough.
+
 
 ## What `--plan` reports
 

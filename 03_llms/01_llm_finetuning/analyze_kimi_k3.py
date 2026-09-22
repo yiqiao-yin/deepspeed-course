@@ -21,16 +21,18 @@ cards. This one only analyses, and the reason is arithmetic rather than
 laziness:
 
     parameters        2.78 T total, 104 B activated per token
-    weights on Hub    1,561 GB  (96 safetensors shards)
-    at 4-bit NF4      ~390 GB   -> ~5 x H100-80GB for WEIGHTS ALONE
-    realistic floor   8 x H200 (1,128 GB), ~$29/hour
+    weights on Hub    1,561 GB  (96 safetensors shards, index total_size)
+    as shipped        0.56 bytes/param -- ALREADY quantised (2.72 T in U8),
+                      so there is no 4x saving left to take
+    realistic floor   >1,561 GB, i.e. 9+ B200-180GB. 8 x B200 is 1,440 GB and
+                      falls 121 GB short before any activations
 
 There are two further blockers that no amount of hardware fixes:
 
 **The remote code does not import on the pinned transformers.** K3 ships
 custom modelling code (`auto_map` -> `modeling_kimi_k3.py`) that imports
-`OutputRecorder` from `transformers.utils.generic`. That symbol existed in
-transformers 4.56-5.0 and was **removed by 5.10**. Every lab in this course
+`OutputRecorder` from `transformers.utils.generic`. That symbol survives in
+transformers 5.1.0 and is **gone in 5.2.0** (verified by installing each). Every lab in this course
 pins **5.16.1**, and `tests/test_config_kwargs.py` fails CI if any lock
 disagrees. `--verify-arch` therefore needs its own pinned environment; see
 the note on that flag below.
@@ -111,6 +113,11 @@ MODEL = "moonshotai/Kimi-K3"
 
 # Measured from the safetensors index, not estimated: sum of shard sizes.
 WEIGHTS_GB = 1561.0
+
+# Total parameters, from the Hub's own safetensors census -- NOT derived from
+# the byte count, because the two do not have the constant ratio you would
+# expect. 2.72 T of these are stored as U8.
+PARAMS = 2_779_931_837_184
 
 
 # NOTE: there is deliberately no `require_gpu()` here.
@@ -222,17 +229,29 @@ def mla_cache_per_token(config: dict) -> dict:
                 per_token_per_layer=kv + rope)
 
 
-def capacity(weights_gb: float, vram_gb: float, bits: int = 4) -> dict:
+def capacity(params: int, vram_gb: float, bytes_per_param: float) -> dict:
     """
-    How many cards the WEIGHTS alone need, at a given quantisation.
+    How many cards the WEIGHTS alone need, at a given bytes-per-parameter.
 
-    Deliberately weights-only and deliberately optimistic. CLAUDE.md's rule is
-    `weights/N + overhead that does not shard`, and activations, gather buffers
-    and fragmentation are all excluded here -- so a number this says is
-    "just barely enough" is not.
+    Takes a PARAMETER COUNT, not a byte size, and that is the whole point.
+
+    The first version of this function took `weights_gb` and scaled it by
+    `bits / 16`, i.e. it assumed the published 1,561 GB was a bf16 footprint
+    and that 4-bit would quarter it to 390 GB. **K3 does not ship in bf16.**
+    2.72 T of its 2.78 T parameters are stored as U8, so the checkpoint is
+    already 0.56 bytes/parameter -- denser than fp8 -- and there is no 4x
+    left to take. 390 GB is what you would get if 1,561 GB were the bf16 size
+    of a 780 B model, which is a different model entirely.
+
+    Rescaling an ALREADY-QUANTISED checkpoint by a bit width is the error, and
+    it is invisible: the arithmetic is right, the premise is not.
+
+    Deliberately weights-only and deliberately optimistic -- CLAUDE.md's rule
+    is `weights/N + overhead that does not shard`, and activations, gather
+    buffers and fragmentation are all excluded.
     """
-    g = weights_gb * (bits / 16.0)
-    return dict(bits=bits, gb=g, cards=g / vram_gb)
+    g = params * bytes_per_param / 1e9
+    return dict(bytes_per_param=bytes_per_param, gb=g, cards=g / vram_gb)
 
 
 def audit_snippet() -> list:
@@ -316,16 +335,27 @@ def print_plan(config: dict, args) -> None:
     print(f"\n{bar}")
     print("  3. Can you run it? No, and here is the arithmetic")
     print(bar)
-    print(f"  weights on the Hub   {WEIGHTS_GB:,.0f} GB  (measured from the "
-          f"safetensors index)")
-    print(f"\n  {'precision':<16} {'weights':>10}   {'H100-80GB':>10} "
-          f"{'H200-141GB':>11}")
-    print(f"  {'-'*16} {'-'*10}   {'-'*10} {'-'*11}")
-    for bits, name in ((16, "bf16 (as shipped)"), (8, "fp8"), (4, "4-bit NF4")):
-        a = capacity(WEIGHTS_GB, 80, bits)
-        b = capacity(WEIGHTS_GB, 141, bits)
-        print(f"  {name:<16} {a['gb']:>9,.0f} GB   {a['cards']:>9.1f}x "
-              f"{b['cards']:>10.1f}x")
+    print(f"  weights on the Hub   {WEIGHTS_GB:,.0f} GB  (safetensors index "
+          f"total_size)")
+    print(f"  total parameters     {PARAMS/1e12:,.2f} T")
+    print(f"  => as shipped        {WEIGHTS_GB*1e9/PARAMS:.2f} bytes/parameter "
+          f"-- ALREADY QUANTISED, denser than fp8")
+    print(f"     2.72 T of the 2.78 T parameters are stored as U8, so there is")
+    print(f"     no 4x saving left to take. Quantisation is not the way out.")
+    print(f"\n  {'stored as':<20} {'weights':>10}   {'B200-180':>9} "
+          f"{'H200-141':>9}")
+    print(f"  {'-'*20} {'-'*10}   {'-'*9} {'-'*9}")
+    rows = [("AS SHIPPED", WEIGHTS_GB * 1e9 / PARAMS),
+            ("if true 4-bit", 0.5),
+            ("if fp8", 1.0),
+            ("if bf16", 2.0)]
+    for name, bpp in rows:
+        a = capacity(PARAMS, 180, bpp)
+        b = capacity(PARAMS, 141, bpp)
+        print(f"  {name:<20} {a['gb']:>7,.0f} GB   {a['cards']:>8.1f}x "
+              f"{b['cards']:>8.1f}x")
+    print(f"\n  8 x B200 is {8*180:,} GB -- {WEIGHTS_GB - 8*180:,.0f} GB SHORT of")
+    print(f"  the as-shipped weights, before a single activation.")
     print(f"\n  Those columns are WEIGHTS ONLY. Activations, gather buffers and")
     print(f"  fragmentation do not shard -- budget per GPU as")
     print(f"  weights/N + overhead, never in aggregate (CLAUDE.md).")
@@ -334,8 +364,8 @@ def print_plan(config: dict, args) -> None:
     print("  4. Two blockers hardware does not fix")
     print(bar)
     print("  * The remote code imports OutputRecorder from")
-    print("    transformers.utils.generic. That existed in 4.56-5.0 and was")
-    print("    REMOVED by 5.10. This course pins 5.16.1 everywhere, and")
+    print("    transformers.utils.generic. That existed up to 5.1 and was")
+    print("    REMOVED IN 5.2.0. This course pins 5.16.1 everywhere, and")
     print("    tests/test_config_kwargs.py fails CI if a lock disagrees.")
     print("  * It needs fla-core (flash-linear-attention) for Kimi Delta")
     print("    Attention — a CUDA-compiled dependency.")
@@ -393,7 +423,7 @@ def verify_architecture(model: str = MODEL) -> bool:
     except ImportError as exc:
         print(f"\n  FAILED: {exc}")
         print("\n  This is the documented blocker, not a bug in this script.")
-        print("  K3's remote code needs transformers 4.56-5.0 and fla-core;")
+        print("  K3's remote code needs transformers <=5.1 and fla-core;")
         print("  this course pins transformers 5.16.1. Reproduce with:")
         print("\n      uv run --no-project \\")
         print("        --with 'transformers==5.0.0' --with torch --with accelerate \\")
@@ -446,7 +476,7 @@ def parse_args() -> argparse.Namespace:
                         "No GPU, no download, no torch.")
     p.add_argument("--verify-arch", action="store_true",
                    help="Build the module tree on the meta device. Needs "
-                        "transformers 4.56-5.0 + fla-core; see --plan step 4.")
+                        "transformers <=5.1 + fla-core; see --plan step 4.")
     p.add_argument("--audit-snippet", action="store_true",
                    help="With --plan: check the circulating 'kimi-k3' "
                         "fine-tuning snippet against the INSTALLED libraries.")
