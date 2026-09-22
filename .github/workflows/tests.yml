@@ -121,6 +121,9 @@ jobs:
       - name: MoE routing, load balancing and expert accounting
         run: uv run tests/test_moe_routing.py
 
+      - name: Kimi K3 architecture arithmetic
+        run: uv run tests/test_kimi_k3_plan.py
+
       - name: Every training script compiles
         run: |
           uv run --no-project python -m compileall -q \

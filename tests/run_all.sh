@@ -49,6 +49,7 @@ TESTS=(
     tests/test_multigpu_download_guard.py
     tests/test_cifar10_source.py
     tests/test_moe_routing.py
+    tests/test_kimi_k3_plan.py
 )
 
 for test in "${TESTS[@]}"; do
