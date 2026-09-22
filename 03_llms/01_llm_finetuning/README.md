@@ -1010,6 +1010,111 @@ and the first version of this script took `min()` of those gaps and printed
 field of the right type holding a plausible small integer, and neither
 detectable by a shape assertion.
 
+## Preflight for any model you cannot afford to be wrong about
+
+Everything above was found without renting anything, and none of it is
+specific to K3. If you are sizing a pod for a frontier checkpoint, these four
+checks cost minutes and are the ones that would otherwise fail *after* the
+download.
+
+### 1. Do not assume the checkpoint is bf16
+
+This is the check that changed the answer here. Ask the Hub what dtypes are
+actually in the file:
+
+```python
+from huggingface_hub import HfApi
+info = HfApi().model_info("moonshotai/Kimi-K3")
+st = info.safetensors
+print(f"total parameters: {st.total:,}")
+for dtype, n in sorted(st.parameters.items(), key=lambda kv: -kv[1]):
+    print(f"  {dtype:5} {n:>18,}")
+```
+
+```
+total parameters: 2,779,931,837,184
+  U8     2,722,740,830,208
+  BF16      57,179,884,544
+  F32           11,122,432
+```
+
+**`U8` for 98% of the parameters means the model is already quantised**, and
+every "just load it in 4-bit" plan is dead on arrival. A `config.json` with
+`torch_dtype: bfloat16` and `quantization_config: null` — which is exactly what
+K3 has — tells you nothing about this. The dtype census does.
+
+### 2. The parameter count and the byte count are different questions
+
+Two authoritative-looking sources disagree here, and picking the wrong one puts
+you off by 1.8×:
+
+| question | source | K3 |
+|---|---|---|
+| how much **disk and VRAM** do I need? | `model.safetensors.index.json` → `metadata.total_size` | **1,561 GB** |
+| how many **parameters** is it? | the dtype census above | **2.78 T** |
+
+```python
+import json, urllib.request
+u = "https://huggingface.co/<repo>/resolve/main/model.safetensors.index.json"
+idx = json.load(urllib.request.urlopen(u, timeout=120))
+print(f"disk needed: {idx['metadata']['total_size']/1e9:,.0f} GB")
+```
+
+They disagree because the census counts *parameters* while the index counts
+*bytes*, and packed experts store **1.88 parameters per byte** — roughly 4-bit
+packing plus per-block scales. Multiplying the parameter count by a bytes-per-
+parameter you assumed is how the 390 GB error happened. **Use `total_size` for
+capacity planning and the census only to understand what you are holding.**
+
+### 3. Check the remote code imports *before* you rent
+
+Custom modelling code pins you to a transformers window that nothing documents.
+K3's `modeling_kimi_linear.py` does:
+
+```python
+from transformers.utils.generic import OutputRecorder, check_model_inputs
+```
+
+Bisecting that symbol takes a few minutes and no GPU:
+
+```bash
+for v in 4.57.1 5.0.0 5.1.0 5.2.0 5.5.0 5.16.1; do
+  printf "  %-8s " "$v"
+  uv run --no-project --with "transformers==$v" python -c \
+    "from transformers.utils.generic import OutputRecorder; print('HAS')" 2>&1 | tail -1
+done
+```
+
+| transformers | `OutputRecorder` |
+|---|---|
+| 4.57.1, 5.0.0, **5.1.0** | present |
+| **5.2.0** and later | **gone** |
+
+So K3's remote code needs **transformers ≤ 5.1**. This course pins 5.16.1
+everywhere, which is why `--verify-arch` needs its own environment. Note that
+a changelog would have told you "removed in 5.2.0" only if you knew to look;
+installing each version and importing the symbol is the check that cannot be
+wrong.
+
+### 4. Check the compiled dependencies, and what is actually bookable
+
+`fla-core` (Kimi Delta Attention) is CUDA-compiled, but it **installs and
+imports on a CPU box**, so you can retire that risk for free:
+
+```bash
+uv run --no-project --with fla-core python -c "import fla; print('ok')"
+```
+
+And confirm the hardware exists before planning around it — RunPod's largest
+card is a B200 at 180 GB:
+
+```bash
+uv run runpod/runpod_ctl.py gpus --min-vram 80 --limit 40
+```
+
+> **The order matters.** Run **3** and **4** before **1** and **2**. Sizing is the interesting question,
+but an import error makes it irrelevant — and it is the cheaper check.
+
 ## References
 
 - [moonshotai/Kimi-K3](https://huggingface.co/moonshotai/Kimi-K3)
