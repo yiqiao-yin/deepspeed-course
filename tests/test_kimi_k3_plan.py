@@ -184,18 +184,49 @@ def test_mla_cache_mentions_no_head_count() -> None:
           mla_cache_per_token({"text_config": {}})["supported"] is False)
 
 
-def test_capacity_scales_with_bit_width() -> None:
-    bf16 = capacity(1561.0, 80.0, bits=16)
-    fp8 = capacity(1561.0, 80.0, bits=8)
-    nf4 = capacity(1561.0, 80.0, bits=4)
-    check("bf16 is the full 1,561 GB", abs(bf16["gb"] - 1561.0) < 1e-6)
-    check("fp8 halves it and 4-bit quarters it",
-          abs(fp8["gb"] - 780.5) < 1e-6 and abs(nf4["gb"] - 390.25) < 1e-6,
-          f"fp8={fp8['gb']} nf4={nf4['gb']}")
-    check("4-bit still needs ~5 x H100-80GB for WEIGHTS ALONE",
-          4.8 < nf4["cards"] < 5.0, f"got {nf4['cards']:.2f} cards")
-    check("cards is a float -- 4.88 must not round down to 4",
-          isinstance(nf4["cards"], float) and nf4["cards"] > 4)
+def test_capacity_is_derived_from_the_PARAMETER_COUNT() -> None:
+    """
+    THE SECOND COUNTEREXAMPLE, and the more expensive one.
+
+    `capacity()` used to take the published 1,561 GB and scale it by
+    `bits / 16` -- which assumes the checkpoint ships in bf16. It does not.
+    2.72 T of K3's 2.78 T parameters are stored as U8, so it is already
+    0.56 bytes/parameter, DENSER than fp8. The old model reported "~390 GB at
+    4-bit, about 5 x H100" for a model whose weights do not fit on eight
+    B200s. 390 GB is the bf16 size of a 780 B model -- a different model.
+
+    The arithmetic was right and the premise was wrong, which is why nothing
+    caught it: 1561 * 4/16 really is 390.
+    """
+    # The published facts, both from the Hub, both cross-checked.
+    PARAMS = 2_779_931_837_184
+    STORED_GB = 1561.0
+
+    shipped_bpp = STORED_GB * 1e9 / PARAMS
+    check("the checkpoint really is already quantised (< 1 byte/param)",
+          shipped_bpp < 1.0, f"got {shipped_bpp:.2f} B/param")
+
+    # capacity() must take a PARAMETER COUNT. If it still took GB, feeding it
+    # a parameter count would produce a number ~1e12 too large.
+    c = capacity(PARAMS, 180.0, shipped_bpp)
+    check("as-shipped weights are ~1,561 GB",
+          abs(c["gb"] - STORED_GB) < 1.0, f"got {c['gb']:,.0f} GB")
+
+    check("8 x B200 (1,440 GB) does NOT hold the as-shipped weights",
+          c["gb"] > 8 * 180, f"{c['gb']:,.0f} GB vs 1,440 GB")
+    check("it needs more than 8 B200s", c["cards"] > 8.0,
+          f"got {c['cards']:.1f} cards")
+
+    # And the specific wrong answer must be unreachable.
+    four_bit = capacity(PARAMS, 180.0, 0.5)
+    check("true 4-bit is ~1,390 GB, NOT the old 390 GB",
+          1380 < four_bit["gb"] < 1400, f"got {four_bit['gb']:,.0f} GB")
+    check("even true 4-bit needs ~8 B200s, not ~5 H100s",
+          four_bit["cards"] > 7.0, f"got {four_bit['cards']:.1f}")
+
+    # Scaling is still linear in bytes/param -- the fix must not break that.
+    check("bf16 is 4x true-4-bit",
+          abs(capacity(PARAMS, 180.0, 2.0)["gb"] / four_bit["gb"] - 4.0) < 1e-9)
 
 
 def test_flat_and_nested_configs_agree() -> None:
@@ -219,7 +250,7 @@ def main() -> int:
                test_a_dense_model_is_not_reported_as_hybrid,
                test_moe_split,
                test_mla_cache_mentions_no_head_count,
-               test_capacity_scales_with_bit_width,
+               test_capacity_is_derived_from_the_PARAMETER_COUNT,
                test_flat_and_nested_configs_agree):
         print(f"\n{fn.__name__}")
         fn()
