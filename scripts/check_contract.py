@@ -149,6 +149,20 @@ def _registered_script(folder: Path, name: str):
     return folder / spec_e["script"] if spec_e else None
 
 
+def calls_require_gpu(path: Path) -> bool:
+    """True when the file actually CALLS require_gpu(), not merely names it."""
+    try:
+        tree = ast.parse(path.read_text(errors="ignore"), filename=str(path))
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "require_gpu"):
+            return True
+    return False
+
+
 def check_reader_a(folder: Path, name: str, r: Report) -> None:
     """No GPU: must fail gracefully, not with a CUDA traceback."""
     eps = entry_points(folder)
@@ -158,8 +172,14 @@ def check_reader_a(folder: Path, name: str, r: Report) -> None:
         return
 
     # An entry point either guards with require_gpu() or is CPU-runnable.
-    guarded = [p for p in eps if "require_gpu" in p.read_text(errors="ignore")]
-    cpu_ok = [p for p in eps if "require_gpu" not in p.read_text(errors="ignore")]
+    #
+    # Asked as "is there a CALL to it", not "does the string appear". A file
+    # that merely *mentions* require_gpu -- in a docstring, or in a comment
+    # explaining why it deliberately has none -- was being classified as
+    # guarded, and then failed the message/ALLOW_CPU checks below for a
+    # function it does not contain.
+    guarded = [p for p in eps if calls_require_gpu(p)]
+    cpu_ok = [p for p in eps if p not in guarded]
 
     r.add(name, "A", "a GPU entry point calls require_gpu()",
           bool(guarded) or bool(cpu_ok),

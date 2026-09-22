@@ -2,6 +2,12 @@
 
 This guide walks through how to use **DeepSpeed** with **HuggingFace Transformers** to fine-tune large language models efficiently on multi-GPU setups.
 
+The folder holds **four** entry points: `train_ds.py` (Llama SFT, the original),
+and three frontier-model analyses — `train_glm53_ds.py` (755 GB sparse MoE),
+`train_qwen38_ds.py` (hybrid linear/full attention) and `analyze_kimi_k3.py`
+(2.78 T parameters — analysis only, hence the name). The last three all start with `--plan`,
+which needs no GPU and downloads nothing.
+
 ## Environment & Local Testing
 
 ### Setup with `uv`
@@ -854,3 +860,132 @@ three of them were in this script and each produced a plausible-looking failure:
 | 3 | hang, then `rc=250` | NCCL barrier — an allreduce of **one element** — timed out after 1,800,069 ms. `nvidia-smi topo -m` showed `SYS` between the cards. Pod, not code |
 | 4 | OOM at 43.73 GiB/GPU | `SFTConfig` built *after* the model, so `zero.Init` never fired and every rank held the whole model |
 | 5 | OOM at 42.23 GiB/GPU | sharding now correct; the **capacity model** was wrong — see the table above |
+
+---
+
+# Kimi K3: reading a 2.8-trillion-parameter model you cannot run
+
+`analyze_kimi_k3.py` is the **fourth** entry point in this folder, and the
+first that deliberately does **not** train. It is named `analyze_`, not
+`train_`, for exactly that reason. It analyses
+[moonshotai/Kimi-K3](https://huggingface.co/moonshotai/Kimi-K3) —
+2.78 T parameters, 104 B activated per token — from its published
+`config.json`.
+
+```bash
+uv run analyze_kimi_k3.py --plan            # no GPU, no download, ~2 seconds
+uv run analyze_kimi_k3.py --plan --audit-snippet
+uv run analyze_kimi_k3.py --verify-arch     # meta device; see the caveat below
+```
+
+## Why there is no training run here
+
+`train_qwen38_ds.py` analyses *and* trains, because 27 B fits on two 48 GB
+cards. This one only analyses, and the reason is arithmetic:
+
+| | |
+|---|---|
+| parameters | 2.78 T total, 104 B activated per token |
+| weights on the Hub | **1,561 GB** across 96 safetensors shards |
+| at 4-bit NF4 | ~390 GB → **~5 × H100-80GB for the weights alone** |
+| realistic floor | 8 × H200 (1,128 GB), ~$29/hour |
+
+And that is the *optimistic* number, because it is weights-only. This course's
+own rule is `weights/N + overhead that does not shard`, and activations, gather
+buffers and fragmentation are all excluded from it.
+
+Two further blockers no amount of hardware fixes:
+
+- **The remote code does not import on the transformers this course pins.** K3
+  ships custom modelling code whose `auto_map` points at
+  `modeling_kimi_k3.py`, which imports `OutputRecorder` from
+  `transformers.utils.generic`. That symbol existed in 4.56–5.0 and was
+  **removed by 5.10**; every lab here pins **5.16.1**, and
+  `tests/test_config_kwargs.py` fails CI if any lock disagrees. So
+  `--verify-arch` needs its own pinned environment, while `--plan` always works.
+- **It needs `fla-core`** (flash-linear-attention) for Kimi Delta Attention,
+  which is a CUDA-compiled dependency.
+
+**This is the honest outcome, not a shortfall.** A lab that pretends a 1.5 TB
+model is rentable would waste a reader's money before it taught them anything.
+
+## What `--plan` reports
+
+Every number is read from `config.json`, never hardcoded:
+
+```
+  layers           93
+  FULL attention    24   (26%)
+  LINEAR (KDA)      69   (74%)
+  pattern          every 4th layer is full attention  ->  2.9:1 linear:full
+```
+
+| | |
+|---|---|
+| architecture | `KimiK3ForConditionalGeneration`, text backbone `KimiLinearForCausalLM` |
+| hidden / vocab | 7,168 / 163,840 |
+| context | 1,048,576 tokens |
+| experts | **896 routed, 16 active (1.8%), 2 shared**, sigmoid router |
+| MLA cache | `kv_lora_rank 512 + qk_rope_head_dim 64` = **576 values/token/full layer** |
+
+**97.9% of the parameters are experts.** That one number explains the model: K3
+is not a dense 2.8 T model, it is a ~104 B model with an enormous lookup table
+of specialists attached. The router that picks 16 of 896 is a rounding error in
+the parameter count and decides where almost everything goes — which is exactly
+the point [`11_moe`](../11_moe/) makes at toy scale.
+
+## Why it is a good capstone read
+
+K3 composes ideas that already have their own folders here:
+
+| K3 uses | Taught in |
+|---|---|
+| MLA-style compressed KV (`kv_lora_rank 512`) | [`10_deepseek_from_scratch`](../10_deepseek_from_scratch/) |
+| fine-grained + shared MoE, sigmoid router | [`11_moe`](../11_moe/) |
+| hybrid linear/full attention layers | `train_qwen38_ds.py`, above |
+| expert parallelism | `11_moe --expert-parallel` |
+
+The hybrid layout is the one worth pausing on. **Linear-attention layers carry
+no KV cache at all**, so on a 3:1 hybrid the cache scales with the 24 full
+layers rather than all 93. Combined with MLA making each of those layers
+cheaper, it compounds: fewer cached layers, and each one smaller.
+
+## A widely-copied training snippet that does not run
+
+A fine-tuning snippet for "kimi-k3" circulates on tutorial sites.
+`--plan --audit-snippet` checks it against your **installed** libraries rather
+than a remembered snapshot:
+
+| in the snippet | what happens |
+|---|---|
+| `model_id = "kimi/kimi-k3"` | 401 — the id is `moonshotai/Kimi-K3` |
+| `SFTTrainer(tokenizer=...)` | removed in transformers 5.x → `processing_class=` |
+| `SFTTrainer(max_seq_length=...)` | moved out of the trainer in trl 1.x |
+| `train_dataset="train.jsonl"` | a `str`, not a `Dataset` |
+
+Its **LoRA targets, though, are fine.** `q_proj/k_proj/v_proj/o_proj` resolve to
+89 modules in the full-attention layers and 211 in the linear ones — 300 in
+total. That is worth stating because the obvious guess, that a linear-attention
+model must use different projection names, is **wrong here**, and only building
+the module tree shows it either way.
+
+## Verifying without a GPU
+
+```bash
+uv run tests/test_kimi_k3_plan.py       # from the repo root
+```
+
+The script cannot be validated by running it end to end, so the arithmetic is
+tested directly against a fixture config. It carries a permanent counterexample:
+K3's `full_attn_layers` is `[4, 8, … 92, 93]` — 23 gaps of 4 and **one of 1** —
+and the first version of this script took `min()` of those gaps and printed
+*"every 1th layer is full attention → 2:1"*. Both halves wrong, both a populated
+field of the right type holding a plausible small integer, and neither
+detectable by a shape assertion.
+
+## References
+
+- [moonshotai/Kimi-K3](https://huggingface.co/moonshotai/Kimi-K3)
+- *Kimi K3: Open Frontier Intelligence*, [arXiv:2607.24653](https://huggingface.co/papers/2607.24653)
+- [`11_moe`](../11_moe/) — the router this model scales to 896 experts
+- [`10_deepseek_from_scratch`](../10_deepseek_from_scratch/) — MLA from scratch

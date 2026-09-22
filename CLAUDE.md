@@ -265,7 +265,7 @@ passed on all of them. Established patterns to copy:
   (catastrophic cancellation), so exact equality is the wrong test.
 
 ```bash
-./tests/run_all.sh              # all 30 suites, no GPU, no downloads
+./tests/run_all.sh              # all 31 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py # one suite
 ```
 
@@ -1083,6 +1083,31 @@ suite enforcing its own checklist, not a broken scaffold.
   | `gpu_guards()` in `test_clawdeck_manifest.py` | `walk()` took a node and recursed into its **children**, so a guard that was itself a statement of a block was never tested. The whole check silently passed everything. |
   | `beats_chance()` in `test_synthetic_data_is_learnable.py` | passed `seed=` unconditionally and died with `TypeError` against the very generator it was written to catch — CI went red naming a signature mismatch, not the finding |
   | the first `--num_gpus`/`gpu.count` check | over-flagged six entries that demonstrably run on CPU, because it keyed on the *presence* of a guard rather than its **reachability** |
+  | `check_contract.py`'s reader-A classifier | tested `"require_gpu" in src`, so a file whose **comment explained why it deliberately has no guard** was classified as guarded and then failed every follow-up check for a function it does not contain. Now an AST check for a real `Call`. |
+
+  The pattern in the last two is the same: **a substring is not a fact about
+  the program.** Ask the AST whether the thing is called, reachable, and in the
+  branch you think it is.
+
+### Not every entry point is a training script, and the name should say so
+
+`03_llms/01_llm_finetuning/analyze_kimi_k3.py` is named `analyze_`, not
+`train_`, because it does not train — Kimi K3 is 2.78 T parameters / 1,561 GB
+and its remote code does not import on the pinned transformers, so there is no
+run to have. Two things follow that generalise:
+
+- **It carries no `require_gpu()`, deliberately, and says so in a comment.**
+  `--plan` reads a JSON file over HTTPS; `--verify-arch` builds on the meta
+  device. A guard that can never fire is decoration, and the same cargo-cult
+  objection applies as to a distributed launcher with nothing to distribute.
+- **A script with no end-to-end run makes its DERIVATIONS the only testable
+  surface.** `tests/test_kimi_k3_plan.py` runs the shipped functions against a
+  fixture config. It caught three defects on its first run, none of which a
+  shape assertion could see: `min()` of the layer gaps reported *"every 1th
+  layer"* (the mode is 4; K3 has 23 gaps of 4 and one of 1, because 93 layers
+  do not divide evenly), `linear // full` truncated a 3:1 design to 2:1, and
+  `(n - full) > 0` called **every dense model hybrid**. All three were
+  populated fields of the right type holding plausible small integers.
 
   So: run a new check against the **unfixed** tree first, and keep a
   counterexample in the suite permanently. `test_config_kwargs.py` found 20

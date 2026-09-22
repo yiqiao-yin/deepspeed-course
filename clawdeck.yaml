@@ -149,13 +149,17 @@ labs:
   # ---------------------------------------------------------------------------
   - id: 03_llms/01_llm_finetuning
     title: "LLM fine-tuning with ZeRO"
-    summary: "Llama SFT, plus frontier-model analysis (GLM-5.3, Qwen3.8)."
+    summary: "Llama SFT, plus frontier-model analysis (GLM-5.3, Qwen3.8, Kimi K3)."
     est_minutes: 15
     gpu: { min_vram_gb: 24, count: 2 }
     run:
       - { label: "Fine-tune (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20", primary: true }
       - { label: "GLM-5.3 analysis (no GPU)", cmd: "uv run train_glm53_ds.py --plan" }
       - { label: "Qwen3.8 analysis (no GPU)", cmd: "uv run train_qwen38_ds.py --plan" }
+      # Reads config.json over HTTPS and prints the architecture. No GPU, no
+      # weights, no download -- so no needs_gpu, and Clawdeck is right to
+      # advertise it as runnable now.
+      - { label: "Kimi K3 analysis (no GPU)", cmd: "uv run analyze_kimi_k3.py --plan" }
 
   - id: 03_llms/02_trl_sft
     title: "TRL supervised fine-tuning"
