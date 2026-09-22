@@ -11,7 +11,7 @@ sidebar_position: 4
 Different terms of the same memory equation — and they compose. If you are OOMing, the first question is always *which term dominates*, because optimising the other one is free effort.
 :::
 
-**Example:** `04_video_text/03_token_compression`
+**Example:** [`04_video_text/03_token_compression`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/03_token_compression)
 
 ## 1. The Arithmetic That Forces the Issue
 

@@ -10,7 +10,7 @@ Compression is lossy by construction, and the loss curve will not warn you. A mo
 
 > Training loss measures fit to your data. It cannot measure whether you deleted the evidence.
 
-**Example:** `04_video_text/05_video_eval`
+**Example:** [`04_video_text/05_video_eval`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/05_video_eval)
 
 ## 1. The Failure Mode That Shapes Everything Here
 

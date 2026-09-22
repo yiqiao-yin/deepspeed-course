@@ -7,7 +7,7 @@ sidebar_position: 7
 The final family in this course, and the only one that takes **video and speech
 in** and **speaks back**.
 
-**Example:** `05_video_speech/02_thinker_talker`
+**Example:** [`05_video_speech/02_thinker_talker`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/05_video_speech/02_thinker_talker)
 
 :::info Scope
 This topic is specifically **video + audio in → speech out**. The neighbouring

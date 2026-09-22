@@ -6,7 +6,7 @@ sidebar_position: 1
 
 Two contrasting approaches to video understanding, in the same example directory: a **vision-language model** that actually looks at frames, and a **sequence-to-sequence model** that only reads metadata. The comparison is the lesson.
 
-**Example:** `04_video_text/01_hf_baseline`
+**Example:** [`04_video_text/01_hf_baseline`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/01_hf_baseline)
 
 ## 1. Two Architectures, Two Problems
 

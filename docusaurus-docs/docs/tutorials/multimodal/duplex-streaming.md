@@ -10,7 +10,7 @@ while it is speaking it is **deaf**.
 
 That is a walkie-talkie.
 
-**Example:** `05_video_speech/03_duplex_streaming`
+**Example:** [`05_video_speech/03_duplex_streaming`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/05_video_speech/03_duplex_streaming)
 
 ## 1. Why Half Duplex Is Not Just "Less Polished"
 
