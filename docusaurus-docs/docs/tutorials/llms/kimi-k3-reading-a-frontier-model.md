@@ -4,10 +4,25 @@ sidebar_position: 17
 
 # Kimi K3: Reading a Model You Cannot Run
 
-**Example:** `03_llms/01_llm_finetuning/analyze_kimi_k3.py`
+**Example:** [`03_llms/01_llm_finetuning/analyze_kimi_k3.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/03_llms/01_llm_finetuning/analyze_kimi_k3.py)
 
 Every other page in this section ends with a training run. This one does not,
 and that is the lesson.
+
+:::note What the script is for
+`analyze_kimi_k3.py` **does not fine-tune anything, and is not a cut-down
+version of something that would.** It answers the questions you would otherwise
+answer by downloading 1,561 GB and waiting for a crash:
+
+| you want to know | the flag | what it costs |
+|---|---|---|
+| where the parameters live, what the cache costs, whether your hardware could hold it | `--plan` | ~2 s, reads `config.json` over HTTPS |
+| whether your LoRA target names resolve against the **real** module tree | `--verify-arch` | ~seconds on torch's meta device — no weights |
+| whether a fine-tuning snippet you found online still runs on your libraries | `--plan --audit-snippet` | instant, imports what you have installed |
+
+It is named `analyze_`, not `train_`, for exactly that reason — and it carries
+no `require_gpu()` guard, deliberately, because it never touches a GPU.
+:::
 
 [Kimi K3](https://huggingface.co/moonshotai/Kimi-K3) is **2.78 trillion
 parameters**, of which **104 billion** are activated per token. Its weights are

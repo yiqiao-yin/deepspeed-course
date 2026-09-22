@@ -10,7 +10,7 @@ sidebar_position: 5
 
 A security camera does not have a length. A livestream does not have a length. A meeting recording has one, but you do not know it in advance.
 
-**Example:** `04_video_text/04_streaming_memory`
+**Example:** [`04_video_text/04_streaming_memory`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/04_streaming_memory)
 
 ## 1. A Strictly Harder Constraint
 

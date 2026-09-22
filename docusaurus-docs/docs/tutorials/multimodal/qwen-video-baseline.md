@@ -6,7 +6,7 @@ sidebar_position: 3
 
 The LLaVA trainer in [Video-Text Training](./video-text-training.md) is the right thing to read first — nothing is hidden. It is also 2024's architecture, and it carries a limitation that no amount of training can fix.
 
-**Example:** `04_video_text/02_qwen25vl`
+**Example:** [`04_video_text/02_qwen25vl`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/02_qwen25vl)
 
 ## 1. The Limitation That Cannot Be Trained Away
 

@@ -14,7 +14,7 @@ it scores **62%**. Two completely different systems produce that number:
 
 **Accuracy cannot tell them apart.**
 
-**Example:** `05_video_speech/04_omni_eval`
+**Example:** [`05_video_speech/04_omni_eval`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/05_video_speech/04_omni_eval)
 
 :::danger B is what you get by default
 During training, one modality is usually sufficient for most examples — so the

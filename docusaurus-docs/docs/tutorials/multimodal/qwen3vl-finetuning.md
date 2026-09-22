@@ -7,7 +7,7 @@ sidebar_position: 10
 LoRA fine-tuning of **Qwen3-VL-8B-Instruct**, and the measured memory curve that
 tells you how many frames fit on your card.
 
-**Example:** `04_video_text/06_qwen3vl`
+**Example:** [`04_video_text/06_qwen3vl`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/04_video_text/06_qwen3vl)
 
 This is the successor to [Qwen2.5-VL fine-tuning](./qwen-video-baseline.md), and
 the comparison is the lesson. It is not a version bump.

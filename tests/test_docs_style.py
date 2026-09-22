@@ -214,6 +214,50 @@ def test_page_structure(r: Results) -> None:
             "; ".join(f"{k[0].name}/{k[1]}: {v}" for k, v in list(dups.items())[:3]))
 
 
+def test_example_lines_link_to_the_code(r: Results) -> None:
+    """
+    A page's `**Example:**` line must LINK to the code, and the target must
+    exist.
+
+    This was site-wide rot rather than one page's slip: eleven pages carried
+    the line and **none** of them linked it, so a reader on the docs site had
+    no path from the page to the code it documents. Plain inline code looks
+    deliberate, which is why it survived that long.
+
+    The existence half is the part that keeps earning its keep: `03_llms` was
+    renamed once already, and an `Example:` link is exactly the kind of
+    reference nothing else in the build checks — Docusaurus verifies internal
+    links, but these point at github.com and it will not follow them.
+    """
+    import re
+
+    pat = re.compile(r'^\*\*Example:\*\* (.+)$', re.M)
+    BLOB = "https://github.com/yiqiao-yin/deepspeed-course/blob/main/"
+
+    unlinked, missing = [], []
+    for page in pages():
+        for m in pat.finditer(page.read_text(encoding="utf-8")):
+            line = m.group(1).strip()
+            rel = page.relative_to(REPO_ROOT)
+            link = re.match(r'^\[`([^`]+)`\]\((\S+)\)$', line)
+            if not link:
+                # Prose like "**Example:** In language modeling:" is not a
+                # code pointer and is left alone.
+                if line.startswith("`"):
+                    unlinked.append(f"{rel}: {line}")
+                continue
+            path, url = link.group(1), link.group(2)
+            if url != BLOB + path:
+                missing.append(f"{rel}: label {path!r} != url {url!r}")
+            elif not (REPO_ROOT / path).exists():
+                missing.append(f"{rel}: {path} does not exist")
+
+    r.check(not unlinked, "every `**Example:**` code pointer is a link",
+            "; ".join(unlinked))
+    r.check(not missing, "every `**Example:**` link resolves to a real path",
+            "; ".join(missing))
+
+
 def test_referenced_tests_exist(r: Results) -> None:
     """
     Every `tests/test_*.py` named in code or docs must actually exist.
@@ -428,6 +472,7 @@ def main() -> int:
     test_no_inline_theme_overrides(r)
     test_diagram_hygiene(r)
     test_page_structure(r)
+    test_example_lines_link_to_the_code(r)
     test_referenced_tests_exist(r)
     test_suite_registration_is_complete(r)
     test_published_counts_are_current(r)
