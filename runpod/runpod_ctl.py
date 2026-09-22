@@ -148,7 +148,7 @@ EXAMPLES = {
     # needs. `folder = REPO_ROOT / name` handles the slash, and `bootstrap`
     # cd's into it the same way.
     "04_video_text/02_qwen25vl": dict(min_vram=24, gpus=2, disk=100,
-                                        script="train_qwen25vl.py --max-steps 3",
+                                        script="train_qwen25vl.py",
                                         note="Qwen2.5-VL-3B + LoRA fits 16 GB; "
                                              "2 GPUs to exercise ZeRO-3."),
     "04_video_text/06_qwen3vl": dict(min_vram=48, gpus=1, disk=120,
