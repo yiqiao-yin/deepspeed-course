@@ -334,10 +334,46 @@ The README's central distinction, which shapes every launcher script:
 **Check it, do not reason about it:**
 
 ```bash
-uv run scripts/check_contract.py 10_my_topic   # one example, ~28 checks
+uv run scripts/check_contract.py 10_my_topic   # one example, 33 checks
 uv run scripts/check_contract.py               # the whole repo
 uv run scripts/check_contract.py -v <folder>   # show passing checks too
 ```
+
+### The contract can be RUN, not only checked
+
+`check_contract.py` reads the source. Two of its three readers can be
+*executed*, cheaply, and executing them catches things reading does not.
+
+**Reader A costs nothing.** Hide the GPU and run the script:
+
+```bash
+CUDA_VISIBLE_DEVICES="" uv run python train_x.py ; echo "exit=$?"
+```
+
+That proves the message actually prints, that it names something the reader
+*can* run, and — the part a static check is weakest on — that the **exit code
+is non-zero**. A guard that prints a beautiful message and exits 0 passes every
+grep and tells a calling script the run succeeded. Also check `ALLOW_CPU=1`
+still gets past it, since that escape hatch is part of the contract.
+
+**Reader C must run on the DECLARED hardware.** This is the one that matters
+and it is easy to get wrong for the most understandable reason: when the cheap
+24 GB card has no capacity, a 48 GB card is right there and the run will
+certainly pass on it. It proves nothing. `min_vram_gb: 24` is a claim *about
+24 GB*, and verifying it on 48 GB is how `03_llms/03_ocr` shipped a lab that
+OOMed for every learner who believed the manifest.
+
+    04_video_text/02_qwen25vl verified on 2 x RTX 3090 -- the declared 24 GB,
+    not the A40 that was available -- 3/3 steps, adapter saved, rc=0, zero OOM.
+
+A few steps is enough. `--max-steps 3` proves `uv sync` resolved, the model
+loaded, and nothing OOMed, without paying for a full fine-tune. What you are
+testing is the *contract*, not the model.
+
+One thing worth watching in that log: the interpreter path. Seeing
+`.../<lab>/.venv/bin/python` is proof the harness installed from the lab's
+**committed lock** rather than from whatever the container image happened to
+ship — which is exactly the distinction that hid eight broken labs.
 
 Advisory, not a CI gate — older examples predate parts of the contract and
 legitimately differ, and failing the build on those would water the checks down
