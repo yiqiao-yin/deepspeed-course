@@ -392,6 +392,34 @@ Two further safety nets you inherit for free:
 > from your machine instead. Do not "improve" this. See
 > [SECURITY.md](SECURITY.md).
 
+#### Two defaults that silently truncate a big run
+
+Both were found by running pods, and both make a **failed** run look like a
+finished one — the worst failure mode a verification harness has.
+
+**`--wait-seconds` defaults to 1800.** Measured fetch throughput from the Hub
+onto a pod is roughly **126 MB/s**, so that window buys about **227 GB**. Any
+model larger than that is still downloading when the timer expires, and with
+`--terminate` the pod is destroyed mid-download — you are billed for a run that
+produced nothing. Pass a realistic window:
+
+```bash
+uv run runpod/runpod_ctl.py run 10_your_topic \
+    --dry-run --collect --wait --terminate --yes \
+    --wait-seconds 7200          # a 17 GB model is fine by default; 200 GB is not
+```
+
+**`--disk` is not the disk you think it is.** `--disk` sizes the *container*
+disk; **`--volume` (default 40 GB)** is what mounts at `/workspace`, and
+`HF_HOME` points there. So `--disk 120` gives you a 40 GB model cache, and the
+run dies with `No space left on device` while the flag looks correct:
+
+```
+[info] disk: /dev/md0  40G  0  40G  0% /workspace     # after --disk 120
+```
+
+Size `--volume` against the weights, plus room for a checkpoint.
+
 #### If you extend the bootstrap, never echo a token
 
 The results topic is unguessable but **public**. `tests/test_runpod_ctl.py`
@@ -764,6 +792,62 @@ except ImportError:
 Enable tracking only when `WANDB_API_KEY` is set. Your example must run with no
 W&B installed.
 
+### 🔴 Name it for what it does — `train_` only if it trains
+
+Most entry points are `train_*.py`. If yours does **not** train — an analysis
+script, a planner, an architecture probe — call it something else
+(`analyze_*.py`, `verify_arch.py`) and say why in the docstring. Calling a
+script `train_` when it never calls `deepspeed.initialize()` is the same
+quiet lie this repo keeps getting caught by.
+
+A script that does not train also has no reason to carry `require_gpu()`. A
+guard that can never fire is decoration, and the same cargo-cult objection
+applies as to a distributed launcher with nothing to distribute. **Leave a
+comment saying the omission is deliberate**, or the next reader will "fix" it:
+
+```python
+# NOTE: there is deliberately no `require_gpu()` here. `--plan` reads a JSON
+# file over HTTPS and `--verify-arch` builds on torch's META device, which
+# allocates nothing. This script never touches a GPU.
+```
+
+If it never trains, it also needs `needs_gpu: true` **omitted** from its
+`clawdeck.yaml` entry — it genuinely runs on CPU, and saying so is the point.
+
+### 🔴 Two ZeRO-3 traps that make your numbers meaningless
+
+Both produce a plausible number rather than an error, so nothing tells you.
+
+**The DeepSpeed config must exist before `from_pretrained`**, or `zero.Init`
+never fires and every rank materialises the whole model. Hold it in a live
+variable — a discarded `HfDeepSpeedConfig` does nothing:
+
+```python
+from transformers.integrations import HfDeepSpeedConfig
+dschf = HfDeepSpeedConfig(ds_config)      # MUST stay in scope
+model = AutoModelForCausalLM.from_pretrained(...)
+```
+
+The tell that it did not fire is **an OOM whose requested allocation is
+trivially small** (60 MiB) on hardware with tens of GB spare. That is not
+"marginally short", it is "sharding never happened".
+
+**Under ZeRO-3, `p.numel()` returns 0.** `zero.Init` partitions each
+parameter, so summing `numel()` gives an 8.77 B model a parameter count of
+zero. Use `ds_numel`:
+
+```python
+n = sum(getattr(p, "ds_numel", p.numel()) for p in model.parameters())
+```
+
+If you report memory or parameter counts, **budget and measure per GPU**:
+
+$$\text{per GPU} = \frac{\text{weights}}{N} + \text{overhead that does not shard}$$
+
+Activations, gather buffers and fragmentation are paid in full by every rank.
+An aggregate "total VRAM vs the weights" check passed 2 × 48 GB for a 55.6 GB
+model that then OOMed at the first step.
+
 ### 🔴 Do not refactor shared logic into a common module
 
 See [§1](#1-what-this-repository-is). Duplication is the design.
@@ -902,6 +986,15 @@ Requirements:
   `sidebars.js` is **orphaned** and nothing warns you.
 - **`onBrokenLinks: 'throw'`** — link rot fails the build.
 - **KaTeX** math and **Mermaid** diagrams are enabled and encouraged.
+- **`**Example:**` must be a LINK, and the target must exist.** Name the folder
+  or script your page documents, linked to it on `main`, so a reader on the
+  site can reach the code. `tests/test_docs_style.py` checks both halves —
+  Docusaurus validates internal links but will not follow a `github.com` URL,
+  so nothing else catches a rename.
+
+  ```markdown
+  **Example:** [`03_llms/10_your_topic`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/03_llms/10_your_topic)
+  ```
 
 The docs workflow triggers **only** on pushes to `main` touching
 `docusaurus-docs/**`.
@@ -1023,7 +1116,10 @@ Copy this into your PR. The PR template already contains it.
 - [ ] Four files present: `train_*.py`, `ds_config*.json`, `run_deepspeed.sh`, `README.md`
 - [ ] `run_deepspeed.sh` is executable (`chmod +x`)
 - [ ] Registered in `EXAMPLES` in `runpod/runpod_ctl.py`
-- [ ] A book page exists **and** is listed in `sidebars.js`
+- [ ] A book page exists **and** is listed in `sidebars.js`, with its
+      `**Example:**` line LINKED to a path that exists
+- [ ] The entry point is named `train_*` only if it actually trains; if it
+      does not, the missing `require_gpu()` is explained in a comment
 - [ ] Registered in `clawdeck.yaml` (title ≤ 40 chars, summary ≤ 95, one `primary`)
 - [ ] `gpu.count` is 1, 2, 4 or 8 and the shape is bookable; any run entry without `--num_gpus` really runs on CPU (else `needs_gpu: true`)
 - [ ] A logic test exists, registered in **both** `tests/run_all.sh` and the CI workflow
@@ -1047,6 +1143,8 @@ Copy this into your PR. The PR template already contains it.
 - [ ] README documents `run ... --dry-run --collect --wait --terminate --yes`
 - [ ] README tells the reader to confirm with `runpod_ctl.py pods`
 - [ ] Nothing added to the bootstrap that echoes a credential
+- [ ] `--volume` sized against the weights (NOT `--disk`, which is the
+      container disk), and `--wait-seconds` raised if the download is large
 
 ### Tooling
 - [ ] `uv` everywhere; no bare `pip` or conda
