@@ -1171,11 +1171,69 @@ single-GPU LoRA on models that fit; K3 at 1,561 GB is not that, and nothing in
 the unsloth repo listing above is a trainable K3. `unsloth/Kimi-K3-GGUF` is a
 conversion for inference, not a training path.
 
-> **What would actually be worth measuring.** Not "can 8 GPUs hold a 2-bit GGUF" — the arithmetic above already answers that.
-The open questions are the ones this page still does not claim: **how long
-1,561 GB (or 861 GB) actually takes to fetch onto a pod**, and whether that
-outlives the orchestrator's window. Those are measurements, not derivations,
-and they are not published here because they have not been made.
+> **This was measured.** See "Measured: how long the download actually takes" below — it cost three cents.
+
+## Measured: how long the download actually takes
+
+Everything above is derived from published metadata. This section is the one
+thing here that required renting something — and it cost **about three cents**,
+because measuring *throughput* does not require downloading 1,561 GB.
+
+Measured on one RunPod pod (RTX 4000 Ada, $0.20/hr, ~10 minutes), fetching real
+K3 shards from the Hub:
+
+| method | throughput |
+|---|---:|
+| single-stream `curl` (one 17.0 GB shard) | **96.7 MB/s** |
+| `hf download` (Xet, parallel — 34.0 GB in 269 s) | **126.3 MB/s** |
+
+At the `hf download` figure:
+
+| what you are fetching | size | download time |
+|---|---:|---:|
+| **K3 as released** | 1,561 GB | **3.4 hours** |
+| `UD-Q4_K_XL` | 1,509 GB | 3.3 hours |
+| `UD-Q2_K_XL` | 861 GB | 1.9 hours |
+| `UD-IQ2_XXS` | 711 GB | 1.6 hours |
+| `UD-Q1_0` | 466 GB | 1.0 hours |
+
+### Two things this changes
+
+**The download dominates the bill on the big machines.** Three and a half hours
+of 8 × B200 at $47.84/hr is **~$164 before the first token is generated**, and
+the GPUs are idle for all of it. If you are chasing the released checkpoint,
+fetch it to a network volume on something cheap *first*.
+
+**`--wait-seconds` defaults to 1800**, and at 126 MB/s that window buys you
+**227 GB**. Every size in the table above outlives it. With `--terminate` the
+pod is destroyed mid-download and you are billed for a run that produced
+nothing — which is exactly the failure this repo has already recorded once, on
+a much smaller model.
+
+### The disk trap, found the same way
+
+`runpod_ctl.py create --disk 120` does **not** give you 120 GB where it
+matters. `--disk` sets the container disk; `--volume` (default **40 GB**) is
+what mounts at `/workspace`, which is where `HF_HOME` points. The probe asked
+for 120 and reported:
+
+```
+[info] disk: /dev/md0 40G 0 40G 0% /workspace
+```
+
+So a K3 fetch would die with `No space left on device` after 40 GB — about
+nineteen minutes in — with the `--disk` flag looking correct the whole time.
+Set `--volume`, not `--disk`.
+
+### Scope
+
+**One pod, one host, one region, measured once.** Network throughput varies by
+datacenter and by neighbour, so treat 126 MB/s as an order of magnitude rather
+than a constant — the honest claim is "hours, not minutes, and longer than the
+default wait window", which is robust to a 2× error in either direction. The
+probe also surfaced that `HF_HUB_ENABLE_HF_TRANSFER` is now deprecated in
+favour of Xet (`HF_XET_HIGH_PERFORMANCE`), so guides recommending `hf_transfer`
+are already stale.
 
 ## References
 
