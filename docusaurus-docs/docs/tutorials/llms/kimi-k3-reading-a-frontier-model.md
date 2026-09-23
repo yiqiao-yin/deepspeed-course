@@ -347,6 +347,70 @@ Run **c** and **d** before **a** and **b**. Sizing is the interesting question,
 but an import error makes it irrelevant — and it is the cheaper check.
 :::
 
+## 7. "What about GGUF, unsloth, llama.cpp?"
+
+A fair objection to everything above: the community routinely runs models that
+"do not fit". So does that change the answer?
+
+**For inference, yes — completely.** For what this course is about, no. The two
+halves are worth separating, because conflating them is how people end up
+renting the wrong machine.
+
+### The sizes are real
+
+`unsloth/Kimi-K3-GGUF` publishes dynamic quants of K3, and they are not
+marginal — measured from the Hub, against RunPod's largest card:
+
+| quant | size | × B200-180GB |
+|---|---:|---:|
+| `UD-Q1_0` | 466 GB | 2.6 |
+| `UD-IQ1_S` | 594 GB | 3.3 |
+| `UD-IQ2_XXS` | 711 GB | 4.0 |
+| **`UD-Q2_K_XL`** | **861 GB** | **4.8** |
+| `UD-Q4_K_XL` | 1,509 GB | 8.4 |
+| `UD-Q8_K_XL` | 1,561 GB | 8.7 |
+
+So `UD-Q2_K_XL` at 861 GB fits on **8 × B200 with 579 GB to spare**, and
+`UD-IQ2_XXS` fits on 8 × RTX PRO 6000 Blackwell — a **~$14/hour** machine
+rather than a ~$48/hour one. The section above says eight Blackwells cannot
+hold K3, and that remains true *of the released checkpoint*; it is not true of
+a 2-bit conversion of it.
+
+NVIDIA also publishes `Kimi-K3-NVFP4` at 1,610 GB, which despite the name is
+**larger** than the original and still will not fit on eight cards.
+
+### Why this does not make K3 a lab here
+
+Three reasons, and the first is the one that matters:
+
+- **GGUF is an inference format.** llama.cpp does not train. This course is
+  about ZeRO, sharding and optimizer state — a quantised inference runtime is
+  a different subject that happens to share a model. You cannot LoRA-tune a
+  `UD-Q2_K_XL` file.
+- **`UD-Q2_K_XL` is not Kimi K3.** It is a 2-bit approximation of it. Fine for
+  "can I talk to it", not fine for any claim about the model's behaviour — and
+  this course's rule is that a measured claim is scoped to the configuration it
+  was measured in.
+- **If you go this route you probably do not want 8 GPUs at all.** llama.cpp's
+  real trick is CPU offload: the binding resource becomes system RAM and disk,
+  not VRAM, and a large-RAM box is far cheaper per hour than eight Blackwells.
+  Renting 8 × B200 to run a 2-bit GGUF is close to the most expensive way to
+  do it.
+
+**unsloth** is worth naming separately, because it is a *fine-tuning* library
+and therefore the closest thing to an on-topic answer. Its speedups target
+single-GPU LoRA on models that fit; K3 at 1,561 GB is not that, and nothing in
+the unsloth repo listing above is a trainable K3. `unsloth/Kimi-K3-GGUF` is a
+conversion for inference, not a training path.
+
+:::note What would actually be worth measuring
+Not "can 8 GPUs hold a 2-bit GGUF" — the arithmetic above already answers that.
+The open questions are the ones this page still does not claim: **how long
+1,561 GB (or 861 GB) actually takes to fetch onto a pod**, and whether that
+outlives the orchestrator's window. Those are measurements, not derivations,
+and they are not published here because they have not been made.
+:::
+
 ## References
 
 - [moonshotai/Kimi-K3](https://huggingface.co/moonshotai/Kimi-K3)
