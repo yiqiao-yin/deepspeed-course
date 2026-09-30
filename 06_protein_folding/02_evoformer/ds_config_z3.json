@@ -1,0 +1,31 @@
+{
+  "_comment": "ZeRO-3 variant, provided so you can MEASURE that it does not help. This is not the recommended config -- ds_config.json is. Run both at a longer --n-res and compare peak memory: stage 3 shards ~100k parameters across your ranks and leaves the O(N_res^3) triangle attention activation exactly where it was. The lesson is worth one experiment.",
+
+  "train_micro_batch_size_per_gpu": 2,
+  "gradient_accumulation_steps": 1,
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 1e-3, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "bf16, matching ds_config.json -- DS4Sci_EvoformerAttention has no fp32 path.",
+  "bf16": { "enabled": true },
+  "fp16": { "enabled": false },
+
+  "_zero_comment": "Stage 3 shards parameters as well as gradients and optimizer state, at about 1.5x the communication volume of stage 2. On a 100k-parameter trunk that buys essentially nothing and costs real bandwidth. Kept as a controlled experiment, not as advice. If stage 3 DOES help your run, the model you are training is not the one this lab ships -- check whether you raised c_z or the block count into real-parameter territory.",
+  "zero_optimization": {
+    "stage": 3,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": 16777216,
+    "stage3_prefetch_bucket_size": 16777216,
+    "stage3_param_persistence_threshold": 10000,
+    "stage3_gather_16bit_weights_on_model_save": true
+  },
+
+  "steps_per_print": 25,
+  "wall_clock_breakdown": false
+}

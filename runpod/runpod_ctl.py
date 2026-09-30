@@ -130,6 +130,18 @@ EXAMPLES = {
                                     note="MLA from the paper. Tiny model; the "
                                          "KV cache is an INFERENCE cost, so "
                                          "ZeRO does not touch it."),
+    "06_protein_folding/02_evoformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_evoformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold2's Evoformer trunk. ONE GPU: "
+                                         "the bottleneck here is an ACTIVATION "
+                                         "(triangle attention is O(N_res^3)), "
+                                         "not parameters, so adding ranks does "
+                                         "not help -- --ds-evoformer-attn does. "
+                                         "--n-res is the knob that will OOM you. "
+                                         "The trunk and the data both run on CPU: "
+                                         "uv run evoformer.py, "
+                                         "uv run synthetic_msa.py."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",

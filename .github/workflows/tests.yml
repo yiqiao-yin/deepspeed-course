@@ -121,6 +121,12 @@ jobs:
       - name: MoE routing, load balancing and expert accounting
         run: uv run tests/test_moe_routing.py
 
+      - name: Evoformer triangle ops, symmetries and the cubic memory wall
+        run: uv run tests/test_evoformer.py
+
+      - name: Synthetic MSAs carry coevolution (and the counterexample does not)
+        run: uv run tests/test_evoformer_data_is_learnable.py
+
       - name: Kimi K3 architecture arithmetic
         run: uv run tests/test_kimi_k3_plan.py
 

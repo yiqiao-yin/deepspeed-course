@@ -89,6 +89,16 @@ const sidebars = {
               'tutorials/multimodal/omni-evaluation',       // 04_omni_eval
             ],
         },
+          {
+            type: 'category',
+            label: '06 · Protein Folding',
+            items: [
+              // 06_protein_folding/02_evoformer. The other subtopics
+              // (01_esm2_plm, 03_pairformer, 04_structure_module) are
+              // designed but not yet written -- no page, no entry.
+              'tutorials/protein/evoformer',
+            ],
+          },
       ],
     },
     {
