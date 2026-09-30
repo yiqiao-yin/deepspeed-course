@@ -127,6 +127,9 @@ jobs:
       - name: Synthetic MSAs carry coevolution (and the counterexample does not)
         run: uv run tests/test_evoformer_data_is_learnable.py
 
+      - name: "Pairformer: the AF3 MSA deletion, and the asymptote that survived"
+        run: uv run tests/test_pairformer.py
+
       - name: Kimi K3 architecture arithmetic
         run: uv run tests/test_kimi_k3_plan.py
 

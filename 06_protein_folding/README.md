@@ -44,9 +44,10 @@ reasoning itself**, and the only way to shrink it is to not write it down.
 | `03_pairformer` | pairs (AF3) | the same trunk with the MSA representation deleted — and why the asymptote survives |
 | `04_structure_module` | coordinates | pair representation → 3D, IPA vs a diffusion head, and SE(3) equivariance |
 
-> **Status:** `02_evoformer` is built. `01`, `03` and `04` are designed but not
-> yet written. The table is here so the shape of the section is visible; do not
-> read it as a claim that those folders exist.
+> **Status:** `02_evoformer` and `03_pairformer` are built. `01_esm2_plm` and
+> `04_structure_module` are designed but not yet written. The table is here so
+> the shape of the section is visible; do not read it as a claim that those
+> folders exist.
 
 ## AF2 and AF3 are two folders on purpose
 
@@ -61,11 +62,18 @@ and the reason is the same one that split `04_reward_model` from `05_dpo` from
 | MSA representation in the trunk | yes, 48 blocks | **deleted** |
 | MSA module | — | 4 blocks, no row-wise gated self-attention |
 | Triangle operations | yes | yes |
-| Trunk activation cost | O(N_seq × N_res) **+** O(N_res²) | O(N_res²) |
+| Trunk activation cost | O(N_seq × N_res²) **+** O(N_res²) | O(N_res²) |
+
+The dominant AF2 term is not the MSA representation itself but its **row
+attention logits**, `[N_seq, heads, N_res, N_res]` — 151 MB against the
+representation's 6.3 MB at N_res=384, N_seq=128. AF3's pair-weighted averaging
+has no query-key product, so that tensor disappears entirely.
 
 The payoff, read across the two folders: both run the *same* triangle
 operations, so the AF3 trunk is still O(N_res²) in memory and O(N_res³) in
-time. **Deleting the MSA representation removes a large constant, not the
+time. Measured, the deletion is worth **24% per block at 384 residues and 11%
+at 1024** — a real saving that shrinks as the cubic term takes over.
+**Deleting the MSA representation removes a large constant, not the
 asymptote.** That is why the kernel still matters for AF3-class models.
 
 The price of the split is that the triangle operations are written twice. That

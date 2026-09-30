@@ -381,3 +381,19 @@ labs:
       - { label: "ZeRO-3 (measure that it does NOT help)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --deepspeed_config ds_config_z3.json" }
       - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --data nanofold --n-res 64" }
       - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/03_pairformer
+    title: "Pairformer (AlphaFold3 trunk)"
+    summary: "AF3 deleted the MSA representation. The cubic term did not move."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy with no download, so Clawdeck may advertise them as
+      # "Runs now". pairformer.py IS the lesson of this topic.
+      - { label: "AF2 vs AF3, priced (CPU)", cmd: "uv run pairformer.py" }
+      - { label: "Does the data carry signal? (CPU)", cmd: "uv run synthetic_msa.py" }
+      - { label: "Train the AF3 trunk", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py", primary: true }
+      - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --ds-evoformer-attn" }
+      - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --data nanofold --n-res 64" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --max-steps 3" }

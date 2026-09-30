@@ -142,6 +142,22 @@ EXAMPLES = {
                                          "The trunk and the data both run on CPU: "
                                          "uv run evoformer.py, "
                                          "uv run synthetic_msa.py."),
+    "06_protein_folding/03_pairformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_pairformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold3's Pairformer: the AF2 "
+                                         "trunk with the MSA representation "
+                                         "deleted. Saves ~24% of per-block "
+                                         "activations at 384 residues and "
+                                         "NOTHING asymptotically -- the "
+                                         "triangle attention logits are "
+                                         "byte-identical to AF2's, so "
+                                         "--ds-evoformer-attn matters here "
+                                         "too despite the name. Run "
+                                         "06_protein_folding/02_evoformer "
+                                         "first; the result is the "
+                                         "difference. uv run pairformer.py "
+                                         "prices it on CPU."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",
