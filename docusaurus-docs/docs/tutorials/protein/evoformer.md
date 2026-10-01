@@ -49,6 +49,10 @@ opinion about residues the experiment could not see.
 
 ## Where the memory goes
 
+> If you have not read [what goes in and what comes out](./shapes.md), the
+> shapes below will land better after it — particularly `pair_rep`, which is
+> the tensor this whole page is about.
+
 Every other topic in this course has its memory problem in the **parameters**.
 Weights, gradients, optimizer state — that is what ZeRO shards, and by now
 "it does not fit, raise the stage" is a reflex.

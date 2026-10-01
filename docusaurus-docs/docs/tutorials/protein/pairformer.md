@@ -12,6 +12,8 @@ AlphaFold3 replaced the Evoformer with the **Pairformer**, and the headline
 change is a deletion. The MSA representation is gone from the trunk. What
 survives is a single (sequence) representation and the pair representation.
 
+> Those names are defined in [what goes in, what comes out](./shapes.md).
+
 So: did that fix it?
 
 ## The number

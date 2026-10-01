@@ -9,6 +9,9 @@ representation — the model's hypothesis about which residues touch. This page
 turns that into coordinates, and the interesting part is a decision AlphaFold3
 made that AlphaFold2 did not.
 
+The shapes involved — `pair_rep` in, a rigid frame per residue out — are laid
+out in [what goes in, what comes out](./shapes.md).
+
 A protein has no preferred position or orientation, so a model predicting
 coordinates must satisfy
 

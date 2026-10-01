@@ -12,6 +12,9 @@ pretrained on UniRef instead of Wikipedia.
 Everything you know about fine-tuning transfers. Almost — and the exceptions
 are the interesting part.
 
+> New to the section? [What goes in, what comes out](./shapes.md) states the
+> input and output shapes these models work in, in about two minutes.
+
 ## What does not transfer
 
 - **ESM-2 is an encoder.** No causal mask, no generation. Every position
