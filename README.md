@@ -137,6 +137,12 @@ cargo cult:
 |---|---|---|
 | `01_basics`, `02_intermediate` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
 | `03_llms`, `04_video_text`, `05_video_speech` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
+| `06_protein_folding` | ~100k parameters, but activations scale as `O(N³)` | **Yes** — one 24 GB card, and the algorithms run on CPU |
+
+`06_protein_folding` is worth calling out because it breaks the pattern: it is
+the highest-numbered section and the *least* demanding of hardware. Its models
+are tiny; the memory goes into activations instead. That inversion is the
+section's whole subject.
 
 For the second group a full run is not a practical way to check a change. The
 repository therefore ships **logic tests** that exercise the code paths without a
@@ -158,7 +164,7 @@ See [`tests/README.md`](tests/README.md).
 
 ## Folder Structure 📁
 
-Five sections, each number used exactly once. Every example lives at
+Six sections, each number used exactly once. Every example lives at
 `NN_section/NN_topic` and is self-contained — open one folder and run it
 without touching the rest.
 
@@ -198,12 +204,18 @@ deepspeed-course/
 │   ├── 05_video_eval/           # Did compression break understanding? Reports the TEMPORAL GAP
 │   └── 06_qwen3vl/              # Qwen3-VL-8B LoRA: DeepStack, and a measured memory curve
 │
-└── 05_video_speech/       # Video AND audio in, speech out
-    ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
-    ├── 02_thinker_talker/       # Two streams onto ONE 40 ms clock, then speech out
-    ├── 03_duplex_streaming/     # Listening and watching WHILE speaking
-    ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
-    └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
+├── 05_video_speech/       # Video AND audio in, speech out
+│   ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
+│   ├── 02_thinker_talker/       # Two streams onto ONE 40 ms clock, then speech out
+│   ├── 03_duplex_streaming/     # Listening and watching WHILE speaking
+│   ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
+│   └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
+│
+└── 06_protein_folding/    # Sequence in, 3D structure out — and where ZeRO stops helping
+    ├── 01_esm2_plm/             # ESM-2: sequence alone, no MSA. The control case
+    ├── 02_evoformer/            # The AlphaFold2 trunk. ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB — 4.6%
+    ├── 03_pairformer/           # The AlphaFold3 trunk — deletes the MSA representation
+    └── 04_structure_module/     # IPA + FAPE → coordinates. SE(3)-invariant by construction
 ```
 
 **Every example folder has the same six files** (the contract in

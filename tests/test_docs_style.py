@@ -481,9 +481,16 @@ def test_readme_folder_tree(r: Results) -> None:
     tree = readme[fence:readme.index("```", fence + 3)]
 
     # 1. every path the tree shows must exist
+    # Glob every numbered section, not a hardcoded range. This read
+    # `0[1-5]_*` until 06_protein_folding landed, at which point the tree was
+    # correct and the CHECKER reported all four new folders as ghosts. Worse,
+    # it had been silently under-checking in the other direction too: the
+    # protein examples were absent from `topics`, so check 2 would not have
+    # noticed the whole section missing from the tree.
     shown = {m for m in re.findall(r"([0-9]{2}_[a-z_0-9]+)/", tree)}
-    sections = {p.name for p in REPO_ROOT.glob("0[1-5]_*") if p.is_dir()}
-    topics = {t.name for sec in REPO_ROOT.glob("0[1-5]_*") if sec.is_dir()
+    numbered = sorted(p for p in REPO_ROOT.glob("[0-9][0-9]_*") if p.is_dir())
+    sections = {p.name for p in numbered}
+    topics = {t.name for sec in numbered
               for t in sec.iterdir() if t.is_dir() and t.name[:2].isdigit()}
     ghosts = sorted(shown - sections - topics)
     r.check(not ghosts,
