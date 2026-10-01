@@ -153,6 +153,12 @@ the per-cutoff search official CASP uses, which means the number is
 *under*-reported, never inflated. What it demonstrates is that the course's
 own model produces something you can superimpose and score. Not that it
 competes with AlphaFold2, which it emphatically does not.
+
+For the comparison, [the Evoformer page](./evoformer.md#the-result-this-architecture-produced)
+carries AlphaFold2's **actual** CASP14 submissions against the same kind of
+experimental structure. That figure and this one deliberately use the same
+visual language so the difference in difficulty is visible rather than
+asserted.
 :::
 
 ```bash

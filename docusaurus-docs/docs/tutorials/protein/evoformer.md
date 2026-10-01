@@ -4,6 +4,51 @@ sidebar_position: 40
 
 # Evoformer: the memory wall ZeRO cannot move
 
+## The result this architecture produced
+
+![AlphaFold2's CASP14 predictions superimposed on the experimental structures](/img/protein/casp14-panel.gif)
+
+Green is the experimental crystal structure. Blue is AlphaFold2's prediction.
+Left is CASP14 target **T1037** (a domain of the crAss-like phage RNA
+polymerase, PDB `6vr4`) at **90.7 GDT**; right is **T1049** (an adhesin tip,
+`6y4f`) at **93.3 GDT**. This is the 2020 result that ended a fifty-year
+problem, and the trunk on this page is the part of the model that produced it.
+
+:::info These are AlphaFold2's actual coordinates — and no AlphaFold was run
+Both halves of this figure are public files, which is worth knowing:
+
+- the experimental structures come from **RCSB** (`6VR4`, `6Y4F`);
+- the predictions come from the **CASP14 prediction archive**, where
+  AlphaFold2 competed as **group 427**. The file is literally
+  `T1049TS427_1` — submitted model 1.
+
+So the script downloads the atoms DeepMind rendered and superimposes them.
+Re-running ColabFold instead would give *a* prediction, not *the* prediction:
+different MSAs, no CASP-condition templates, different seeds, and a GDT near
+but not equal to the published numbers.
+
+The superposition is PyMOL's `super` (RMSD 0.84 Å for T1037, 0.51 Å for
+T1049). The camera is ours — DeepMind's orientation was chosen by hand and
+cannot be recovered from the published image. Everything else is theirs.
+:::
+
+```bash
+uv run scripts/make_casp14_figure.py                     # for the book
+uv run scripts/make_casp14_figure.py --bg light          # the published look
+uv run scripts/make_casp14_figure.py --frames 48         # smoother
+```
+
+It also writes a four-view sheet per target, because a single still can't show
+whether the agreement survives rotation:
+
+![Four views of T1049, 90 degrees apart](/img/protein/casp14-t1049-angles.png)
+
+The stray blue loop with no green beneath it is not an error. AlphaFold2
+predicted a terminal segment the crystal never resolved — the model has an
+opinion about residues the experiment could not see.
+
+## Where the memory goes
+
 Every other topic in this course has its memory problem in the **parameters**.
 Weights, gradients, optimizer state — that is what ZeRO shards, and by now
 "it does not fit, raise the stage" is a reflex.
