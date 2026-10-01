@@ -11,10 +11,11 @@ stylistic.
 ## What this repository is
 
 A teaching course, not an application. Each numbered directory
-(`01_basics/01_neuralnet` … `05_video_speech/04_omni_eval`) is a
+(`01_basics/01_neuralnet` … `06_protein_folding/04_structure_module`) is a
 **self-contained, runnable DeepSpeed example** that escalates in difficulty:
 toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL →
-LoRA SFT of 20B models → video-text → video-speech-to-speech.
+LoRA SFT of 20B models → video-text → video-speech-to-speech → protein
+structure.
 
 There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~34 files on purpose.)
 
@@ -126,16 +127,61 @@ reach it by all-to-all. DeepSpeed ships `deepspeed/moe/` (`ep_router.py`,
 `sharded_moe.py`) for this. It is the reason the topic belongs in this course
 rather than an architecture course.
 
-### Sections 04 and 05 are multi-subtopic
+### `06_protein_folding` is one argument against a reflex
 
-Most sections hold flat topics. **`04_video_text/` and `05_video_speech/` escalate
-internally**, so each holds several numbered subtopics:
+The four subtopics escalate, but the section exists to make a single systems
+claim that the rest of the course sets up and then breaks:
+
+| Folder | What it is | Reads the thesis |
+|---|---|---|
+| `01_esm2_plm` | ESM-2, sequence only — no MSA, no geometry | the control: an ordinary transformer |
+| `02_evoformer` | the AlphaFold2 trunk | **where the thesis is measured** |
+| `03_pairformer` | the AlphaFold3 trunk — MSA deleted from the trunk | what deleting a representation buys |
+| `04_structure_module` | IPA + FAPE → coordinates | SE(3) invariance by construction |
+
+**The thesis: AlphaFold-class memory lives in activations, not parameters, so
+no ZeRO stage helps.** The trunk this course builds has ~100k parameters; what
+fills the card is the pair representation (`O(N²)`) and the triangle attention
+logits (`O(N³)`). Measured in `02_evoformer`: **ZeRO-1 0.65 GB vs ZeRO-3
+0.62 GB — 4.6%**, for 1.5× the communication. That is the point of the lab,
+and it is the reason DeepSpeed shipped a fused *kernel*
+(`DS4Sci_EvoformerAttention`) for this model family rather than another
+sharding strategy.
+
+Three things that are easy to break by tidying:
+
+- **`ds_config.json` and `ds_config_z3.json` must differ in the stage and
+  nothing else.** They once differed in `reduce_bucket_size` too — ZeRO-1 left
+  it unset, so DeepSpeed's 5e8 default made the comparison read 1.58 vs
+  0.62 GB and appear to prove ZeRO-3 saves 2.5×, the exact opposite of the
+  lab's finding. A config comparison is only a comparison if one variable moves.
+- **`DS4Sci_EvoformerAttention` is UNVERIFIED here** and labelled so in four
+  places. It needs a CUDA toolkit (`nvcc`); the PyPI `nvidia-cuda-nvcc-cu12`
+  wheels ship only `ptxas`. No memory number is published for it — do not
+  estimate one.
+- **`02` and `03` are a matched pair**, like `02_intermediate/03`+`04`. The
+  AF2→AF3 saving from deleting the MSA representation is **58% at 128 residues
+  and 12% at 256** — a constant, not the asymptote, so quoting one number
+  without the length is meaningless.
+
+`synthetic_msa.py` generates coevolving alignments scored by **APC-corrected**
+mutual information (Dunn 2008). Raw MI is biased by column entropy, and the
+first counterexample written here was contaminated — one shared mutation event
+per coupled pair correlated the columns even at `coupling=0.0`.
+
+### Sections 04, 05 and 06 are multi-subtopic
+
+Most sections hold flat topics. **`04_video_text/`, `05_video_speech/` and
+`06_protein_folding/` escalate internally**, so each holds several numbered
+subtopics:
 
 ```
 04_video_text/{01_hf_baseline, 02_qwen25vl, 03_token_compression,
                04_streaming_memory, 05_video_eval, 06_qwen3vl}
 05_video_speech/{01_longcat_omni, 02_thinker_talker,
                  03_duplex_streaming, 04_omni_eval, data/}
+06_protein_folding/{01_esm2_plm, 02_evoformer,
+                    03_pairformer, 04_structure_module}
 ```
 
 Each subtopic keeps the full six-file contract independently and is registered
@@ -240,6 +286,12 @@ This distinction governs how to verify a change:
 |---|---|---|
 | `01_basics/`, `02_intermediate/` | Synthetic or tiny data, ≤1M params, 1–2 GPUs | **Runnable end to end** on a single machine |
 | `03_llms/`, `04_video_text/`, `05_video_speech/` | Real model downloads (GBs to 1.1 TB), multi-GPU, up to 560B params | **Not runnable locally.** Verify logic only |
+| `06_protein_folding/` | ~100k params, synthetic or CATH data, **1 × 24 GB** | **Runnable** — the trunks train on one modest card |
+
+`06_protein_folding/` is the third case and the exception to the usual
+reading of this table: it sits high in the numbering but needs no frontier
+hardware, because its models are small and its cost is in activations. Verify
+changes there by **running them**, not by writing a mock.
 
 (The numbers are per section and get reused, so name the section — `03_llms/03_ocr`,
 not `03`.)
@@ -648,13 +700,22 @@ Register the printed line, then `./tests/run_all.sh` is green before any of your
 own code exists. Skip the registration and exactly one check fails — that is the
 suite enforcing its own checklist, not a broken scaffold.
 
-`scripts/` holds three tools, and they answer different questions:
+`scripts/` holds five tools. Three answer questions about an example; two
+generate figures for the book:
 
 | Tool | Question | Gate? |
 |---|---|---|
 | `new_example.py` | "give me a skeleton that already satisfies the contract" | — |
 | `check_contract.py` | "does this example work for all three readers?" | advisory |
 | `audit_readmes.py` | "has this README drifted from the code?" | advisory, over-reports |
+| `make_protein_animations.py` | six figures for `06_protein_folding` (PNG + GIF) | — |
+| `make_casp14_figure.py` | the CASP14 panel, from the public archive + RCSB | — |
+
+The two figure scripts carry **PEP 723 inline metadata and no `pyproject.toml`**,
+deliberately. A `pyproject.toml` would oblige an entry in `clawdeck.yaml` (CI
+enforces it), and these are authoring tools rather than labs — a learner should
+never be offered "run the figure generator" as an exercise. `uv run
+scripts/<name>.py` still provisions them.
 
 ## Conventions to preserve
 
@@ -739,7 +800,7 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 41 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 48 diagram pages conform.
 
 - **The site's own background is `#000000`**, not the dark blue of the Mermaid
   palette above — `custom.css` sets `--ifm-background-color: #000000` and dark
