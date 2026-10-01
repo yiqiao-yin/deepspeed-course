@@ -152,10 +152,16 @@ controlled experiment has two knobs, it is not a controlled experiment.**
 :::
 
 :::note Still unverified: the kernel itself
-`DS4Sci_EvoformerAttention` JIT-compiles CUTLASS and needs a CUDA toolkit
-(`nvcc`, `CUDA_HOME`). The verification box has drivers but no toolkit, so the
-**fallback** is verified and the kernel's memory reduction is not. No number
-for it appears on this page.
+The **fallback** is verified — the run completes and reports
+`FELL BACK (0/4 modules)` rather than claiming success. The kernel's own
+memory reduction is not measured, and no number for it appears anywhere in
+this course.
+
+The blocker is `nvcc`. The card is compute 8.6 and CUTLASS is uv-installable,
+but the PyPI `nvidia-cuda-nvcc-cu12` wheels ship `ptxas` and headers
+**without the nvcc driver binary** (checked 12.1 → 12.9), so a root-level CUDA
+toolkit install is required. The folder README gives the full recipe for
+anyone who has one.
 :::
 
 ## Two properties the tests assert

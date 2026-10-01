@@ -166,7 +166,14 @@ at a 1:1 ratio.
 :::
 
 :::note Still unverified: the kernel itself
-The verification box has GPU drivers but no CUDA toolkit, so CUTLASS cannot
-compile. The fallback path is verified; the kernel's memory reduction is not
-measured and no number for it appears here.
+The **fallback** is verified — the run completes and reports
+`FELL BACK (0/4 modules)` rather than claiming success. The kernel's own
+memory reduction is not measured, and no number for it appears anywhere in
+this course.
+
+The blocker is `nvcc`. The card is compute 8.6 and CUTLASS is uv-installable,
+but the PyPI `nvidia-cuda-nvcc-cu12` wheels ship `ptxas` and headers
+**without the nvcc driver binary** (checked 12.1 → 12.9), so a root-level CUDA
+toolkit install is required. The folder README gives the full recipe for
+anyone who has one.
 :::

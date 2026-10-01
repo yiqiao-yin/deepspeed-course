@@ -202,10 +202,17 @@ asserted.**
 
 ### `--ds-evoformer-attn`: still unverified
 
-The verification box has GPU drivers but no CUDA toolkit, so CUTLASS cannot
-compile. The fallback is verified and reports honestly
-(`FELL BACK (0/4 modules)`); the kernel's memory reduction is not measured and
-no number for it appears here.
+The fallback is verified and reports honestly (`FELL BACK (0/4 modules)`); the
+kernel's memory reduction is **not** measured and no number for it appears
+here.
+
+The blocker is `nvcc`. CUTLASS is uv-installable (`uv pip install
+nvidia-cutlass`) and the card is compute 8.6, but the PyPI
+`nvidia-cuda-nvcc-cu12` wheels ship `ptxas` and headers **without the nvcc
+driver binary** — checked across 12.1 through 12.9 — so a real CUDA toolkit
+install is required and that needs root. See
+[`../02_evoformer/README.md`](../02_evoformer/README.md#--ds-evoformer-attn-still-unverified-and-here-is-exactly-what-it-needs)
+for the full recipe.
 
 ---
 

@@ -254,19 +254,46 @@ rather than asserted.
 > the `zero_optimization` block. **If you change a knob in one, change it in
 > the other, or the experiment stops being an experiment.**
 
-### `--ds-evoformer-attn`: still unverified
+### `--ds-evoformer-attn`: still unverified, and here is exactly what it needs
 
-The kernel needs a **CUDA toolkit** (`nvcc`, `CUDA_HOME`) to JIT-compile
-CUTLASS, and the verification box has drivers but no toolkit. So the fallback
-path is verified — it reports
+The fallback path **is** verified. On a box with a GPU but no CUDA toolkit the
+run completes and reports honestly:
 
 ```
 peak GPU memory: 0.17 GB   (DS4Sci kernel: FELL BACK (0/4 modules) --
                             the kernel was wired but every call raised)
 ```
 
-— and the kernel's actual memory reduction is **not measured here**. No number
-for it appears in this README.
+The kernel's actual memory reduction is **not measured**, and no number for it
+appears anywhere in this repository.
+
+`DeepSpeed`'s `EvoformerAttnBuilder` needs three things:
+
+| requirement | status on the verification box |
+|---|---|
+| compute capability ≥ 7.0 | ✅ 8.6 (Ampere) |
+| CUTLASS ≥ 3.1 — `CUTLASS_PATH`, or the `cutlass_library` package | ✅ `uv pip install nvidia-cutlass` works |
+| a CUDA toolkit: `nvcc` + `CUDA_HOME` | ❌ **not obtainable here** |
+
+**The third one cannot be solved with uv.** The PyPI wheels
+`nvidia-cuda-nvcc-cu12` ship `ptxas`, `nvvm` and headers but **not the `nvcc`
+driver binary** — checked across 12.1, 12.4, 12.6, 12.8 and 12.9. A real
+toolkit install is required, which needs root on this machine.
+
+So to verify the kernel yourself:
+
+```bash
+# 1. a CUDA toolkit matching your torch build (cu128 here), then
+export CUDA_HOME=/usr/local/cuda
+# 2. CUTLASS, which uv CAN provide
+uv pip install nvidia-cutlass
+# 3. first call JIT-compiles CUTLASS -- expect several minutes
+uv run deepspeed --num_gpus=1 train_evoformer_ds.py --ds-evoformer-attn
+```
+
+If the status line says `on (4/4 modules, used throughout)`, the kernel ran.
+Anything else and you are measuring the fallback — which is the whole reason
+that line reports post-run state rather than wiring intent.
 
 ---
 
