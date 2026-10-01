@@ -93,8 +93,10 @@ const sidebars = {
             type: 'category',
             label: '06 · Protein Folding',
             items: [
-              // 06_protein_folding, in reading order: sequence, pairs
-              // (AF2), pairs (AF3), coordinates.
+              // Orientation first -- the I/O contract, which the four
+              // architecture pages all assume. Then reading order: sequence,
+              // pairs (AF2), pairs (AF3), coordinates.
+              'tutorials/protein/shapes',
               'tutorials/protein/esm2',
               'tutorials/protein/evoformer',
               'tutorials/protein/pairformer',
