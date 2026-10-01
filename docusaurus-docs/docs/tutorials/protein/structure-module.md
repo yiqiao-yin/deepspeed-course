@@ -168,6 +168,63 @@ asserted.
 uv run scripts/make_protein_animations.py --only prediction-vs-truth
 ```
 
+## An open question this lab is positioned to ask
+
+The measurement above — IPA exact, the AF3-style head at 5.1e-02, augmentation
+closing it to 7.8e-03 — was taken **in distribution**. Every test structure
+resembled the training structures.
+
+That leaves a question nobody appears to have answered:
+
+> **Does a learned symmetry decay off-distribution, while an architectural one
+> stays flat?**
+
+A guarantee holds on inputs you never tested. A learned symmetry is a claim
+about the training distribution, so it ought to weaken as you move away from
+it — but "ought to" is not a measurement, and the size of the effect is what
+decides whether AlphaFold3's trade was cheap or expensive.
+
+### What the literature has, and what it does not
+
+There is a substantial **theory** literature on augmentation versus built-in
+equivariance: [Data Augmentation vs. Equivariant Networks
+(2022)](https://arxiv.org/abs/2206.09450) derives generalization bounds, and
+[Emergent Equivariance in Deep Ensembles
+(2024)](https://arxiv.org/abs/2403.03103) shows ensembles become equivariant
+even off the data manifold. Almost none of it concerns proteins — the
+empirical work sits in robotics, turbulence and vision.
+
+On the protein side the debate is acknowledged but not measured. AlphaFold3
+dropping IPA reopened the question of how physical invariances should be
+captured, and [Transformers trained on proteins can learn to attend to
+Euclidean distance (2025)](https://arxiv.org/abs/2502.01533) argues plain
+Transformers suffice — without reporting an equivariance error.
+
+A citation-graph check in October 2026 found that of **332** works citing
+[OpenFold (Nature Methods,
+2024)](https://doi.org/10.1038/s41592-024-02272-z), only **5** mention
+equivariance and **2** mention symmetry, none measuring it; and of **16,107**
+works citing [AlphaFold 3](https://doi.org/10.1038/s41586-024-07487-w), **83**
+mention equivariance, overwhelmingly as review-level commentary.
+
+### The experiment exists already, with the wrong metric
+
+OpenFold elided large regions of fold space to test how AlphaFold2
+generalises — and measured **accuracy**. Swapping the metric gives a
+well-posed study:
+
+> Train an augmentation-only head, then measure equivariance error on
+> held-out fold space against seen fold space.
+
+Falsifiable in both directions, and the negative result is as useful as the
+positive: a flat curve would say augmentation is sufficient and the field can
+stop arguing about it.
+
+:::note How much to trust this
+These are abstract- and citation-level searches, not a systematic review.
+They can miss work buried in a methods section. A lead, not a clearance.
+:::
+
 ## The loss has to be invariant too
 
 Frame-Aligned Point Error compares predicted and true coordinates *inside each
