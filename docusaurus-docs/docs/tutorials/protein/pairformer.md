@@ -54,6 +54,18 @@ eventually.** $O(N_{res}^3)$ before, $O(N_{res}^3)$ after. Deleting the MSA
 representation removed a large constant; it did not touch the exponent.
 :::
 
+![Pair representation and triangle logits growing with protein length](/img/protein/memory-wall.gif)
+
+This is the same figure as on the [Evoformer](./evoformer.md) page, and that
+is the point: **it describes the AF3 trunk equally well.** The orange curve is
+the triangle attention logits, which the Pairformer computes identically. The
+MSA deletion removes terms that are not on this chart; it does not bend
+either line.
+
+```bash
+uv run scripts/make_protein_animations.py --only memory-wall
+```
+
 Which means `DS4Sci_EvoformerAttention` matters *just as much* to AF3-class
 models as to AF2-class ones. The kernel's name says "Evoformer" and does not
 tell you that.
