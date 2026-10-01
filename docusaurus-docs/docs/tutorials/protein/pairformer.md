@@ -121,9 +121,10 @@ self-attention. Each MSA row is averaged along the residue axis using weights
 read off the pair representation:
 
 $$
-w_{ij} = \mathrm{softmax}_j\big(\mathrm{Linear}(z_{ij})\big),
-\qquad
-m_{si} \leftarrow g_{si} \odot \sum_j w_{ij}\, v_{sj}
+\begin{aligned}
+w_{ij} &= \mathrm{softmax}_j\big(\mathrm{Linear}(z_{ij})\big) \\[2pt]
+m_{si} &\leftarrow g_{si} \odot \sum_j w_{ij}\, v_{sj}
+\end{aligned}
 $$
 
 The MSA never computes its own query–key product — so there is no
