@@ -52,6 +52,26 @@ flowchart LR
     class LOG bright
 ```
 
+### What the pair representation is a picture of
+
+![A protein backbone rotating beside its contact map](/img/protein/contact-map.gif)
+
+A real CATH chain on the left, the contact map it produces on the right. The
+orange residue walks the chain; the orange lines are every residue it touches
+in 3D, and the orange dots are those same contacts in the matrix.
+
+The point is that these are **the same object**. A contact map is not a
+summary of a structure — it is very nearly the structure itself, written as a
+matrix. The band along the diagonal is the chain touching its own neighbours,
+which is trivially true of any chain and therefore carries no information
+(which is why the labs exclude it). The off-diagonal blobs are where the fold
+brings distant parts of the sequence together, and those are the entire
+prediction problem.
+
+```bash
+uv run scripts/make_protein_animations.py --only contact-map
+```
+
 Printed by `uv run evoformer.py`, at AlphaFold2's real `c_z=128`, 4 heads, bf16:
 
 | N_res | pair rep | triangle logits | ratio |
@@ -62,6 +82,23 @@ Printed by `uv run evoformer.py`, at AlphaFold2's real `c_z=128`, 4 heads, bf16:
 | 1024 | 268.4 MB | 8589.9 MB | 32.0× |
 
 Two of those per block, 48 blocks in AlphaFold2 proper.
+
+![Pair representation and triangle logits growing with protein length](/img/protein/memory-wall.gif)
+
+Both curves on a log scale, so a straight line is a power law and the steeper
+line has the larger exponent. The pair representation (pale) is quadratic; the
+triangle attention logits (orange) are cubic. The right-hand panel is the
+ratio between them, and it is the part worth watching — it does not settle, it
+climbs. At 128 residues the logits cost 4× the pair representation; by 1024
+they cost 32×.
+
+That is what makes this a wall rather than a constant. You cannot buy your way
+out with a slightly bigger card, because the term that dominates grows eight
+times faster per doubling than the one you were budgeting for.
+
+```bash
+uv run scripts/make_protein_animations.py --only memory-wall
+```
 
 ## The three operations
 
@@ -103,6 +140,27 @@ APC-corrected mutual information, precision at K, base rate **0.014**:
 | 0.25 | 0.385 | | 2 | 0.000 |
 | 0.50 | 0.923 | | 8 | 0.462 |
 | 1.00 | 1.000 | | 32 | 1.000 |
+
+![An alignment filling in, and contacts emerging from mutual information](/img/protein/coevolution.gif)
+
+Left: the alignment filling in, one homolog at a time. Middle: APC-corrected
+mutual information between every pair of columns, recomputed at each depth.
+Right: the contacts that were actually planted.
+
+Watch the middle panel. At two or three sequences it is noise — there are no
+statistics to measure. As the depth grows, bright spots sharpen out of the
+background and land exactly on the planted contacts. **Nothing about the
+query sequence changed**; the only thing that arrived was a population to
+compare it against.
+
+```bash
+uv run scripts/make_protein_animations.py --only coevolution
+
+# bigger: 128 residues, 1024 sequences. This is the one a GPU accelerates --
+# a [128, 128, 20, 20] joint distribution per frame.
+uv run scripts/make_protein_animations.py --only coevolution \
+    --quality high --device cuda
+```
 
 The right-hand column is the one to sit with. At *perfect* coupling, a depth-1
 "alignment" is still unlearnable — coevolution is a property of a population,
@@ -186,6 +244,40 @@ And the counterexample that makes the closure check mean something:
 over $k$ with an elementwise product. It runs, it trains, it returns the right
 shape, and it has no triangle in it. Measured separation: correct
 `9.495e-01`, broken `0.000e+00`.
+
+## Watching it actually learn
+
+Every figure above draws a quantity that was computed analytically. This one
+runs the real thing:
+
+![The Evoformer's predicted contact map sharpening as it trains](/img/protein/trunk-refinement.gif)
+
+`EvoformerStack` — the same class the lab trains — doing several hundred real
+forward and backward passes, with the predicted contact map captured as it
+goes. Left is the prediction, middle is the truth, right is the loss.
+
+Two details that are not decoration:
+
+- **Only long-range pairs are shown.** The near-diagonal band is excluded from
+  the loss, so the model is free to output anything there and does. An earlier
+  version of this figure displayed the raw prediction, complete with a bright
+  diagonal the truth does not have — which reads as "the model is wrong" when
+  it actually means "this region was never asked for". Showing an unscored
+  region as a prediction is a lie by omission.
+- **The loss has a visible step down around 200.** That is the model going
+  from predicting the base rate everywhere to actually resolving individual
+  contacts.
+
+This is the figure that demonstrates the repository is GPU-ready, because the
+work on the card is the repo's own model rather than a rendering trick.
+
+```bash
+uv run scripts/make_protein_animations.py --only trunk-refinement
+```
+
+It runs without a GPU too — it drops to a smaller protein and fewer steps, and
+says so on the figure, so a reduced render can never be mistaken for the full
+one.
 
 ## Where this sits
 

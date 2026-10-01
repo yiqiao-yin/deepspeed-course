@@ -87,6 +87,35 @@ is the house style — this repository duplicates on purpose — but it means a
 fix to one must be applied to the other, and each folder's test suite asserts
 the shared properties independently so a one-sided fix is caught.
 
+## Figures
+
+Six animations carry most of the section's arguments visually. They are
+rendered by one uv-managed script in `scripts/` — not a lab, so it is not
+bookable and has no `pyproject.toml`, and it modifies nothing in the four
+topics:
+
+| figure | shows | command |
+|---|---|---|
+| `contact-map` | a backbone and its contact map are the same object | `--only contact-map` |
+| `memory-wall` | quadratic vs cubic, and the ratio climbing | `--only memory-wall` |
+| `coevolution` | contacts emerging from alignment depth | `--only coevolution` |
+| `se3-equivariance` | IPA holds exactly, the AF3-style head drifts | `--only se3-equivariance` |
+| **`trunk-refinement`** | **the real Evoformer learning, on a GPU** | `--only trunk-refinement` |
+| **`prediction-vs-truth`** | **CASP-style superposition with a real GDT-TS** | `--only prediction-vs-truth` |
+
+```bash
+uv run scripts/make_protein_animations.py                  # the four analytic
+uv run scripts/make_protein_animations.py --only trunk-refinement
+uv run scripts/make_protein_animations.py --quality high --device cuda
+```
+
+**What a GPU buys, stated plainly:** not the rendering — matplotlib draws on
+the CPU and no flag changes that. What it buys is computing a far richer
+input in reasonable time: a 1024-sequence alignment for `coevolution`, and
+real forward/backward passes through the course's own models for the last
+two. Everything still runs without one; the two training figures drop to a
+smaller problem and say so on the figure.
+
 ## Where ColabFold fits
 
 Most people meet this field through a Colab notebook: ColabFold, which wraps

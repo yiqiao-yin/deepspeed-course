@@ -30,6 +30,22 @@ float64:
 | `diffusion` | 4.5e-02 | no — must be learned |
 | `mlp` | 2.7e-01 | no — and not trying |
 
+![A structure rotating: IPA follows exactly, the AF3-style head drifts](/img/protein/se3-equivariance.gif)
+
+The same molecule, rotated, rendered twice. Grey underneath is where the
+prediction *should* be. On the left IPA sits exactly on it through the whole
+rotation. On the right the AF3-style head wanders off it and back, because it
+is reading raw coordinates and has only ever *learned* that orientation
+should not matter.
+
+The drift is exaggerated 6× to be visible at this size, and the figure says
+so — at true scale it is 5% of the molecule's width, which is large enough to
+matter and small enough to be invisible in a thumbnail.
+
+```bash
+uv run scripts/make_protein_animations.py --only se3-equivariance
+```
+
 IPA's figure is float noise. **Invariant Point Attention** compares points
 only after mapping them into per-residue local frames, and the distance
 between two points in a shared frame cannot change when the whole molecule
@@ -113,6 +129,35 @@ as atoms.
 
 **A symmetry you can prove, against a model that can represent more things.**
 Neither choice is obviously right, which is why both shipped.
+
+## Prediction on truth, in the CASP style
+
+![Prediction superimposed on the experimental structure, rotating](/img/protein/prediction-vs-truth.gif)
+
+Green is the experimental backbone of a real CATH chain. Blue is this
+repository's structure module. They are superimposed by a real Kabsch fit and
+scored with a real GDT-TS — the metric on DeepMind's CASP14 panels, computed
+the standard way: the mean, over 1, 2, 4 and 8 Å cutoffs, of the percentage
+of residues within that distance.
+
+:::caution This is not AlphaFold2, and the difference is the whole point
+DeepMind's CASP14 figure shows AlphaFold2 predicting a target it had never
+seen, **from sequence alone**. This shows a ~50k-parameter structure module,
+trained here for 300 steps, **refining a backbone that was deliberately
+noised**. Those are enormously different problems, and a figure that blurred
+them would be exactly the fabricated result this course has rules against.
+
+What is honest about it: the chain is real, the superposition is real, and
+the GDT-TS is computed properly — with a single global Kabsch fit rather than
+the per-cutoff search official CASP uses, which means the number is
+*under*-reported, never inflated. What it demonstrates is that the course's
+own model produces something you can superimpose and score. Not that it
+competes with AlphaFold2, which it emphatically does not.
+:::
+
+```bash
+uv run scripts/make_protein_animations.py --only prediction-vs-truth
+```
 
 ## The loss has to be invariant too
 
