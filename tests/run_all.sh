@@ -52,6 +52,8 @@ TESTS=(
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py
+    tests/test_structure_module.py
+    tests/test_cath_source.py
     tests/test_kimi_k3_plan.py
 )
 

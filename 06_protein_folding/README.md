@@ -44,10 +44,10 @@ reasoning itself**, and the only way to shrink it is to not write it down.
 | `03_pairformer` | pairs (AF3) | the same trunk with the MSA representation deleted — and why the asymptote survives |
 | `04_structure_module` | coordinates | pair representation → 3D, IPA vs a diffusion head, and SE(3) equivariance |
 
-> **Status:** `02_evoformer` and `03_pairformer` are built. `01_esm2_plm` and
-> `04_structure_module` are designed but not yet written. The table is here so
-> the shape of the section is visible; do not read it as a claim that those
-> folders exist.
+> **Status:** `02_evoformer`, `03_pairformer` and `04_structure_module` are
+> built and verified on hardware. `01_esm2_plm` is designed but not yet
+> written. The table is here so the shape of the section is visible; do not
+> read it as a claim that it exists.
 
 ## AF2 and AF3 are two folders on purpose
 

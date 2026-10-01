@@ -158,6 +158,21 @@ EXAMPLES = {
                                          "first; the result is the "
                                          "difference. uv run pairformer.py "
                                          "prices it on CPU."),
+    "06_protein_folding/04_structure_module": dict(min_vram=24, gpus=1, disk=20,
+                                    script="train_structure_ds.py",
+                                    launcher="deepspeed",
+                                    note="Pair representation to 3D. The "
+                                         "cheapest lab in the section -- no "
+                                         "cubic term, runs in 0.2 GB. The "
+                                         "point is --head ipa vs --head "
+                                         "diffusion: AF2's SE(3) guarantee "
+                                         "measures 1e-15, AF3's learned "
+                                         "symmetry 5e-02, and augmentation "
+                                         "only gets it to 8e-03. fp32 on "
+                                         "purpose -- bf16 cannot represent "
+                                         "the difference being taught. "
+                                         "uv run structure.py shows it all "
+                                         "on CPU."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",

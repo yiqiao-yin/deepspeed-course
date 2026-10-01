@@ -93,11 +93,11 @@ const sidebars = {
             type: 'category',
             label: '06 · Protein Folding',
             items: [
-              // 06_protein_folding/02_evoformer and 03_pairformer. The
-              // remaining subtopics (01_esm2_plm, 04_structure_module) are
-              // designed but not yet written -- no page, no entry.
+              // 06_protein_folding/02, 03 and 04. 01_esm2_plm is designed
+              // but not yet written -- no page, no entry.
               'tutorials/protein/evoformer',
               'tutorials/protein/pairformer',
+              'tutorials/protein/structure-module',
             ],
           },
       ],

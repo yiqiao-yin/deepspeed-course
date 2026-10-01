@@ -397,3 +397,19 @@ labs:
       - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --ds-evoformer-attn" }
       - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --data nanofold --n-res 64" }
       - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/04_structure_module
+    title: "Structure module (IPA vs diffusion)"
+    summary: "SE(3) equivariance: guaranteed by construction, or learned approximately."
+    est_minutes: 8
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy, and structure.py IS the lesson of this topic.
+      - { label: "Guaranteed vs learned symmetry (CPU)", cmd: "uv run structure.py" }
+      - { label: "Check the real backbones (CPU)", cmd: "uv run cath_data.py --split validation" }
+      - { label: "Train with IPA (AlphaFold2)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head ipa", primary: true }
+      - { label: "Train with an AF3-style head", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion" }
+      - { label: "AF3-style, with augmentation", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion --augment" }
+      - { label: "Real CATH backbones", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --data cath --head ipa" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --max-steps 3" }
