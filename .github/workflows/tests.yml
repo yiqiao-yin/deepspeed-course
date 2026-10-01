@@ -136,6 +136,9 @@ jobs:
       - name: CATH backbones are what they claim (chemistry check)
         run: uv run tests/test_cath_source.py
 
+      - name: Secondary structure derived from geometry
+        run: uv run tests/test_ss_derivation.py
+
       - name: Kimi K3 architecture arithmetic
         run: uv run tests/test_kimi_k3_plan.py
 

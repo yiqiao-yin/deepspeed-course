@@ -21,7 +21,12 @@ size of the model:
 
 A ~100k-parameter trunk can exhaust a 24 GB card on a 512-residue chain, and
 sharding the parameters across eight GPUs changes nothing, because every rank
-materialises the cubic tensor in full, every step.
+materialises the cubic tensor in full, every step. Measured: ZeRO-1 0.65 GB
+against ZeRO-3 0.62 GB, a 4.6% difference for 1.5x the communication.
+
+`01_esm2_plm` is the control. ESM-2 650M has 652M *real* parameters, so there
+the ordinary reasoning applies and stage 2 earns its keep. Same course, same
+knob, opposite conclusion -- because the memory is in a different place.
 
 This is why DeepSpeed ships
 [`DS4Sci_EvoformerAttention`](https://www.deepspeed.ai/tutorials/ds4sci_evoformerattention/)
@@ -44,10 +49,11 @@ reasoning itself**, and the only way to shrink it is to not write it down.
 | `03_pairformer` | pairs (AF3) | the same trunk with the MSA representation deleted — and why the asymptote survives |
 | `04_structure_module` | coordinates | pair representation → 3D, IPA vs a diffusion head, and SE(3) equivariance |
 
-> **Status:** `02_evoformer`, `03_pairformer` and `04_structure_module` are
-> built and verified on hardware. `01_esm2_plm` is designed but not yet
-> written. The table is here so the shape of the section is visible; do not
-> read it as a claim that it exists.
+> **Status:** all four subtopics are built and verified on hardware
+> (1 x RTX 3080 Ti, 16 GB). The one thing still unverified anywhere in the
+> section is `DS4Sci_EvoformerAttention` itself, which needs a CUDA toolkit
+> the verification box lacks -- only its fallback path is tested, and no
+> memory number for the kernel appears anywhere.
 
 ## AF2 and AF3 are two folders on purpose
 

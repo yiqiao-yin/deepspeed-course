@@ -173,6 +173,21 @@ EXAMPLES = {
                                          "the difference being taught. "
                                          "uv run structure.py shows it all "
                                          "on CPU."),
+    "06_protein_folding/01_esm2_plm": dict(min_vram=24, gpus=1, disk=60,
+                                    script="train_esm2_ds.py",
+                                    launcher="deepspeed",
+                                    note="ESM-2 fine-tuning -- the on-ramp to "
+                                         "the section, and the one lab here "
+                                         "where the ordinary ZeRO reasoning "
+                                         "applies (650M real parameters, so "
+                                         "stage 2 earns its keep). Labels are "
+                                         "DERIVED from backbone dihedrals, "
+                                         "not downloaded. --model 3B needs "
+                                         "--use-lora; its checkpoint is "
+                                         ".bin-only and loads fine on "
+                                         "transformers 5.18. Compare accuracy "
+                                         "against the MAJORITY CLASS (~0.50), "
+                                         "never 1/3."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",

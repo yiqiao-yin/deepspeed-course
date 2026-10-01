@@ -54,6 +54,7 @@ TESTS=(
     tests/test_pairformer.py
     tests/test_structure_module.py
     tests/test_cath_source.py
+    tests/test_ss_derivation.py
     tests/test_kimi_k3_plan.py
 )
 

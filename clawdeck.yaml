@@ -413,3 +413,17 @@ labs:
       - { label: "AF3-style, with augmentation", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion --augment" }
       - { label: "Real CATH backbones", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --data cath --head ipa" }
       - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/01_esm2_plm
+    title: "ESM-2 protein language model"
+    summary: "A protein is a sequence, so the whole LLM stack transfers. Almost."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus: plm.py is plain NumPy and needs no GPU.
+      - { label: "Masking and derived labels (CPU)", cmd: "uv run plm.py" }
+      - { label: "Secondary structure, 150M", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 150M", primary: true }
+      - { label: "650M with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 650M --use-lora" }
+      - { label: "3B with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 3B --use-lora" }
+      - { label: "Masked LM instead", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task mlm --model 35M" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --max-steps 3 --model 8M" }

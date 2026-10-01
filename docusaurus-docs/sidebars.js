@@ -93,8 +93,9 @@ const sidebars = {
             type: 'category',
             label: '06 · Protein Folding',
             items: [
-              // 06_protein_folding/02, 03 and 04. 01_esm2_plm is designed
-              // but not yet written -- no page, no entry.
+              // 06_protein_folding, in reading order: sequence, pairs
+              // (AF2), pairs (AF3), coordinates.
+              'tutorials/protein/esm2',
               'tutorials/protein/evoformer',
               'tutorials/protein/pairformer',
               'tutorials/protein/structure-module',
