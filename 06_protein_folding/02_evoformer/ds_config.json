@@ -17,8 +17,15 @@
   "bf16": { "enabled": true },
   "fp16": { "enabled": false },
 
-  "_zero_comment": "Stage 1, and the reason is the whole topic. ZeRO shards optimizer state (stage 1), gradients (stage 2) and parameters (stage 3). This model has ~100k parameters. Sharding it harder would trade communication for kilobytes while the thing actually filling the card -- an O(N_res^3) triangle attention logit tensor -- is an ACTIVATION, which no ZeRO stage touches. Every rank materialises it in full, every step. That is why the answer here is a fused kernel (--ds-evoformer-attn) and activation checkpointing, not a higher stage. Raising the stage to fit a longer protein is the single most tempting wrong move in this lab.",
-  "zero_optimization": { "stage": 1 },
+  "_zero_comment": "Stage 1, and the reason is the whole topic. ZeRO shards optimizer state (stage 1), gradients (stage 2) and parameters (stage 3). This model has ~100k parameters. Sharding it harder would trade communication for kilobytes while the thing actually filling the card -- an O(N_res^3) triangle attention logit tensor -- is an ACTIVATION, which no ZeRO stage touches. Every rank materialises it in full, every step. That is why the answer here is a fused kernel (--ds-evoformer-attn) and activation checkpointing, not a higher stage. Raising the stage to fit a longer protein is the single most tempting wrong move in this lab. MEASURED on 1x RTX 3080 Ti at --n-res 128: stage 1 = 0.65 GB, stage 3 = 0.62 GB. A 4.6% difference, for 1.5x the communication.",
+
+  "_bucket_comment": "reduce_bucket_size is set EXPLICITLY, and that matters more than it looks. Leave it out and DeepSpeed defaults it to 5e8 -- a 500 MB reduction buffer -- while ds_config_z3.json sets 16 MB. The first version of these two files differed in exactly that way, so the ZeRO-1-vs-ZeRO-3 comparison this lab invites read 1.58 GB vs 0.62 GB and appeared to show stage 3 winning by 2.5x. It was measuring the buckets, not the stage. These two configs are now identical except for the stage, which is the only way the comparison means anything.",
+  "zero_optimization": {
+    "stage": 1,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": 16777216
+  },
 
   "_checkpointing_comment": "Activation checkpointing is configured but left OFF by default so the baseline measurement is honest. Turn it on with --activation-checkpointing to recompute the triangle activations in the backward pass instead of storing them: real memory relief, at roughly 30% more compute. Unlike the ZeRO stage, this one attacks the tensor that is actually large.",
   "activation_checkpointing": {

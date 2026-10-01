@@ -254,6 +254,22 @@ def main() -> None:
 
     with open(args.deepspeed_config) as fh:
         ds_config = json.load(fh)
+
+    # require_gpu() is not sufficient, and finding that out cost a run.
+    #
+    # torch.cuda.is_available() is True on any box with a driver, because the
+    # PyTorch wheels ship their own CUDA runtime. DeepSpeed's FusedAdam is a
+    # different matter: it JIT-COMPILES a CUDA extension, which needs nvcc and
+    # CUDA_HOME. Without a toolkit the run dies inside
+    # deepspeed.initialize() with
+    #
+    #     OSError: CUDA_HOME environment variable is not set.
+    #
+    # raised from torch/utils/cpp_extension.py -- which is exactly the
+    # unhelpful, deep-in-the-stack message require_gpu() exists to prevent,
+    # arriving after the data has been built and the model constructed.
+    _check_cuda_toolkit(ds_config, log)
+
     if args.activation_checkpointing:
         ds_config.setdefault("activation_checkpointing", {})
         ds_config["activation_checkpointing"]["partition_activations"] = True
@@ -318,6 +334,32 @@ def main() -> None:
     peak_gb = (torch.cuda.max_memory_allocated() / 1e9
                if torch.cuda.is_available() else 0.0)
 
+    # Report what the kernel ACTUALLY did, not what we asked it to do.
+    #
+    # TriangleAttention falls back by setting self.ds_kernel = None the first
+    # time a call raises -- which is the right behaviour, but it happens after
+    # this status string was computed at wiring time. The first version
+    # printed "DS4Sci kernel: on (4 modules)" on a box with no CUDA toolkit,
+    # where the kernel cannot possibly have run. A verification harness that
+    # reports success for a path that fell back does not lose information, it
+    # manufactures confidence -- the same failure the RunPod harness shipped
+    # four times (see POSTMORTEMS.md).
+    if args.ds_evoformer_attn:
+        from pairformer import TriangleAttention as _TA
+        live = sum(1 for m in model.modules()
+                   if isinstance(m, _TA) and m.ds_kernel is not None)
+        total = sum(1 for m in model.modules() if isinstance(m, _TA))
+        if kernel_state == "unavailable":
+            pass                                    # already accurate
+        elif live == 0:
+            kernel_state = (f"FELL BACK (0/{total} modules) -- the kernel was "
+                            "wired but every call raised")
+        elif live < total:
+            kernel_state = f"partial ({live}/{total} modules still using it)"
+        else:
+            kernel_state = f"on ({live}/{total} modules, used throughout)"
+
+
     log("\n" + "=" * 78)
     log("  RESULTS  (held-out chains, long-range pairs only)")
     log("=" * 78)
@@ -368,6 +410,64 @@ def main() -> None:
         # inside a collective is the same bug as guarding a collective.
         torch.distributed.barrier(device_ids=[local_rank])
         torch.distributed.destroy_process_group()
+
+
+def _check_cuda_toolkit(ds_config: dict, log) -> None:
+    """
+    Fail fast, and usefully, when there is a GPU but no CUDA toolkit.
+
+    Skipped when the config already asks for torch's own Adam, because that
+    path compiles nothing and works fine without nvcc.
+    """
+    import shutil
+    import sys
+
+    wants_torch_adam = (
+        ds_config.get("optimizer", {}).get("params", {}).get("torch_adam")
+        is True
+    )
+    if wants_torch_adam or shutil.which("nvcc"):
+        return
+
+    try:
+        from torch.utils.cpp_extension import CUDA_HOME
+    except Exception:                                       # noqa: BLE001
+        CUDA_HOME = None
+    if CUDA_HOME:
+        return
+
+    log("\n" + "=" * 78)
+    log("  GPU FOUND, BUT NO CUDA TOOLKIT -- DeepSpeed cannot build FusedAdam")
+    log("=" * 78)
+    log("""
+  Why this is not caught by the GPU check above
+      torch.cuda.is_available() is True: the PyTorch wheels ship their own
+      CUDA runtime, so tensors and training work fine. DeepSpeed's FusedAdam
+      is different -- it JIT-COMPILES a CUDA extension, which needs `nvcc`
+      and CUDA_HOME. Neither is present here.
+
+      Left alone, this run would die inside deepspeed.initialize() with
+      `OSError: CUDA_HOME environment variable is not set`, raised from
+      torch/utils/cpp_extension.py, after the data was built and the model
+      constructed.
+
+  Two ways forward
+
+      1. Use torch's optimizer instead of the fused one. Nothing is compiled,
+         and for a ~100k-parameter trunk the speed difference is noise:
+
+             "optimizer": { "type": "AdamW",
+                            "params": { ..., "torch_adam": true } }
+
+         Everything this lab teaches works on that path, including the
+         memory comparisons.
+
+      2. Install a CUDA toolkit matching your driver, then set CUDA_HOME.
+         Required for --ds-evoformer-attn, which compiles CUTLASS and has
+         no pure-PyTorch fallback worth the name.
+""")
+    log("=" * 78 + "\n")
+    sys.exit(1)
 
 
 def _enable_ds_kernel(model, log) -> str:

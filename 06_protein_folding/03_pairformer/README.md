@@ -160,17 +160,88 @@ The two tables above, plus:
 Both symmetries hold for the same reasons they hold in `02_evoformer`. **The
 MSA deletion changed the cost, not the symmetries.**
 
-### `uv run deepspeed --num_gpus=1 train_pairformer_ds.py`
+### `uv run deepspeed --num_gpus=1 train_pairformer_ds.py` — verified on hardware
 
-**Not yet verified on hardware.** The CPU modules and the full logic suite
-have been run; the GPU path — peak memory with and without the kernel, and
-throughput against `02_evoformer` — has not been measured on the declared
-24 GB card. No numbers for it appear here rather than estimated ones.
+Measured on **1 × RTX 3080 Ti Laptop (16 GB, compute 8.6)**, torch 2.11.0+cu128,
+deepspeed 0.19.7, default settings, three seeds:
 
-The honest comparison to make once you have a card: run `02_evoformer` and
-`03_pairformer` at the *same* `--n-res` and `--n-seq`, with and without
-`--ds-evoformer-attn`, and check the four peak-memory figures against the
-table at the top of this file.
+```
+  precision@K    : 0.675      (seeds 0/1/2: 0.675, 0.873, 0.762)
+  base rate      : 0.013
+  ratio          : 50.1x base rate
+  steps          : 640
+  wall clock     : 75.8s
+  peak GPU memory: 0.13 GB
+```
+
+### Measured: the saving is real, and it shrinks
+
+Activation memory only, 6 trunk blocks against 1 MSA-module block, batch 1,
+N_seq=64:
+
+| N_res | Evoformer | Pairformer | AF3 saving |
+|---|---|---|---|
+| 32 | 120.7 MB | 50.1 MB | **58.5%** |
+| 64 | 380.9 MB | 225.4 MB | 40.8% |
+| 128 | 1511.4 MB | 1145.4 MB | 24.2% |
+| 192 | 3795.2 MB | 3142.5 MB | 17.2% |
+| 256 | 7531.4 MB | 6589.4 MB | **12.5%** |
+
+Monotonically decreasing, exactly as the analytic table at the top of this
+file predicts. **The central claim of this folder is now measured, not
+asserted.**
+
+> **The block ratio matters, and getting it wrong inverts the result.** The
+> first measurement used 1 trunk block for both, where AF3 *lost* — saving
+> −1.2% at 256 residues. The reason: the MSA module carries its own triangle
+> operations, so at `n_blocks=1` the Pairformer runs **6** triangle ops to the
+> Evoformer's **4**, and the module is 100% overhead instead of the real
+> models' 8% (AF3 is 4 MSA blocks to 48 Pairformer blocks). A per-block
+> analytic claim and a whole-model measurement are different claims, and at a
+> 1:1 ratio they disagree in sign.
+
+### `--ds-evoformer-attn`: still unverified
+
+The verification box has GPU drivers but no CUDA toolkit, so CUTLASS cannot
+compile. The fallback is verified and reports honestly
+(`FELL BACK (0/4 modules)`); the kernel's memory reduction is not measured and
+no number for it appears here.
+
+---
+
+## An accuracy difference, and why it is NOT a claim about AF2 vs AF3
+
+Same data, same loss, same metric, same configs, same seeds, three runs each:
+
+| seed | Evoformer | Pairformer |
+|---|---|---|
+| 0 | 0.992 | 0.675 |
+| 1 | 0.980 | 0.873 |
+| 2 | 0.999 | 0.762 |
+| **mean** | **0.990** | **0.770** |
+
+No overlap between the groups, so this is not seed luck. The Evoformer wins
+on this data.
+
+**That is a statement about this configuration, not about the architectures.**
+It was measured at 48 residues, alignment depth 64, two trunk blocks, 640
+steps, on synthetic MSAs whose coupling is **purely pairwise** — and the
+Evoformer keeps the full MSA representation in the trunk for all 48 of AF2's
+blocks, where AF3 compresses it in four and discards it. On data whose entire
+signal is pairwise column covariance, keeping more of the alignment is
+plausibly just *better*.
+
+Real alignments carry indirect and higher-order structure that AF3's design
+targets and this generator does not contain by construction. Nothing measured
+here speaks to that case, and AlphaFold3's published results are not in
+dispute.
+
+So the honest summary is: **on purely pairwise synthetic coupling at this
+scale, AF2's trunk recovers more contacts.** The repository has a rule about
+this, learned from `03_llms/11_moe` publishing a load-balancing result that
+reversed at world size 2 — *"measured at X" is a different claim from "true in
+general", and the docs should say which one they are making.* This is the
+former. Reproduce it with `--data nanofold` before believing anything broader.
 
 ---
 

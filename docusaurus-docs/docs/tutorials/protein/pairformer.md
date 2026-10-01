@@ -143,9 +143,30 @@ and not the other would be silent, so each folder's suite re-asserts
 permutation equivariance, MSA row invariance and triangle closure
 independently rather than assuming the sibling covers them.
 
-:::note Not yet verified on hardware
-The CPU modules and the full logic suite have been run. The GPU path — peak
-memory with and without the kernel, and throughput against `02_evoformer` —
-has **not** been measured on the declared 24 GB card, so no numbers for it
-appear here.
+:::tip Measured on hardware — the saving is real, and it shrinks
+Activation memory only, 6 trunk blocks : 1 MSA-module block, batch 1,
+N_seq=64, on 1 × RTX 3080 Ti Laptop:
+
+| $N_{res}$ | Evoformer | Pairformer | AF3 saving |
+|---|---|---|---|
+| 32 | 120.7 MB | 50.1 MB | **58.5%** |
+| 64 | 380.9 MB | 225.4 MB | 40.8% |
+| 128 | 1511.4 MB | 1145.4 MB | 24.2% |
+| 192 | 3795.2 MB | 3142.5 MB | 17.2% |
+| 256 | 7531.4 MB | 6589.4 MB | **12.5%** |
+
+Monotonically decreasing, as the analytic table predicts.
+
+**The block ratio inverts this if you get it wrong.** Measured at 1 trunk
+block for both, AF3 *loses* — −1.2% at 256 residues — because the MSA module
+carries its own triangle operations, so the Pairformer runs 6 triangle ops to
+the Evoformer's 4 and the module is 100% overhead instead of the real models'
+8%. A per-block analytic claim and a whole-model measurement disagree in sign
+at a 1:1 ratio.
+:::
+
+:::note Still unverified: the kernel itself
+The verification box has GPU drivers but no CUDA toolkit, so CUTLASS cannot
+compile. The fallback path is verified; the kernel's memory reduction is not
+measured and no number for it appears here.
 :::

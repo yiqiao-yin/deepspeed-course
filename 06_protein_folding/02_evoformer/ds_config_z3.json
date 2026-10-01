@@ -1,5 +1,7 @@
 {
-  "_comment": "ZeRO-3 variant, provided so you can MEASURE that it does not help. This is not the recommended config -- ds_config.json is. Run both at a longer --n-res and compare peak memory: stage 3 shards ~100k parameters across your ranks and leaves the O(N_res^3) triangle attention activation exactly where it was. The lesson is worth one experiment.",
+  "_comment": "ZeRO-3 variant, provided so you can MEASURE that it does not help. This is not the recommended config -- ds_config.json is. Run both at a longer --n-res and compare peak memory: stage 3 shards ~100k parameters across your ranks and leaves the O(N_res^3) triangle attention activation exactly where it was. MEASURED on 1x RTX 3080 Ti at --n-res 128: stage 1 = 0.65 GB, stage 3 = 0.62 GB.",
+
+  "_controlled_comparison_comment": "This file is byte-identical to ds_config.json except for the zero_optimization block, and that is load-bearing. An earlier version left reduce_bucket_size unset in ds_config.json, where DeepSpeed defaults it to 5e8 (500 MB) against the 16 MB set here -- so the comparison read 1.58 GB vs 0.62 GB and appeared to prove stage 3 saves 2.5x. It was measuring bucket sizes. If you change a knob here, change it there too, or the experiment stops being an experiment.",
 
   "train_micro_batch_size_per_gpu": 2,
   "gradient_accumulation_steps": 1,

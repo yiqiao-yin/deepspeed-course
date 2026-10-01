@@ -198,38 +198,98 @@ documented and says so rather than implying otherwise.
   contact logit spread -> std          0.4090  (must be > 0)
 ```
 
-### `uv run deepspeed --num_gpus=1 train_evoformer_ds.py`
+### `uv run deepspeed --num_gpus=1 train_evoformer_ds.py` — verified on hardware
 
-**Not yet verified on hardware.** This lab has been run end to end on CPU and
-through its full logic suite, but the GPU path — peak memory with and without
-`--ds-evoformer-attn`, throughput, and the ZeRO-3 comparison — has not been
-measured on the declared 24 GB card. The numbers are deliberately absent rather
-than estimated: a published figure a reader cannot reproduce costs them a day
-deciding their own correct setup is broken.
+Measured on **1 × RTX 3080 Ti Laptop (16 GB, compute 8.6)**, torch 2.11.0+cu128,
+deepspeed 0.19.7, default settings, three seeds:
 
-What the script prints is precision@K on **held-out** chains against the base
-rate, plus peak GPU memory and the kernel status. A capped run
-(`--max-steps N`) says so explicitly and tells you not to read its precision as
-a result.
+```
+  precision@K    : 0.992      (seeds 0/1/2: 0.992, 0.980, 0.999)
+  base rate      : 0.013   <- what random guessing gets
+  ratio          : 73.7x base rate
+  steps          : 640
+  wall clock     : 63.8s
+  peak GPU memory: 0.17 GB
+```
+
+Note the card is **16 GB against a declared 24 GB**. Verifying on a *smaller*
+card than advertised is sound — it makes the declaration conservative. The
+failure mode to avoid is the opposite one, which is how `03_llms/03_ocr`
+shipped a 24 GB claim verified on a 48 GB card.
+
+### Measured: peak memory really is super-quadratic
+
+Activation memory only — model and optimizer resident, peak reset, one
+forward+backward. 6 blocks, batch 1, N_seq=64, toy widths:
+
+| N_res | Evoformer | growth |
+|---|---|---|
+| 32 | 120.7 MB | — |
+| 64 | 380.9 MB | 3.16× |
+| 128 | 1511.4 MB | 3.97× |
+| 192 | 3795.2 MB | 2.51× (×1.5 length) |
+| 256 | 7531.4 MB | 1.98× (×1.33 length) |
+
+Growth per doubling climbs toward cubic as the quadratic terms stop
+dominating. At these toy widths (`c_z=32`, 4 heads) the pure cubic regime is
+not reached by 256 — the published table at the top of this file uses
+AlphaFold's real `c_z=128`, where it is.
+
+### Measured: ZeRO-3 does not help, and the comparison must be controlled
+
+| config | peak GPU memory |
+|---|---|
+| `ds_config.json` (ZeRO-1) | **0.65 GB** |
+| `ds_config_z3.json` (ZeRO-3) | **0.62 GB** |
+
+4.6%, for 1.5× the communication. That is the lesson, and it is now measured
+rather than asserted.
+
+> **This nearly shipped backwards.** The first version of these two configs
+> differed in more than the stage: `ds_config.json` left `reduce_bucket_size`
+> unset, so DeepSpeed defaulted it to 500 MB, while `ds_config_z3.json` set
+> 16 MB. The comparison then read **1.58 GB vs 0.62 GB** and appeared to prove
+> ZeRO-3 saves 2.5× — the exact opposite of this lab's point, demonstrated
+> convincingly with real numbers. The two files are now identical except for
+> the `zero_optimization` block. **If you change a knob in one, change it in
+> the other, or the experiment stops being an experiment.**
+
+### `--ds-evoformer-attn`: still unverified
+
+The kernel needs a **CUDA toolkit** (`nvcc`, `CUDA_HOME`) to JIT-compile
+CUTLASS, and the verification box has drivers but no toolkit. So the fallback
+path is verified — it reports
+
+```
+peak GPU memory: 0.17 GB   (DS4Sci kernel: FELL BACK (0/4 modules) --
+                            the kernel was wired but every call raised)
+```
+
+— and the kernel's actual memory reduction is **not measured here**. No number
+for it appears in this README.
 
 ---
 
-## A result worth not overclaiming
+## A result worth scoping carefully
 
 On this synthetic data, classical APC-corrected mutual information reaches
-prec@K **1.000**, while the trunk in `tests/test_evoformer_data_is_learnable.py`
-— one block, 150 steps, CPU — reaches **0.313** against a base rate of 0.023.
+prec@K **1.000**. So does the trunk, near enough: **0.992** at the lab's
+default settings on a GPU.
 
-That is 13× the base rate, so the model is genuinely learning. But it is *below
-the classical baseline*, and the honest reason is that this generator plants
-**purely pairwise** coupling, which is precisely what MI is optimal for. The
-Evoformer's advantage is indirect and higher-order coupling on real alignments,
-which the synthetic arm does not contain by construction.
+An earlier draft of this README said the trunk reached only **0.313** and drew
+a conclusion from it — that the Evoformer was losing to a 2008 statistic. That
+number was real but came from `tests/test_evoformer_data_is_learnable.py`:
+**one block, 150 steps, on CPU**, a budget chosen to keep CI under 20 seconds.
+Reading it as a fact about the lab was the same error this repository has
+shipped twice before — publishing a number measured in a configuration no
+learner runs. Measured in the configuration the lab actually ships, the gap
+disappears.
 
-So: the synthetic path proves the plumbing, the symmetries and the counter-
-example. It does not prove the architecture is better than a 2008 statistic,
-and this README will not pretend otherwise. Use `--data nanofold` for that
-argument.
+What remains true and worth saying: this generator plants **purely pairwise**
+coupling, which is exactly what mutual information is optimal for. Matching MI
+here is the ceiling, not a triumph. The Evoformer's real advantage is indirect
+and higher-order coupling on real alignments, which the synthetic arm does not
+contain by construction. Use `--data nanofold` for that argument.
 
 ---
 

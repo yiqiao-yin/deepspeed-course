@@ -133,12 +133,29 @@ Make all three runs. The third is the important one: ZeRO-3 shards ~100k
 parameters and does essentially nothing for peak memory. Seeing the familiar
 answer fail is worth more than being told it would.
 
-:::note Not yet verified on hardware
-The CPU modules and the full logic suite have been run. The GPU path — peak
-memory with and without the kernel, throughput, and the ZeRO-3 comparison —
-has **not** been measured on the declared 24 GB card, so no numbers for it
-appear here. A published figure a reader cannot reproduce costs them a day
-debugging a correct setup.
+:::tip Measured on hardware
+On 1 × RTX 3080 Ti Laptop (16 GB, compute 8.6), torch 2.11.0+cu128, deepspeed
+0.19.7, defaults, three seeds:
+
+| | |
+|---|---|
+| precision@K | **0.992** (0.992 / 0.980 / 0.999) |
+| base rate | 0.013 |
+| ZeRO-1 peak | **0.65 GB** |
+| ZeRO-3 peak | **0.62 GB** — 4.6%, for 1.5× the communication |
+
+The ZeRO-3 comparison nearly shipped backwards. The two configs initially
+differed in more than the stage — ZeRO-1 left `reduce_bucket_size` unset, so
+DeepSpeed defaulted it to 500 MB against ZeRO-3's 16 MB — and the comparison
+read 1.58 GB vs 0.62 GB, appearing to prove stage 3 saves 2.5×. **If a
+controlled experiment has two knobs, it is not a controlled experiment.**
+:::
+
+:::note Still unverified: the kernel itself
+`DS4Sci_EvoformerAttention` JIT-compiles CUTLASS and needs a CUDA toolkit
+(`nvcc`, `CUDA_HOME`). The verification box has drivers but no toolkit, so the
+**fallback** is verified and the kernel's memory reduction is not. No number
+for it appears on this page.
 :::
 
 ## Two properties the tests assert
