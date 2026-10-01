@@ -107,6 +107,63 @@ What is asserted is geometry:
 The third row uses **no dihedral at all**, which is why it catches errors the
 Ramachandran check shares a cause with.
 
+## An open question: are dataset cards true?
+
+Deriving labels sidesteps one trust problem and walks into another — the
+backbones themselves are downloaded, and the description that comes with them
+is not a guarantee.
+
+This section hit that directly. The CATH dataset's card states that chains are
+"cropped to a fixed 128-residue window." They are not: lengths run **40–128**,
+with 12,806 of 16,691 training chains at the cap. Taken at face value it
+breaks batching on the first mixed batch. The card is complete, well-written,
+and wrong in a load-bearing detail.
+
+### What exists, and the gap between the two halves
+
+Dataset **hygiene** auditing is now active. [BenchAudit
+(2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13425739/) checks 51
+biomolecular benchmarks for duplicates, cross-split contamination and label
+conflicts, finding contamination that inflates reported ROC AUC by 0.177. It
+states explicitly that it does **not** assess stereochemistry, bond geometry,
+Ramachandran validity or clashes.
+
+Physical validation of **model outputs** is also active: [structural errors in the AlphaFold DB (J. Cheminformatics,
+2026)](https://doi.org/10.1186/s13321-026-01285-4)
+catalogues 3,932 in v6, [Fold or flop (Bioinformatics Advances,
+2026)](https://doi.org/10.1093/bioadv/vbag190)
+identifies a physically-implausible population across whole proteomes, and
+[AlphaFold 3 fails to predict D-peptide chirality, fold and
+binding (2025)](https://doi.org/10.1101/2025.03.14.643307) reports ~50%
+chirality violations there against 4.4% generally.
+
+Dataset **documentation** has been studied too — but for *completeness*.
+[Navigating Dataset Documentations in AI (ICLR
+2024)](https://arxiv.org/abs/2401.13822) analysed all 7,433 Hugging Face
+dataset cards and found 86% of the top-100 fill every suggested section
+against 7.9% of the rest; [a 2025 supply-chain
+study](https://arxiv.org/html/2502.04484v2) covers 175,000 datasets.
+
+Both measure **how much** a card says. Neither measures **whether it is
+right**. A citation-graph check in October 2026 found zero works citing the
+ICLR paper that match "accuracy", "verification", "correctness", "audit" or
+"validate claims".
+
+> **What fraction of checkable claims in ML dataset cards are contradicted by
+> the data they describe?**
+
+Row counts, shapes, value ranges, split sizes and stated crop lengths are all
+machine-checkable against the artifact. We have one existence proof and no
+idea of the base rate.
+
+### Which is why the validation here is physical
+
+`tests/test_cath_source.py` does not trust the card. It checks that
+consecutive Cα atoms sit 3.804 Å apart — a fact about the peptide bond, not
+about this dataset — with a tolerance tight enough to reject a
+nanometre/Ångström mix-up. **Chemistry is the checksum**, and it catches
+corruption nobody computed a hash for.
+
 ## Two traps
 
 **Label/token alignment.** ESM-2 prepends `<cls>`, so residue $i$ is at token
