@@ -121,6 +121,24 @@ jobs:
       - name: MoE routing, load balancing and expert accounting
         run: uv run tests/test_moe_routing.py
 
+      - name: Evoformer triangle ops, symmetries and the cubic memory wall
+        run: uv run tests/test_evoformer.py
+
+      - name: Synthetic MSAs carry coevolution (and the counterexample does not)
+        run: uv run tests/test_evoformer_data_is_learnable.py
+
+      - name: "Pairformer: the AF3 MSA deletion, and the asymptote that survived"
+        run: uv run tests/test_pairformer.py
+
+      - name: "Structure module: SE(3) guaranteed vs learned"
+        run: uv run tests/test_structure_module.py
+
+      - name: CATH backbones are what they claim (chemistry check)
+        run: uv run tests/test_cath_source.py
+
+      - name: Secondary structure derived from geometry
+        run: uv run tests/test_ss_derivation.py
+
       - name: Kimi K3 architecture arithmetic
         run: uv run tests/test_kimi_k3_plan.py
 

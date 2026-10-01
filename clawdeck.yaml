@@ -361,3 +361,69 @@ labs:
       # model id called "none" and fail.
       - { label: "Ablation grid (CPU)", cmd: "uv run omni_eval.py", primary: true }
       - { label: "Fewer questions", cmd: "uv run omni_eval.py --questions 20" }
+
+  # ---------------------------------------------------------------------------
+  # 06_protein_folding — the memory is in the ACTIVATIONS, and ZeRO cannot help
+  # ---------------------------------------------------------------------------
+  - id: 06_protein_folding/02_evoformer
+    title: "Evoformer (AlphaFold2 trunk)"
+    summary: "Triangle attention, coevolution, and the O(N^3) wall ZeRO does not touch."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the first two, and that is correct: both are plain
+      # PyTorch/NumPy on CPU with no download, so Clawdeck may advertise them
+      # as "Runs now". Most of the teaching in this topic is in them.
+      - { label: "The trunk and the memory wall (CPU)", cmd: "uv run evoformer.py" }
+      - { label: "Does the data carry signal? (CPU)", cmd: "uv run synthetic_msa.py" }
+      - { label: "Train on synthetic MSAs", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py", primary: true }
+      - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --ds-evoformer-attn" }
+      - { label: "ZeRO-3 (measure that it does NOT help)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --deepspeed_config ds_config_z3.json" }
+      - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --data nanofold --n-res 64" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/03_pairformer
+    title: "Pairformer (AlphaFold3 trunk)"
+    summary: "AF3 deleted the MSA representation. The cubic term did not move."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy with no download, so Clawdeck may advertise them as
+      # "Runs now". pairformer.py IS the lesson of this topic.
+      - { label: "AF2 vs AF3, priced (CPU)", cmd: "uv run pairformer.py" }
+      - { label: "Does the data carry signal? (CPU)", cmd: "uv run synthetic_msa.py" }
+      - { label: "Train the AF3 trunk", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py", primary: true }
+      - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --ds-evoformer-attn" }
+      - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --data nanofold --n-res 64" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/04_structure_module
+    title: "Structure module (IPA vs diffusion)"
+    summary: "SE(3) equivariance: guaranteed by construction, or learned approximately."
+    est_minutes: 8
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy, and structure.py IS the lesson of this topic.
+      - { label: "Guaranteed vs learned symmetry (CPU)", cmd: "uv run structure.py" }
+      - { label: "Check the real backbones (CPU)", cmd: "uv run cath_data.py --split validation" }
+      - { label: "Train with IPA (AlphaFold2)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head ipa", primary: true }
+      - { label: "Train with an AF3-style head", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion" }
+      - { label: "AF3-style, with augmentation", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion --augment" }
+      - { label: "Real CATH backbones", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --data cath --head ipa" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/01_esm2_plm
+    title: "ESM-2 protein language model"
+    summary: "A protein is a sequence, so the whole LLM stack transfers. Almost."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus: plm.py is plain NumPy and needs no GPU.
+      - { label: "Masking and derived labels (CPU)", cmd: "uv run plm.py" }
+      - { label: "Secondary structure, 150M", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 150M", primary: true }
+      - { label: "650M with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 650M --use-lora" }
+      - { label: "3B with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 3B --use-lora" }
+      - { label: "Masked LM instead", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task mlm --model 35M" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --max-steps 3 --model 8M" }

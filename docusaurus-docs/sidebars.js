@@ -89,6 +89,18 @@ const sidebars = {
               'tutorials/multimodal/omni-evaluation',       // 04_omni_eval
             ],
         },
+          {
+            type: 'category',
+            label: '06 · Protein Folding',
+            items: [
+              // 06_protein_folding, in reading order: sequence, pairs
+              // (AF2), pairs (AF3), coordinates.
+              'tutorials/protein/esm2',
+              'tutorials/protein/evoformer',
+              'tutorials/protein/pairformer',
+              'tutorials/protein/structure-module',
+            ],
+          },
       ],
     },
     {

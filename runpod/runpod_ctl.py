@@ -130,6 +130,64 @@ EXAMPLES = {
                                     note="MLA from the paper. Tiny model; the "
                                          "KV cache is an INFERENCE cost, so "
                                          "ZeRO does not touch it."),
+    "06_protein_folding/02_evoformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_evoformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold2's Evoformer trunk. ONE GPU: "
+                                         "the bottleneck here is an ACTIVATION "
+                                         "(triangle attention is O(N_res^3)), "
+                                         "not parameters, so adding ranks does "
+                                         "not help -- --ds-evoformer-attn does. "
+                                         "--n-res is the knob that will OOM you. "
+                                         "The trunk and the data both run on CPU: "
+                                         "uv run evoformer.py, "
+                                         "uv run synthetic_msa.py."),
+    "06_protein_folding/03_pairformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_pairformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold3's Pairformer: the AF2 "
+                                         "trunk with the MSA representation "
+                                         "deleted. Saves ~24% of per-block "
+                                         "activations at 384 residues and "
+                                         "NOTHING asymptotically -- the "
+                                         "triangle attention logits are "
+                                         "byte-identical to AF2's, so "
+                                         "--ds-evoformer-attn matters here "
+                                         "too despite the name. Run "
+                                         "06_protein_folding/02_evoformer "
+                                         "first; the result is the "
+                                         "difference. uv run pairformer.py "
+                                         "prices it on CPU."),
+    "06_protein_folding/04_structure_module": dict(min_vram=24, gpus=1, disk=20,
+                                    script="train_structure_ds.py",
+                                    launcher="deepspeed",
+                                    note="Pair representation to 3D. The "
+                                         "cheapest lab in the section -- no "
+                                         "cubic term, runs in 0.2 GB. The "
+                                         "point is --head ipa vs --head "
+                                         "diffusion: AF2's SE(3) guarantee "
+                                         "measures 1e-15, AF3's learned "
+                                         "symmetry 5e-02, and augmentation "
+                                         "only gets it to 8e-03. fp32 on "
+                                         "purpose -- bf16 cannot represent "
+                                         "the difference being taught. "
+                                         "uv run structure.py shows it all "
+                                         "on CPU."),
+    "06_protein_folding/01_esm2_plm": dict(min_vram=24, gpus=1, disk=60,
+                                    script="train_esm2_ds.py",
+                                    launcher="deepspeed",
+                                    note="ESM-2 fine-tuning -- the on-ramp to "
+                                         "the section, and the one lab here "
+                                         "where the ordinary ZeRO reasoning "
+                                         "applies (650M real parameters, so "
+                                         "stage 2 earns its keep). Labels are "
+                                         "DERIVED from backbone dihedrals, "
+                                         "not downloaded. --model 3B needs "
+                                         "--use-lora; its checkpoint is "
+                                         ".bin-only and loads fine on "
+                                         "transformers 5.18. Compare accuracy "
+                                         "against the MAJORITY CLASS (~0.50), "
+                                         "never 1/3."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",
