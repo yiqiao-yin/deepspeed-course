@@ -25,3 +25,10 @@ runpod/results/
 **/data/cifar-10-batches-py/
 **/data/cifar-10-python.tar.gz
 01_basics/03_convnet_cifar10/data/
+
+# Downloaded source data for scripts/make_casp14_figure.py -- 47 MB of CASP14
+# prediction tarballs and RCSB mmCIF files. They are public, immutable and
+# re-fetched on demand, so committing them would add weight to every clone
+# for no benefit. The RENDERED figures under docusaurus-docs/static/img/ ARE
+# committed, because CI builds the site but does not run the script.
+.cache/

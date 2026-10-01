@@ -103,6 +103,20 @@ topics:
 | **`trunk-refinement`** | **the real Evoformer learning, on a GPU** | `--only trunk-refinement` |
 | **`prediction-vs-truth`** | **CASP-style superposition with a real GDT-TS** | `--only prediction-vs-truth` |
 
+A second script recreates **DeepMind's CASP14 panel** from public data —
+AlphaFold2's actual submitted coordinates (CASP14 archive, group 427)
+superimposed on the deposited crystal structures (RCSB `6VR4`, `6Y4F`):
+
+```bash
+uv run scripts/make_casp14_figure.py             # dark, for the book
+uv run scripts/make_casp14_figure.py --bg light  # the published look
+```
+
+**No AlphaFold is run.** Both halves of that famous figure are downloadable
+files; the script fetches them, superimposes with PyMOL, and renders a
+rotation sweep plus a four-view sheet per target. It also prints its own
+GDT-TS beside CASP's official 90.7 / 93.3 — never instead of them.
+
 ```bash
 uv run scripts/make_protein_animations.py                  # the four analytic
 uv run scripts/make_protein_animations.py --only trunk-refinement
