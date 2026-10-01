@@ -64,9 +64,10 @@ permissive data spine across the whole section. But mostly because secondary
 structure is not a label somebody assigned; it is a fact about geometry:
 
 $$
-\phi_i = \text{dihedral}\big(C_{i-1}, N_i, C\alpha_i, C_i\big)
-\qquad
-\psi_i = \text{dihedral}\big(N_i, C\alpha_i, C_i, N_{i+1}\big)
+\begin{aligned}
+\phi_i &= \text{dihedral}\big(C_{i-1},\, N_i,\, C\alpha_i,\, C_i\big) \\[2pt]
+\psi_i &= \text{dihedral}\big(N_i,\, C\alpha_i,\, C_i,\, N_{i+1}\big)
+\end{aligned}
 $$
 
 Plot them and you get the Ramachandran diagram, with helix near $(-60, -45)$

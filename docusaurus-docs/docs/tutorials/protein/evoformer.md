@@ -62,9 +62,10 @@ parameters and it will still exhaust a 24 GB card, because the thing filling
 the card is an **activation** that grows with the cube of the protein length.
 
 $$
-\text{pair representation} = O(N_{res}^2 \cdot c_z)
-\qquad
-\text{triangle attention logits} = O(N_{res}^3 \cdot n_{heads})
+\begin{aligned}
+\text{pair representation} &= O(N_{res}^2 \cdot c_z) \\[2pt]
+\text{triangle attention logits} &= O(N_{res}^3 \cdot n_{heads})
+\end{aligned}
 $$
 
 Neither is a parameter. No ZeRO stage touches either. Every rank materialises
