@@ -196,10 +196,11 @@ Instead you now get:
   then:  ALLOW_CPU=1 deepspeed --num_gpus=1 <script>.py
 ```
 
-### Running examples 01–04 on CPU
+### Running the small examples on CPU
 
-Examples `01`–`04` are small enough to train without a GPU. Two config changes
-are required, because both defaults need CUDA:
+Everything in `01_basics/` and `02_intermediate/` is small enough to train
+without a GPU. Two config changes are required, because both defaults need
+CUDA:
 
 ```json
 {
@@ -217,15 +218,20 @@ ALLOW_CPU=1 deepspeed --num_gpus=1 train_ds.py
 
 It is slow, but it genuinely trains and converges.
 
-:::warning Examples 05–09 cannot run on CPU
+:::warning `03_llms/`, `04_video_text/` and `05_video_speech/` cannot run on CPU
 They download models measured in GB and need real VRAM; no config flag changes
 that. Their preflight says so instead of offering a CPU path.
+
+`06_protein_folding/` is the exception to the shape of this list — it needs a
+GPU to *train*, but only a 24 GB one, and its algorithm modules
+(`evoformer.py`, `mla.py`-style pure-tensor code) run on CPU with no download
+at all.
 :::
 
 ### What needs no GPU at all
 
 ```bash
-./tests/run_all.sh     # 203 logic checks — configs, data handling, rewards
+./tests/run_all.sh     # 37 suites, ~1,540 checks — configs, data, objectives
 ```
 
 The test suite validates the *logic* of every example without a GPU or a model
