@@ -160,9 +160,11 @@ Three things that are easy to break by tidying:
   wheels ship only `ptxas`. No memory number is published for it — do not
   estimate one.
 - **`02` and `03` are a matched pair**, like `02_intermediate/03`+`04`. The
-  AF2→AF3 saving from deleting the MSA representation is **58% at 128 residues
-  and 12% at 256** — a constant, not the asymptote, so quoting one number
-  without the length is meaningless.
+  AF2→AF3 saving from deleting the MSA representation **decays with length**:
+  measured at 58.5% (32 residues), 24.2% (128), 12.5% (256). It is a constant
+  subtracted from an $O(N_{res}^3)$ term, so quoting one figure without the
+  length is meaningless — and the length that figure came from is the thing
+  most easily lost in an edit.
 
 `synthetic_msa.py` generates coevolving alignments scored by **APC-corrected**
 mutual information (Dunn 2008). Raw MI is biased by column entropy, and the
