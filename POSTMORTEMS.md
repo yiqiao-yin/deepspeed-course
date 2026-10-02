@@ -40,6 +40,7 @@ rules are phrased as "assert the property" rather than "be careful".
 
 **Claims and measurement**
 - [A measured claim is scoped to the configuration it was measured in](#a-measured-claim-is-scoped-to-the-configuration-it-was-measured-in)
+  - [Second instance: the figure was right and the length was wrong](#second-instance-the-figure-was-right-and-the-length-was-wrong)
 - [A script with no end-to-end run makes its derivations the only testable surface](#a-script-with-no-end-to-end-run-makes-its-derivations-the-only-testable-surface)
 
 ---
@@ -659,6 +660,55 @@ Two related habits, from the same family of error:
   their own correct setup.
 
 ---
+
+### Second instance: the figure was right and the length was wrong
+
+The `11_moe` case above was a claim measured in one configuration and stated
+for all of them. This one is narrower and, for that reason, harder to see.
+
+CLAUDE.md published that the AF2→AF3 saving from deleting the MSA
+representation is **"58% at 128 residues and 12% at 256"**. The measured
+table in `pairformer.md` reports:
+
+| residues | saving |
+|---|---|
+| 32 | 58.5% |
+| 128 | 24.2% |
+| 256 | 12.5% |
+
+Both numbers in the sentence existed. One of them was attached to the wrong
+length: at 128 residues the real saving is 24.2%, so the published figure was
+**more than double the truth**. The second half of the sentence was fine.
+
+Three things made it survive:
+
+- **The number was real**, so it did not look invented. Every instinct that
+  guards against fabrication was satisfied.
+- **24.2% appears in two different tables at two different lengths** — it is
+  the measured saving at 128 residues *and* the analytic saving at 384, which
+  is the configuration of the detailed per-tensor table. A page can therefore
+  show "24.2%" twice, correctly, meaning two different things.
+- **Nothing compared prose to the table it came from.** Three checkers were
+  green. They checked that referenced files exist, that counts are current,
+  that diagrams conform — none of them could read a sentence.
+
+The fix was not just the correction. `tests/test_published_protein_numbers.py`
+now **recomputes** every analytic figure by running
+`trunk_activation_table()` out of the shipped `pairformer.py`, and for the
+measured figures — which CI cannot reproduce — enforces a single owning
+table that every other mention must agree with, *including its residue
+count*. Checking the number alone would not have caught this; the number was
+right.
+
+Confirmed by reintroducing the original sentence verbatim and watching four
+checks fail, and by changing `n_heads` in the shipped source and watching
+nine fail. A check that has not been seen rejecting the real bug is not
+evidence it would have.
+
+The generalisable form: **a measured number and the configuration it was
+measured in are one indivisible fact.** Quoting the number without the
+configuration is not a shortening of the claim — it is a different claim,
+and usually a false one.
 
 ## A script with no end-to-end run makes its derivations the only testable surface
 
