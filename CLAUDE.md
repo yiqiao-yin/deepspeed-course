@@ -354,7 +354,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 37 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 38 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
@@ -591,7 +591,13 @@ evidence is in `POSTMORTEMS.md`.
 - **A measured claim is scoped to the configuration it was measured in.**
   `11_moe`'s load-balancing finding reversed at world size 2; it was scoped to
   world size 1 and the disagreement written down as unresolved rather than
-  rewritten around one unreplicated run.
+  rewritten around one unreplicated run. **It has now shipped twice**: the
+  second time the figure was correct and the residue count attached to it was
+  not, which doubled the published saving. A number and the configuration it
+  was measured in are one indivisible fact; quoting the number alone is a
+  different claim, not a shorter one. `tests/test_published_protein_numbers.py`
+  recomputes every analytic figure from the shipped function and pins the
+  measured ones to a single owning table.
   → [postmortem](POSTMORTEMS.md#a-measured-claim-is-scoped-to-the-configuration-it-was-measured-in)
 - **Never fabricate expected output.** If it has not been run, mark it *not yet
   verified on hardware*.
