@@ -456,6 +456,105 @@ The tools here are different:
 
 Diagnostically: if OOM scales with **batch size or sequence length**, it is activations, and ZeRO stages will not save you. If it scales with **parameter count**, it is model states, and ZeRO will.
 
+### 6.1 The question this whole page is really answering
+
+Everything above reduces to one diagnostic, worth stating plainly because it
+is the framework the rest of this course is organised around:
+
+> **Is your memory in the weights, or in the work?**
+
+Model states scale with $\Psi$. Residual states scale with $b$, $s$ and $L$,
+and **contain no $\Psi$ term at all**. Those are two different problems with
+two different sets of tools, and the reflex — "it does not fit, so shard it" —
+only solves the first. Reaching for ZeRO when the memory is in activations
+costs you communication and buys you nothing.
+
+The course has a lab for each branch. They are not alternative tutorials on
+the same idea; each one is where a different answer to that question gets
+*measured*.
+
+```mermaid
+flowchart TD
+    Q{"OOM.<br/>What is filling the card?"}
+
+    subgraph MS["Memory is in the WEIGHTS — scales with the parameter count"]
+        direction TB
+        Z1["ZeRO-1 — optimizer state<br/>4x smaller, same traffic"]
+        Z2["ZeRO-2 — add gradients<br/>8x smaller, same traffic"]
+        Z3["ZeRO-3 — add parameters<br/>Nd x smaller, 1.5x traffic"]
+        Z1 --> Z2 --> Z3
+    end
+
+    subgraph RS["Memory is in the WORK — scales with batch, sequence, depth"]
+        direction TB
+        R1["Shrink what it LOOKS AT<br/>token compression"]
+        R2["Bound what it RETAINS<br/>STAR memory"]
+        R3["Recompute what it DISCARDS<br/>activation checkpointing"]
+    end
+
+    LAB1["01_basics / 03_llms<br/>ZeRO across real models"]
+    LAB2["04_video_text/03_token_compression<br/>ToMe, FastV, DyCoke"]
+    LAB3["04_video_text/04_streaming_memory<br/>unbounded video, O(1) memory"]
+    LAB4["06_protein_folding/02_evoformer<br/>ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB"]
+
+    Q e1@--> MS
+    Q e2@--> RS
+    MS --> LAB1
+    R1 --> LAB2
+    R2 --> LAB3
+    RS e3@--> LAB4
+
+    e1@{ animate: true }
+    e2@{ animate: true }
+    e3@{ animate: true }
+
+    classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+
+    class MS,RS deep
+    class Z1,Z2,Z3,R1,R2,R3 base
+    class LAB1,LAB2,LAB3 steel
+    class Q,LAB4 bright
+```
+
+### 6.2 The branch that is easiest to disbelieve
+
+The right-hand path is the one worth following, because it is the one the
+reflex gets wrong, and this course measures how wrong.
+
+[`06_protein_folding/02_evoformer`](/docs/tutorials/protein/evoformer) builds
+the AlphaFold2 trunk — about **100,000 parameters**, which is nothing. Then it
+runs the same training step under ZeRO-1 and under ZeRO-3 and reports:
+
+| Stage | Peak allocated | What it sharded |
+|---|---|---|
+| ZeRO-1 | 0.65 GB | optimizer state |
+| ZeRO-3 | 0.62 GB | optimizer state, gradients, **and every parameter** |
+
+**A 4.6% difference, for 1.5x the communication.** Sharding away *every
+parameter in the model* bought almost nothing, because the parameters were
+never the problem. What fills the card is the pair representation at
+$O(N_{res}^2)$ and the triangle attention logits at $O(N_{res}^3)$ — at 1,024
+residues, 8,590 MB of logits against 268 MB of pair state, per block, with 48
+blocks.
+
+This is also why DeepSpeed ships
+[`DS4Sci_EvoformerAttention`](https://www.deepspeed.ai/tutorials/ds4sci_evoformerattention/)
+— a fused *kernel* — for this model family rather than another sharding
+strategy. When the memory is in the work, you change how the work is done.
+There is no fourth ZeRO stage that would have helped.
+
+:::note Read §4.3 and that table together
+§4.3 derives ZeRO-3's 1.5x communication cost as the price of an $N_d$-fold
+reduction in model-state memory. The Evoformer measurement is the same trade
+with the numerator near zero: you still pay the 1.5x, and the reduction does
+not materialise. The cost model was never wrong — it just does not describe
+where that model's memory lives.
+:::
+
 ## 7. Choosing a Stage: A Decision Procedure
 
 ```mermaid
