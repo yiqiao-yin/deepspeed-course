@@ -497,16 +497,18 @@ flowchart TD
     LAB3["04_video_text/04_streaming_memory<br/>unbounded video, O(1) memory"]
     LAB4["06_protein_folding/02_evoformer<br/>ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB"]
 
-    Q e1@--> MS
-    Q e2@--> RS
+    %% No animated edges here. Mermaid's `e1@{ animate: true }` is only
+    %% honoured by the default dagre renderer -- the ELK layout this site
+    %% sets globally draws its own edges and never emits the
+    %% `edge-animation-slow` class, so the syntax parses, renders, and does
+    %% nothing. It was tried and removed rather than left in place to look
+    %% like a feature. Choosing animation would mean dropping ELK sitewide.
+    Q --> MS
+    Q --> RS
     MS --> LAB1
     R1 --> LAB2
     R2 --> LAB3
-    RS e3@--> LAB4
-
-    e1@{ animate: true }
-    e2@{ animate: true }
-    e3@{ animate: true }
+    RS --> LAB4
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
