@@ -155,7 +155,27 @@ def gpu_guards(src: str) -> list:
         if isinstance(node, ast.If):
             dumped = ast.dump(node.test)
             if "cuda" in dumped and "is_available" in dumped:
-                return True
+                # ...but only if the branch actually STOPS. A
+                # `cuda.is_available()` test that falls through to a CPU
+                # path is device SELECTION, the opposite of a guard:
+                #
+                #     if not torch.cuda.is_available():
+                #         return "cpu"            <- a fallback
+                #
+                #     if not torch.cuda.is_available() and ALLOW_CPU != "1":
+                #         print(...); sys.exit(1) <- a guard
+                #
+                # Flagging the first form told 07_physical_ai's CPU-only lab
+                # that its CPU commands reach a GPU preflight, which is
+                # exactly backwards. Requires a terminating statement at the
+                # TOP level of the body -- one nested inside a further `if`
+                # is conditional, so the branch can still fall through.
+                return any(
+                    isinstance(st, ast.Raise)
+                    or (isinstance(st, ast.Expr)
+                        and isinstance(st.value, ast.Call)
+                        and "exit" in ast.dump(st.value.func))
+                    for st in node.body)
         return False
 
     def arg_flags(test) -> set:
@@ -568,18 +588,16 @@ def main() -> None:
                   "Route it through `deepspeed --num_gpus=N`, or add "
                   "`needs_gpu: true`.")
 
-            # require_gpu() means the script exits without a GPU, unless this
-            # invocation takes a documented early-return path.
-            if "require_gpu()" in src:
-                safe = [f for f in CPU_SAFE_FLAGS if f in cmd]
-                check(f"{i}: {label!r} reaches a CPU path despite require_gpu()",
-                      bool(safe),
-                      f"{script} calls require_gpu(), and this command passes "
-                      "no flag that returns before it "
-                      f"({', '.join(CPU_SAFE_FLAGS)}). Clawdeck would advertise "
-                      "it under 'Runs now - no GPU needed' and the learner "
-                      "would get the no-GPU preflight instead. Add "
-                      "`needs_gpu: true`, or give it a real CPU path.")
+            # NOTE: there is deliberately no second GPU-preflight check
+            # here. One lived at this spot and was a cruder duplicate of the
+            # reachability check above: it tested `"require_gpu()" in src`,
+            # so it matched the PHRASE in any comment or docstring -- it
+            # flagged a lab whose docstring says "there is deliberately no
+            # require_gpu() here" -- and it ignored the flags gating each
+            # guard, so it would have failed five CPU-runnable commands
+            # whose guards sit inside `if args.model:`. The check above asks
+            # the AST and respects the gating. Two checks for one property,
+            # one of them wrong, is worse than one.
 
     # ---- fields the UI depends on -----------------------------------------
     print("\n  -- fields the picker renders --")

@@ -265,6 +265,25 @@ labs:
       - { label: "Expert parallelism (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --expert-parallel --deepspeed_config ds_config_ep.json" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --max-steps 20" }
 
+  # ---------------------------------------------------------------------------
+  # 07_physical_ai — learning to act in a simulated world
+  # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/01_obstacle_hopper
+    title: "Obstacle Hopper: learning to climb"
+    summary: "Real MuJoCo physics, PPO from scratch, and why one seed proves nothing."
+    est_minutes: 10
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on these three, and that is CORRECT:
+      # the world is an XML string, the policy is 10k parameters, and CPU is
+      # measurably 2.3x faster than GPU. Clawdeck is right to advertise them
+      # as "Runs now".
+      - { label: "The world + random baseline (CPU)", cmd: "uv run obstacle_env.py" }
+      - { label: "GAE limits, no simulator (CPU)", cmd: "uv run ppo.py" }
+      - { label: "Train the hopper (CPU, ~8 min)", cmd: "uv run train_ppo.py --total-steps 600000", primary: true }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
+      - { label: "The ablation: blind to obstacle height", cmd: "uv run train_ppo.py --total-steps 600000 --blind-to-height --name blind_s0" }
+
   - id: 03_llms/12_prefill_decode
     title: "Prefill and Decode: when to split them"
     summary: "Head-of-line blocking, chunked prefill, and why the obvious fix loses here."

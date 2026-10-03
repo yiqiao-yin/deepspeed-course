@@ -206,6 +206,16 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/01_obstacle_hopper": dict(min_vram=16, gpus=1, disk=15,
+                                    script="train_ppo.py",
+                                    launcher="python",
+                                    args="--total-steps 600000",
+                                    note="SEVENTH launcher=python exception: a "
+                                         "10k-parameter PPO policy has nothing "
+                                         "for ZeRO to shard, and CPU is 2.3x "
+                                         "FASTER than GPU here (measured). "
+                                         "Rentable for convenience, not speed; "
+                                         "it runs fine on a laptop."),
     "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
                    script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),

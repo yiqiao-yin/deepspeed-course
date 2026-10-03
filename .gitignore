@@ -32,3 +32,6 @@ runpod/results/
 # for no benefit. The RENDERED figures under docusaurus-docs/static/img/ ARE
 # committed, because CI builds the site but does not run the script.
 .cache/
+
+# RL training output: regenerate with train_ppo.py
+**/runs/
