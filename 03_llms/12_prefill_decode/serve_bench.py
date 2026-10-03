@@ -213,14 +213,30 @@ def calibrate(args: argparse.Namespace) -> None:
     # kernel-launch bound, not bandwidth bound, which is the opposite of the
     # usual summary of decode and worth knowing before quoting the usual
     # summary.
-    if per_kv <= 0:
+    # Sign alone is the wrong test. A NEGATIVE fit is obviously impossible,
+    # but a small POSITIVE one drawn from the same noise is equally
+    # meaningless -- and the first version of this guard passed it happily,
+    # so consecutive runs of this script disagreed about whether decode is
+    # bandwidth-bound. The honest test is whether the effect exceeds the
+    # measurement's own scatter: if the two decode medians differ by less
+    # than the spread of either, the term is UNRESOLVED at this sample size,
+    # whichever way the sign fell.
+    noise = max(hi_s - lo_s, hi_l - lo_l)
+    signal = abs(d_long - d_short)
+    if per_kv <= 0 or signal < noise:
         print()
         print("!" * 70)
         print("MEASUREMENT REFUSED: decode_per_kv_token came out "
               f"{per_kv:.3e} s/token.")
-        print("A negative marginal cost is impossible -- more KV cannot be")
-        print("cheaper to read. The term is below this machine's noise")
-        print("floor, so it is reported as 0 rather than fitted.")
+        print(f"  signal (|{d_long * 1e3:.1f} - {d_short * 1e3:.1f}| = "
+              f"{signal * 1e3:.1f} ms) vs noise ({noise * 1e3:.1f} ms)")
+        if per_kv <= 0:
+            print("A negative marginal cost is impossible -- more KV cannot")
+            print("be cheaper to read.")
+        else:
+            print("The fitted effect is smaller than the run-to-run scatter,")
+            print("so it is indistinguishable from zero at this sample size.")
+        print("Reported as 0 rather than fitted.")
         print()
         print("What that means here: decode is LAUNCH-bound, not")
         print("bandwidth-bound, at this model size and batch. The usual")
@@ -245,6 +261,8 @@ def calibrate(args: argparse.Namespace) -> None:
     print("That ratio is the topic: one token of output costs what a")
     print("thousand tokens of input cost, because decode cannot use the")
     print("parallelism prefill saturates.")
+    advise(overhead, per_token, base)
+
     if per_kv > 0:
         print("Here the cost grows with cache size, so decode is")
         print("bandwidth-bound as usually described.")
@@ -253,6 +271,61 @@ def calibrate(args: argparse.Namespace) -> None:
         print("so decode is launch-bound rather than bandwidth-bound. The")
         print("textbook phrasing is a claim about large models and fused")
         print("kernels, and it does not survive being measured here.")
+
+
+def advise(overhead: float, per_token: float, decode_step: float) -> None:
+    """
+    Turn the measured constants into a chunk size you can actually set.
+
+    The chunk stops being worth shrinking once it is cheaper than the
+    decode iteration it rides with -- below that the stall is floored by
+    the decode step and every further split is pure TTFT cost. Setting the
+    two equal:
+
+        overhead + per_token * C  =  decode_step
+        C* = (decode_step - overhead) / per_token
+
+    C* is directly the knob a real serving stack exposes. In vLLM it is
+    `max_num_batched_tokens` (with `--enable-chunked-prefill`), and vLLM's
+    own tuning guidance describes exactly the tradeoff measured here:
+    smaller values give better inter-token latency because fewer prefills
+    interrupt decodes, larger values give better time-to-first-token.
+    What this gives you is a way to pick it from your own hardware instead
+    of inheriting a default.
+
+    A NEGATIVE OR TINY C* IS THE INTERESTING CASE. It means the fixed cost
+    of a forward pass has eaten the decode step, so there is no chunk small
+    enough to help and chunking cannot pay on this machine at all. That is
+    a diagnosis, not a failure -- it is the signal to reach for
+    disaggregation instead.
+    """
+    print()
+    print("-" * 70)
+    print("WHAT TO SET, from the constants above")
+    print("-" * 70)
+    if per_token <= 0:
+        print("  per-token cost did not resolve; cannot advise.")
+        return
+
+    c_star = (decode_step - overhead) / per_token
+    frac = overhead / decode_step if decode_step else float("inf")
+    print(f"  C* = (decode_step - pass_overhead) / prefill_per_token")
+    print(f"     = ({decode_step * 1e3:.2f} - {overhead * 1e3:.2f}) ms / "
+          f"{per_token * 1e6:.1f} us")
+    print(f"     = {c_star:.0f} tokens")
+    print()
+    print(f"  pass overhead is {frac * 100:.0f}% of one decode step")
+    if c_star < 256:
+        print("  -> chunking has almost no room here. The fixed cost of a")
+        print("     forward pass has eaten the decode step. Prefer")
+        print("     DISAGGREGATION; chunking will cost TTFT and buy little.")
+    else:
+        print(f"  -> set vLLM --max-num-batched-tokens near {int(c_star)}")
+        print("     (with --enable-chunked-prefill). Smaller hurts TTFT")
+        print("     without improving the stall; larger lengthens the stall.")
+    print()
+    print("  Re-measure on YOUR serving hardware. These constants describe")
+    print("  this machine and do not transfer.")
 
 
 def demo(args: argparse.Namespace) -> None:

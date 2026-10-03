@@ -182,6 +182,101 @@ uv run serve_bench.py --demo --prompt-len 4096 --chunk 256
 constants will describe a CPU, which is a different machine with a different
 answer — the conclusions above do not transfer.
 
+## Taking this into your own code
+
+Running the lab tells you something about *this* GPU. The part that
+transfers is the **method and the formula**, not the constants — and three
+pieces are meant to be lifted.
+
+### 1. The chunk-size rule maps onto a knob you already have
+
+The lab's result is not "use chunk 512". It is a formula:
+
+$$
+C^{*} = \frac{t_{\text{decode step}} - t_{\text{pass overhead}}}{t_{\text{per token}}}
+$$
+
+A chunk stops being worth shrinking once it is cheaper than the decode
+iteration it rides with — below that the stall is floored by the decode
+step and every further split is pure TTFT cost.
+
+**$C^{*}$ is directly `max_num_batched_tokens` in vLLM** (with
+`--enable-chunked-prefill`). vLLM's own
+[tuning guidance](https://docs.vllm.ai/en/stable/configuration/optimization/)
+describes exactly the tradeoff measured here — smaller values give better
+inter-token latency because fewer prefills interrupt decodes, larger values
+give better time-to-first-token. What this lab adds is a way to *compute* a
+starting point from your hardware instead of inheriting a default.
+
+`serve_bench.py --calibrate` prints it:
+
+```
+C* = (decode_step - pass_overhead) / prefill_per_token
+   = (35.73 - 29.03) ms / 55.2 us
+   = 121 tokens
+
+pass overhead is 81% of one decode step
+-> chunking has almost no room here. Prefer DISAGGREGATION.
+```
+
+**A tiny or negative $C^{*}$ is the useful case.** It means the fixed cost of
+a forward pass has eaten the decode step, so no chunk is small enough to
+help. That is a diagnosis, not a failure — it is the signal to reach for
+disaggregation, and it is exactly what this laptop reports.
+
+As a sanity check: plugging in figures typical of a datacenter GPU with
+fused kernels — ~1 ms overhead, ~10 µs/token, ~10 ms decode step, *all
+illustrative and not measured here* — gives $C^{*} \approx 900$, the same
+order as vLLM's defaults. The rule lands in the right place on hardware
+where chunking is known to work.
+
+### 2. `scheduler.py` drops into anything
+
+It imports `math` and `dataclasses`. **No torch, no transformers, no
+numpy** — copy the file and it runs:
+
+```python
+from scheduler import CostModel, Request, simulate
+
+cost = CostModel(                      # YOUR constants, from --calibrate
+    prefill_pass_overhead=1.0e-3,
+    prefill_per_token=1.0e-5,
+    decode_step_base=1.0e-2,
+)
+load = [Request(f"r{i}", arrival=i * 0.05, prompt_len=4096, output_len=256)
+        for i in range(64)]
+
+for policy in ("shared", "chunked", "disaggregated"):
+    t = simulate(policy, load, cost, chunk=900)
+    print(policy, t.summary())
+```
+
+That answers "what happens at 64 concurrent streams" without renting 64
+streams' worth of hardware — which is the point of having a cost model at
+all. Measure cheap, extrapolate free.
+
+### 3. The measurement discipline is the most portable part
+
+Three habits from `serve_bench.py` that are worth more than the numbers:
+
+- **Median of repeats after warmup, with the spread printed.** One timed
+  call is a sample, not a measurement.
+- **Difference two measurements to isolate a term.** No single timed call
+  contains only one cost; the per-token slope and the fixed overhead come
+  from subtracting a short run from a long one.
+- **Refuse a fit that the noise cannot support.** Compare the effect
+  against the measurement's own scatter, *not* against zero. This lab's
+  first guard only rejected negative values, so consecutive runs disagreed
+  about whether decode is bandwidth-bound — a small positive number drawn
+  from the same noise sailed through.
+
+### What does NOT transfer
+
+The constants, and therefore the conclusion. On this laptop disaggregation
+beats chunking; on an H100 with fused kernels and a large batch the
+overhead term shrinks and chunking wins. **Re-measure on your serving
+hardware.** The lab's job is to make that cheap, not to hand you an answer.
+
 ### Renting a GPU (RunPod)
 
 ```bash
