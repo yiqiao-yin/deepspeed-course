@@ -865,7 +865,7 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 48 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 49 diagram pages conform.
 
 - **The site's own background is `#000000`**, not the dark blue of the Mermaid
   palette above — `custom.css` sets `--ifm-background-color: #000000` and dark

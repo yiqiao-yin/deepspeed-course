@@ -63,6 +63,7 @@ const sidebars = {
             'tutorials/llms/beyond-grpo',
             'tutorials/llms/gpt-oss-finetuning',
             'tutorials/llms/multi-agent',
+            'tutorials/llms/prefill-decode-scheduling',
           ],
         },
         {
