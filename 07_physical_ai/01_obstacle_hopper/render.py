@@ -31,6 +31,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from pathlib import Path as pathlib_Path
 
 HERE = Path(__file__).parent
 OUT = HERE.parent.parent / "docusaurus-docs" / "static" / "img" / "physical"
@@ -84,11 +85,19 @@ def pick_backend() -> str:
     sys.exit(1)
 
 
-def frames_for(policy, env, seed: int, every: int, width: int, height: int,
-               max_frames: int) -> list:
-    """Roll out one episode, keeping every Nth frame, camera tracking x."""
+def frames_for(policy, env, *, seed: int, every: int, width: int,
+               height: int, max_frames: int, title: str, subtitle: str
+               ) -> list:
+    """
+    Roll out one episode and return HUD-annotated frames.
+
+    Stats are read from the live simulation each frame, so the panel can
+    never disagree with what the robot is doing.
+    """
     import mujoco
     import numpy as np
+
+    from obstacle_env import BOX_BACK_X, BOX_FRONT_X
 
     renderer = mujoco.Renderer(env.model, height=height, width=width)
     cam = mujoco.MjvCamera()
@@ -96,32 +105,136 @@ def frames_for(policy, env, seed: int, every: int, width: int, height: int,
     cam.distance, cam.azimuth, cam.elevation = 3.0, 90, -8
 
     obs, _ = env.reset(seed=seed)
-    out, t = [], 0
+    out, t, total, cleared = [], 0, 0.0, False
+    alive = True
+
     while len(out) < max_frames:
-        obs, _, term, trunc, _ = env.step(policy(obs))
+        obs, rew, term, trunc, info = env.step(policy(obs))
+        total += rew
+        cleared |= info["cleared"]
+        alive = not term
+
         if t % every == 0:
-            # Track the robot, but never scroll backwards -- a camera that
-            # jitters back and forth makes a fall look like a cut.
+            # Track forward only -- a camera that scrolls back makes a
+            # fall look like an edit.
+            #
+            # The offset keeps the robot just RIGHT of centre. The first
+            # version centred 0.35 m ahead of it, which put the robot
+            # directly behind the stats panel in the top-left for most of
+            # every clip -- the HUD was hiding the thing it described.
             x = float(env.data.qpos[0])
-            cam.lookat[:] = [max(0.95, x + 0.35), 0.0, 0.55]
+            cam.lookat[:] = [max(0.20, x + 0.05), 0.0, 0.62]
             renderer.update_scene(env.data, camera=cam)
-            out.append(renderer.render().copy())
+
+            gap = BOX_FRONT_X - x
+            out.append(hud(
+                renderer.render(),
+                title=title, subtitle=subtitle,
+                stats=[("step", f"{t}"),
+                       ("distance", f"{x:+.2f} m"),
+                       ("to the step", f"{gap:+.2f} m" if gap > 0 else "past"),
+                       ("torso height", f"{env.torso_height():.2f} m"),
+                       ("step height", f"{env.box_height:.2f} m"),
+                       ("return", f"{total:.0f}")],
+                status=("CLEARED" if cleared else
+                        "UPRIGHT" if alive else "FALLEN"),
+                status_ok=alive,
+                progress=max(0.0, x / BOX_BACK_X),
+                bar_label="progress to the far edge of the step"))
         t += 1
         if term or trunc:
             break
+
+    # Hold the final frame so a short, failed episode is readable rather
+    # than a flicker. The freeze IS the result for the untrained arm.
+    if out:
+        out += [out[-1]] * 8
     renderer.close()
     return out
 
 
-def label(frame, text: str, colour=(230, 240, 246)):
-    """Stamp a caption using PIL if present, silently skip if not."""
-    try:
-        from PIL import Image, ImageDraw
-    except ImportError:
-        return frame
-    img = Image.fromarray(frame)
-    ImageDraw.Draw(img).text((14, 10), text, fill=colour)
+_FONTS: dict = {}
+
+
+def _font(size: int, bold: bool = False):
+    """DejaVu, which ships inside matplotlib, so there is nothing to install."""
+    key = (size, bold)
+    if key not in _FONTS:
+        from PIL import ImageFont
+        try:
+            import matplotlib
+            d = (pathlib_Path(matplotlib.__file__).parent / "mpl-data"
+                 / "fonts" / "ttf")
+            name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+            _FONTS[key] = ImageFont.truetype(str(d / name), size)
+        except Exception:                                      # noqa: BLE001
+            _FONTS[key] = ImageFont.load_default()
+    return _FONTS[key]
+
+
+# Palette, matching the course's own.
+INK = (233, 240, 246)
+MUTED = (141, 163, 181)
+ACCENT = (227, 160, 90)
+GOOD = (92, 196, 141)
+BAD = (226, 110, 110)
+BLUE = (99, 163, 208)
+
+
+def hud(frame, *, title: str, subtitle: str, stats: list, status: str,
+        status_ok: bool, progress: float, bar_label: str):
+    """
+    Draw a stats panel over a rendered frame.
+
+    An animation of a robot moving is pleasant and says very little. The
+    same animation with the numbers the training loop is actually
+    optimising -- distance, torso height, cumulative reward, whether the
+    episode is still alive -- shows WHY it moves that way, and makes the
+    failure case legible instead of just sad.
+
+    Everything drawn here is read from the live `MjData`; nothing is
+    pre-baked or smoothed.
+    """
+    from PIL import Image, ImageDraw
     import numpy as np
+
+    img = Image.fromarray(frame).convert("RGB")
+    d = ImageDraw.Draw(img, "RGBA")
+    W, H = img.size
+
+    # Panel. Semi-transparent so the scene stays visible behind it.
+    pw, ph = 232, 34 + 20 * len(stats) + 46
+    d.rounded_rectangle([12, 12, 12 + pw, 12 + ph], 8,
+                        fill=(8, 24, 42, 205), outline=(45, 90, 134, 255))
+
+    d.text((26, 22), title, font=_font(15, True), fill=INK)
+    d.text((26, 41), subtitle, font=_font(11), fill=MUTED)
+
+    y = 64
+    for k, v in stats:
+        d.text((26, y), k, font=_font(11), fill=MUTED)
+        d.text((12 + pw - 16, y), v, font=_font(11, True), fill=INK,
+               anchor="ra")
+        y += 20
+
+    # Progress toward clearing the obstacle.
+    y += 4
+    d.text((26, y), bar_label, font=_font(10), fill=MUTED)
+    y += 15
+    x0, x1 = 26, 12 + pw - 16
+    d.rounded_rectangle([x0, y, x1, y + 7], 3, fill=(20, 44, 68, 255))
+    if progress > 0:
+        d.rounded_rectangle([x0, y, x0 + (x1 - x0) * min(progress, 1.0),
+                             y + 7], 3, fill=BLUE if progress < 1 else GOOD)
+
+    # Status chip, bottom-right.
+    col = GOOD if status_ok else BAD
+    tw = d.textlength(status, font=_font(12, True))
+    d.rounded_rectangle([W - tw - 40, H - 42, W - 16, H - 16], 6,
+                        fill=(8, 24, 42, 205), outline=col + (255,))
+    d.text((W - 28 - tw / 2, H - 29), status, font=_font(12, True),
+           fill=col, anchor="mm")
+
     return np.asarray(img)
 
 
@@ -171,61 +284,79 @@ def do_stills(args) -> None:
     print("  hopper-world.png")
 
 
+def _save_gif(frames, path, frame_ms: int, colors: int) -> None:
+    """
+    Palette-quantise and write. At full colour the first of these was
+    4.1 MB, which is a slow page on a phone for two blue shapes on a dark
+    floor; 64 colours is visually indistinguishable here.
+    """
+    from PIL import Image
+
+    pil = [Image.fromarray(f).convert("P", palette=Image.ADAPTIVE,
+                                      colors=colors) for f in frames]
+    pil[0].save(path, save_all=True, append_images=pil[1:],
+                duration=frame_ms, loop=0, optimize=True)
+    kb = path.stat().st_size / 1024
+    print(f"  {path.name}  ({len(frames)} frames, {kb:.0f} KB)")
+
+
 def do_gif(args) -> None:
     """
-    Before and after, stacked, from the same seed and the same obstacle.
+    Three animations: untrained alone, trained alone, and the comparison.
 
-    The 'before' is the random policy -- the lab's actual measured
-    baseline, not a hand-picked bad run. It collapses in about a second,
-    which is what the termination condition is for.
+    The two solo clips exist because the stacked version makes both panels
+    small, and the interesting detail -- the HUD numbers, what the leg is
+    actually doing -- is lost. The comparison answers "is it better?"; the
+    solo clips answer "what is it doing?".
+
+    The untrained arm is the RANDOM POLICY, which is the lab's measured
+    baseline rather than a hand-picked bad run. It collapses in about a
+    second and the clip freezes on the collapse, because that is the
+    result.
     """
-    import imageio.v3 as iio
+    import json
+
     import numpy as np
 
     from obstacle_env import ObstacleHopper, random_policy
 
-    rng = np.random.default_rng(0)
     runs = sorted(p.name for p in (HERE / "runs").iterdir()
-                  if p.is_dir() and p.name.startswith("seeing"))
+                  if p.is_dir() and p.name.startswith("seeing")
+                  and (p / "summary.json").exists())
     if not runs:
         print("  no trained policy in runs/ — train first:\n"
               "      uv run train_ppo.py --name seeing_s0", file=sys.stderr)
         sys.exit(1)
-
-    import json
     best = max(runs, key=lambda n: json.loads(
         (HERE / "runs" / n / "summary.json").read_text())["final"]["return"])
-    print(f"  using {best} (best final return of {len(runs)} runs)")
+    summ = json.loads((HERE / "runs" / best / "summary.json").read_text())
+    print(f"  using {best} (best of {len(runs)} seeds, "
+          f"final return {summ['final']['return']:.0f})")
 
     h = args.height
-    before = frames_for(lambda o: random_policy(rng)(o),
-                        ObstacleHopper(fixed_height=h), 3, args.every,
-                        args.width, args.height_px, args.max_frames)
-    after = frames_for(load_policy(best), ObstacleHopper(fixed_height=h),
-                       3, args.every, args.width, args.height_px,
-                       args.max_frames)
+    rng = np.random.default_rng(0)
+    common = dict(seed=3, every=args.every, width=args.width,
+                  height=args.height_px, max_frames=args.max_frames)
 
-    # Pad the shorter clip by holding its last frame, so the two panels stay
-    # in step. The random policy terminates early -- that IS the result, and
-    # freezing on the collapse shows it rather than hiding it.
-    n = max(len(before), len(after))
-    before += [before[-1]] * (n - len(before))
-    after += [after[-1]] * (n - len(after))
+    before = frames_for(
+        lambda o: random_policy(rng)(o), ObstacleHopper(fixed_height=h),
+        title="BEFORE TRAINING",
+        subtitle=f"random policy · baseline return "
+                 f"{summ['baseline_return']:.0f}", **common)
+    _save_gif(before, OUT / "hopper-before.gif", args.frame_ms, args.colors)
 
-    frames = [np.vstack([label(b, f"BEFORE  random policy  (step {h:.2f} m)"),
-                         label(a, "AFTER  600k steps of PPO")])
-              for b, a in zip(before, after)]
-    # Palette-quantise. At full colour this GIF was 4.1 MB, which is a slow
-    # page on a phone for an animation whose content is two blue shapes on
-    # a dark floor. 64 colours is visually indistinguishable here and costs
-    # about a quarter of the bytes.
-    from PIL import Image
-    pil = [Image.fromarray(f).convert(
-        "P", palette=Image.ADAPTIVE, colors=args.colors) for f in frames]
-    pil[0].save(OUT / "hopper-before-after.gif", save_all=True,
-                append_images=pil[1:], duration=args.frame_ms, loop=0,
-                optimize=True)
-    print(f"  hopper-before-after.gif ({len(frames)} frames)")
+    after = frames_for(
+        load_policy(best), ObstacleHopper(fixed_height=h),
+        title="AFTER TRAINING",
+        subtitle=f"PPO · {summ['total_steps'] // 1000}k steps · return "
+                 f"{summ['final']['return']:.0f}", **common)
+    _save_gif(after, OUT / "hopper-after.gif", args.frame_ms, args.colors)
+
+    # No stacked side-by-side clip. One existed and was dropped: at half
+    # scale the HUD numbers -- the entire reason the panel is there -- were
+    # unreadable, and it pushed the page past 3.5 MB of animation. Two
+    # full-size clips shown one after another read better and cost half as
+    # much.
 
 
 def main() -> int:
@@ -234,8 +365,8 @@ def main() -> int:
     ap.add_argument("--gif", action="store_true")
     ap.add_argument("--height", type=float, default=0.10,
                     help="obstacle height for the animation, metres")
-    ap.add_argument("--width", type=int, default=520)
-    ap.add_argument("--height-px", type=int, default=300)
+    ap.add_argument("--width", type=int, default=640)
+    ap.add_argument("--height-px", type=int, default=330)
     ap.add_argument("--every", type=int, default=4,
                     help="keep every Nth simulation step")
     ap.add_argument("--max-frames", type=int, default=80)

@@ -117,26 +117,207 @@ steps and learned to stand still.
 
 ## What training looks like
 
-![Random policy collapsing, then the trained policy clearing the step](/img/physical/hopper-before-after.gif)
+Same obstacle, same seed, same starting state. The only difference between
+these two clips is 600,000 steps of PPO. The panel is read from the live
+simulation every frame — nothing in it is pre-baked.
 
-Both panels are the same obstacle (0.10 m) and the same seed. The only
-difference is 600,000 steps of PPO.
+### Before training — the random policy
 
-**Top — the random policy.** It folds up and collapses in about a second.
-That is not a hand-picked bad run; it is the lab's measured baseline, the
-same one every number on this page is quoted against. The episode
-terminates when the torso drops below 0.55 m, so the clip freezes on the
-collapse rather than hiding it.
+![Untrained policy collapsing, with live stats](/img/physical/hopper-before.gif)
 
-**Bottom — after training.** It stands, drives forward, gets over the step,
-and is still upright when the clip ends. Watch the orange box scroll off to
-the left: the camera tracks the robot, so the step moving behind it *is* the
-robot clearing it.
+It topples almost immediately. Watch `torso height` fall from 0.99 m and
+the status flip to **FALLEN** when it crosses 0.55 m, which is the
+termination condition. `distance` never passes about 0.2 m, so the robot
+does not come close to the step at 1.05 m, and the progress bar barely
+leaves the left edge.
 
-It is worth being precise about what this is not. The gait is a forward
-lunge rather than smooth walking — with one leg and a locked torso there is
-no other option — and on a 0.15 m step it gets past and then stalls rather
-than striding away. The sweep below shows exactly where that limit sits.
+This is not a hand-picked bad run. It is the random policy — the measured
+baseline every number on this page is quoted against, return ≈ 114 against
+the trained policy's ≈ 1112.
+
+### After training — 600k steps of PPO
+
+![Trained policy clearing the step, with live stats](/img/physical/hopper-after.gif)
+
+It drives forward, gets over the step, and keeps going. Three things in the
+panel are worth watching together: `to the step` counts down and then reads
+**past**; the status chip turns **CLEARED**; and `return` climbs steadily
+instead of flatlining, because the alive bonus keeps paying while the robot
+stays up.
+
+The orange box scrolling off to the left is the camera tracking the robot —
+the step moving behind it *is* the robot clearing it.
+
+Be precise about what this is and is not. The gait is a forward lunge, not
+smooth walking: one leg and a locked torso leave no other option. And on a
+0.15 m step it gets past and then stalls rather than striding away — the
+sweep further down shows exactly where that limit sits.
+
+## Build one yourself
+
+If you write software but have never touched reinforcement learning, this
+is the part to read. There is less to it than the vocabulary suggests, and
+nothing below is pseudocode — it is the lab, quoted.
+
+### An environment is a class with two methods
+
+That is genuinely the whole interface. If you have written a state machine
+or a game loop, you already know this shape:
+
+```python
+obs, info = env.reset(seed=0)            # start an episode
+obs, reward, terminated, truncated, info = env.step(action)
+```
+
+- **observation** — what the agent is allowed to see this tick. An array of
+  floats. Here, 11 of them.
+- **action** — what it is allowed to do. Also an array of floats. Here, 3
+  joint torques in `[-1, 1]`.
+- **reward** — one number per tick saying how that went. This is the only
+  channel through which you express what you want.
+- **terminated** — it failed (the robot fell). **truncated** — it ran out
+  of time. They are separate because the first is the agent's fault and the
+  second is not.
+
+A *policy* is just a function `obs -> action`. Training is the process of
+improving that function. Everything else is machinery.
+
+### The world is a scene graph, written in XML
+
+This is the part people assume is hard. It is a tree of bodies, each with a
+shape and a joint, and MuJoCo does the physics. The entire world in this
+lab, trimmed to its skeleton:
+
+```xml
+<mujoco model="obstacle_hopper">
+  <option integrator="RK4" timestep="0.002"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="40 2 0.1"/>
+    <geom name="step"  type="box" pos="1.2 0 0.05" size="0.15 0.6 0.05"/>
+
+    <body name="torso" pos="0 0 1.0">
+      <joint name="rootx" type="slide" axis="1 0 0"/>   <!-- move forward -->
+      <joint name="rootz" type="slide" axis="0 0 1"/>   <!-- move up      -->
+      <geom type="capsule" fromto="0 0 0 0 0 0.35" size="0.06"/>
+
+      <body name="thigh">
+        <joint name="thigh_joint" type="hinge" axis="0 -1 0" range="-150 0"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.42" size="0.05"/>
+        <!-- shin and foot nest the same way -->
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor joint="thigh_joint" ctrlrange="-1 1" gear="150"/>
+  </actuator>
+</mujoco>
+```
+
+Four concepts and you can build any world you like:
+
+| tag | what it is |
+|---|---|
+| `geom` | a shape that collides. `plane`, `box`, `capsule`, `sphere`, `mesh` |
+| `body` | a frame that moves. Nest them and you have a kinematic chain |
+| `joint` | how a body may move relative to its parent. `hinge` rotates, `slide` translates |
+| `actuator` | a motor the policy can command. One entry per controllable joint |
+
+There is **no `rooty` hinge** in this model, and that omission is the
+single most consequential line in the file. Add it and the torso can
+rotate; the robot now has to learn balance before it can learn anything
+about obstacles, and 1M steps of training produced something that dived
+forward and fell over at one second.
+
+### The reward is four lines
+
+```python
+forward = (x_after - x_before) / self.dt
+
+reward = forward + 1.0 - 1e-3 * float(np.sum(np.square(action)))
+if self.cleared() and not self._cleared_awarded:
+    reward += 5.0                      # once, on clearing
+    self._cleared_awarded = True
+```
+
+Read it as four separate instructions: *go forward*, *stay alive* (the
+`+1.0` every surviving tick), *do not flail* (a small penalty on torque),
+and *a bonus for getting past the box*.
+
+The `+1.0` is doing more work than it looks. Without it the policy learns
+to fall over immediately, because falling ends the episode and ends the
+accumulating control cost. Reward design is mostly this: noticing which
+degenerate strategy you have accidentally made optimal.
+
+The one-off bonus must be one-off. Pay it every tick and standing on the
+box forever beats crossing it.
+
+### What the policy sees
+
+```python
+return np.concatenate([
+    q[1:],                        # torso height + 3 joint angles   (4)
+    np.clip(v, -10.0, 10.0),      # 5 velocities                    (5)
+    [BOX_FRONT_X - q[0]],         # distance to the box             (1)
+    [height],                     # how tall the box is this episode(1)
+]).astype(np.float64)
+```
+
+Note what is **excluded**: the absolute `x` position, `q[0]`. Plain
+locomotion is translation-invariant — a gait is the same wherever you are —
+so feeding the world coordinate invites the policy to memorise a position
+instead of learning a behaviour. The *relative* distance to the box is the
+useful form of the same information.
+
+Velocities are clipped because an early, bad policy can produce enormous
+ones, and a single outlier observation will wreck the running normaliser
+that everything downstream depends on.
+
+### The loop, in outline
+
+```python
+for iteration in range(...):
+    # 1. collect: run the current policy for N steps across 16 envs
+    # 2. score:   compute_gae(rewards, values, dones, ...) -> advantages
+    # 3. improve: a few epochs of clipped_policy_loss on that batch
+```
+
+That is PPO. Step 2 asks *was that action better or worse than expected?*
+and step 3 nudges the policy toward the better ones — but only within a
+trust region, so a single strange batch cannot destroy a working policy.
+Both are a dozen lines each in `ppo.py`, and both are
+[exactly testable](#what-is-exactly-testable-here) without a simulator.
+
+### Things to change first
+
+In rough order of how much you learn per minute spent:
+
+1. **`BOX_HEIGHT_MAX`** — push it past 0.17 and watch the clear rate
+   collapse. This is the fastest way to see a task become unlearnable.
+2. **The reward.** Delete the `+1.0` alive bonus and watch the policy
+   discover that falling over immediately is optimal.
+3. **A second box**, further along — one more `<geom>` line.
+4. **Un-comment the `rooty` joint.** The robot can now tip over. This is a
+   genuinely hard problem; budget millions of steps, and expect it to need
+   reward shaping you have not thought of yet.
+5. **Swap the robot.** Gymnasium ships standard MuJoCo models (Ant,
+   Half-Cheetah, Walker2d) whose XML you can drop in and point this same
+   training loop at.
+
+### What will go wrong
+
+Not *might* — will. These cost hours each while building this lab:
+
+- **It trains to something, and the something is nothing.** Always measure
+  a random baseline first and keep it on the chart. `train_ppo.py` runs 20
+  random episodes before every training run for exactly this reason.
+- **Your obstacle does nothing.** This lab shipped a 100% clear rate
+  against a box the robot was never touching. Test the physics directly,
+  not through a policy.
+- **Normalisation.** Observations mixing radians near zero with velocities
+  in the tens will not train. If a correct-looking PPO learns nothing at
+  all, suspect this before suspecting the algorithm.
+- **One run means nothing.** See the entire next section.
 
 ## The result: the ablation failed
 
