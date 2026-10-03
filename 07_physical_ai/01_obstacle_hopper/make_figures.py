@@ -70,6 +70,8 @@ def fig_learning(plt) -> None:
     for arm, colour, label in (("seeing", SEEING, "sees obstacle height"),
                                ("blind", BLIND, "blind to height")):
         names = runs_for(arm)
+        if not names:
+            continue
         for i, n in enumerate(names):
             rows, summ = load(n)
             base = summ["baseline_return"]
@@ -100,8 +102,24 @@ def fig_learning(plt) -> None:
 
 
 def fig_seed_spread(plt) -> None:
-    """The bar chart that kills the single-run conclusion."""
+    """
+    The bar chart that kills the single-run conclusion.
+
+    Needs BOTH arms. A reader following the page trains the seeing arm,
+    runs this, and used to get an IndexError traceback -- the documented
+    happy path crashed. It now says which run is missing and what command
+    produces it.
+    """
     import numpy as np
+
+    missing = [a for a in ("seeing", "blind") if not runs_for(a)]
+    if missing:
+        print(f"  hopper-seed-spread.png SKIPPED — no {'/'.join(missing)} "
+              f"run yet.\n"
+              f"      this figure compares the two arms, so it needs both:\n"
+              f"      uv run train_ppo.py --name seeing_s0\n"
+              f"      uv run train_ppo.py --blind-to-height --name blind_s0")
+        return
 
     fig, ax = plt.subplots(figsize=(7.5, 4.4))
     fig.patch.set_facecolor(DEEP)
@@ -152,6 +170,9 @@ def fig_height_sweep(plt) -> None:
     for arm, colour, label in (("seeing", SEEING, "sees height"),
                                ("blind", BLIND, "blind to height")):
         names = runs_for(arm)
+        if not names:
+            print(f"  (height sweep: no {arm} run, skipping that line)")
+            continue
         best = max(names, key=lambda n: load(n)[1]["final"]["return"])
         ck = torch.load(RUNS / best / "policy.pt", weights_only=False)
         net = ActorCritic(OBS_DIM, ACT_DIM)

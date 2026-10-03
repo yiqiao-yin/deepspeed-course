@@ -344,6 +344,94 @@ def test_the_page_quotes_the_real_source(r: Results) -> None:
                 "to copy")
 
 
+def test_the_page_can_actually_be_followed(r: Results) -> None:
+    """
+    Every command the book page gives a reader must work.
+
+    Audited by cold-cloning the repo and running the page top to bottom.
+    Three things were wrong, and the third was fatal:
+
+      * the page opened with `cd 07_physical_ai/01_obstacle_hopper` and
+        never said what to clone, or that `uv` is needed at all;
+      * `render.py` was absent from the commands even though the page
+        shows its output;
+      * **the documented happy path crashed.** Train once, then run
+        make_figures.py exactly as written, and it died with an
+        IndexError because it assumed a `blind*` run existed.
+
+    These check the parts a static reader cannot: that the scripts named
+    exist, and that the numbers the page prints match what the code
+    prints.
+    """
+    page = (REPO / "docusaurus-docs" / "docs" / "tutorials" / "physical"
+            / "obstacle-hopper.md").read_text()
+    lab = REPO / "07_physical_ai" / "01_obstacle_hopper"
+
+    r.check("git clone" in page,
+            "the page says how to get the repo",
+            "it opens with `cd <folder>` into a repo the reader does not "
+            "have")
+    r.check("astral.sh/uv/install.sh" in page,
+            "...and how to install uv, which is not a standard tool")
+
+    # Every `uv run <script>.py` must name a file that exists.
+    import re
+    scripts = set(re.findall(r"uv run (?:--no-project python )?"
+                             r"([A-Za-z0-9_./]+\.py)", page))
+    missing = [x for x in scripts
+               if not (lab / x).exists() and not (lab / x).resolve().exists()]
+    r.check(not missing,
+            f"every script the page tells you to run exists ({len(scripts)})",
+            f"missing: {missing}")
+    r.check("render.py" in scripts,
+            "the page documents render.py",
+            "the page shows rendered animations but never says what makes "
+            "them")
+
+    # The parameter count is quoted on the page, printed by ppo.py and
+    # asserted in this file. All three must agree -- ppo.py's demo once
+    # hardcoded the old observation size and printed 10,375 while the page
+    # said 10,119, which a reader meets on the second command they run.
+    n = ActorCritic(OBS_DIM, ACT_DIM).n_params()
+    r.check(f"{n:,}" in page,
+            f"the page's parameter count matches the model ({n:,})",
+            "the page and the code disagree about the size of the policy")
+    # Ask the AST, not the text. The first version of this check searched
+    # ppo.py for the string "ActorCritic(13, 3)" and failed on the COMMENT
+    # a few lines above that explains why the hardcoding was removed --
+    # the exact "a substring is not a fact about the program" trap this
+    # repository has a rule about, reproduced inside the check written to
+    # enforce it.
+    import ast
+    hardcoded = [
+        node for node in ast.walk(ast.parse((lab / "ppo.py").read_text()))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name) and node.func.id == "ActorCritic"
+        and node.args and isinstance(node.args[0], ast.Constant)
+    ]
+    r.check(not hardcoded,
+            "ppo.py builds the model from OBS_DIM, not a literal",
+            "a hardcoded observation size will print a parameter count "
+            "that contradicts the page the moment the observation changes")
+
+
+def test_make_figures_survives_a_partial_run_set(r: Results) -> None:
+    """
+    A reader with one trained arm must get a message, not a traceback.
+
+    This is the crash the cold-start audit found. The page says train,
+    then make figures; with only the `seeing` arm present that path raised
+    IndexError out of `load(names[0])`.
+    """
+    src = (REPO / "07_physical_ai" / "01_obstacle_hopper"
+           / "make_figures.py").read_text()
+    r.check("if missing:" in src and "SKIPPED" in src,
+            "make_figures reports a missing arm instead of crashing",
+            "fig_seed_spread indexes runs_for('blind')[0] unguarded")
+    r.check("if not names:" in src,
+            "...and the other figures skip an absent arm too")
+
+
 def test_policy_is_too_small_to_shard(r: Results) -> None:
     """
     Pins the reason this lab carries launcher="python".
@@ -369,6 +457,8 @@ def main() -> int:
     test_determinism(r)
     test_random_baseline_is_weak(r)
     test_the_page_quotes_the_real_source(r)
+    test_the_page_can_actually_be_followed(r)
+    test_make_figures_survives_a_partial_run_set(r)
     test_policy_is_too_small_to_shard(r)
     return r.finish()
 
