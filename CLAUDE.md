@@ -359,7 +359,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 40 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 41 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
@@ -681,6 +681,54 @@ What the corpus currently supports, as measurements rather than impressions:
 **10 of 13 defects did not crash**, and latency ranges from same-day to 367
 days. That asymmetry — the quiet ones survive a year — is the argument for
 every property-based test in `tests/`.
+
+### A lab that claims something is BETTER declares a baseline and a budget
+
+Scoped to one tier, deliberately. Most labs make no comparative claim and
+demanding this of them would be cargo cult:
+
+| tier | claims | requirement |
+|---|---|---|
+| 1 | nothing comparative (`01_neuralnet` fits y = 2x + 1) | none |
+| 2 | a systems fact (memory, throughput, tokens/page) | budget only |
+| 3 | **X beats Y on a measured axis** | **baseline + budget, enforced** |
+
+Two visible lines near the top of the README, in this exact form —
+`tests/test_tier3_claims.py` fails CI without them, and `TIER3` in that file
+is the registry:
+
+```markdown
+**Baseline:** the untrained scorer, NDCG 0.4862 at every row.
+**Budget:** epochs 1 to 40; the spread is 0.041 at one epoch and 0.001 at forty.
+```
+
+Tier 3 is where this repo has been confidently wrong twice — `11_moe`'s
+load-balancing finding reversed at world size 2, and the ranking spread
+collapses by a factor of 40 with training budget. Both were scoping errors,
+not measurement errors.
+
+**A keyword search is the wrong check here.** The first version grepped for
+the word "baseline" and flagged `05_video_speech/04_omni_eval`, which has
+had a proper two-sided control all along (model B ignores the video; the
+harness must flag it *and* must not flag model A) and simply never used the
+word. Hence the explicit marker. A substring is not a fact about the
+document.
+
+**State a falsifier too — not enforced, costs one line.** Any check for it
+would be a check for a phrase. It is convention because it works:
+`03_llms/12_prefill_decode` wrote one before measuring, printed
+`HOLDS`/`FAILS` against it, and got `FAILS` on its first dry run. Not a bug
+— at a 512-token prompt there are only two chunks and chunking genuinely
+loses. A whole regime documented because the claim was written in a form
+that could lose.
+
+**For latency or throughput, report repeats and the spread.** One timed call
+is a sample, not a measurement. In `12_prefill_decode` the baseline decode
+step varies ±14% while the blocked step varies ±1.5%, so the ratio between
+them wanders 4×–8× while the absolutes barely move — quote the absolutes.
+The same discipline caught a two-point fit returning a **negative** cost per
+cached token, which a single sample would have published as a confident
+constant.
 
 ## The Clawdeck lab manifest
 

@@ -1,5 +1,9 @@
 # 08.4 — Evaluation: did compression break understanding?
 
+**Baseline:** the single-frame bucket. Questions answerable from one frame are reported *apart* from temporal ones, because a model can score well on the first while understanding no video at all.
+
+**Budget:** question counts are reported per bucket (e.g. 8 single-frame, 32 temporal) — a bucket average over single digits is not a measurement.
+
 The three subsections before this one all make the same promise: *you can now
 fit more video.* **None of them can tell you whether the model still
 understands it.**

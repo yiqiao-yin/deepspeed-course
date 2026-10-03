@@ -136,6 +136,9 @@ jobs:
       - name: Incident records resolve, and incidents.csv is current
         run: uv run tests/test_incident_records.py
 
+      - name: Tier-3 labs declare a baseline and a budget
+        run: uv run tests/test_tier3_claims.py
+
       - name: "Prefill/decode: head-of-line blocking and what chunking costs"
         run: uv run tests/test_prefill_decode.py
 

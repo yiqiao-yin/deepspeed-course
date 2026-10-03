@@ -1,5 +1,9 @@
 # Prefill and Decode: when to split them
 
+**Baseline:** an undisturbed decode step with nothing else running, 39.6 ms. Without it there is no way to tell a blocked step from an ordinary one.
+
+**Budget:** median of 7 timed repeats after 3 warmup calls, prompt 4096, chunk 256, on one RTX 3080 Ti Laptop. Spreads are printed beside every number because the ratio is far noisier than the absolutes.
+
 One request, two phases that want opposite hardware. **Prefill** reads the
 whole prompt at once, so every token is available and the work becomes big
 dense GEMMs — it saturates compute and finishes in one pass. **Decode**

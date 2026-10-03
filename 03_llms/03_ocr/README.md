@@ -1,5 +1,9 @@
 # Vision-Language Model Fine-tuning with DeepSpeed
 
+**Baseline:** the models are ranked against each other on the same pages, and against tokens/page — accuracy alone recommends the wrong model.
+
+**Budget:** pooled and median CER over the same page set for every model; the table reports both because a single pooled figure hides per-page variance.
+
 Minimal Vision-Language Model (VLM) fine-tuning script using DeepSpeed for distributed training on 2 RTX 4000-series NVIDIA GPUs. This example uses the Qwen2-VL-2B-Instruct model for OCR and vision-language tasks.
 
 ## Which OCR model should you actually use?

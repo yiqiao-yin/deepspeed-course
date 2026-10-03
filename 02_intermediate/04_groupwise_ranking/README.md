@@ -1,5 +1,9 @@
 # 02_intermediate/04_groupwise_ranking — Groupwise Ranking
 
+**Baseline:** the pointwise scorer under the same ListNet objective — the architecture is the only thing that varies.
+
+**Budget:** 4096 train / 1024 test queries, 12 documents per list, 30 epochs; the context-sensitivity result also measured at 250/800/2400 steps across three learning rates.
+
 The previous folder changed the **loss** and held the scorer fixed. This one
 does the opposite: the loss is frozen at ListNet for every model, and what
 varies is how much of the candidate list the scorer may look at — a plain
