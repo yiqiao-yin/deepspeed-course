@@ -28,30 +28,46 @@ That red-flagged break is the entire problem.
 
 ```mermaid
 flowchart LR
-    subgraph IN1["Long prompt"]
-        P1["P P P P P P"]
-    end
-    subgraph LS1["Live streams"]
-        AB1["A · B"]
-        W1["WAIT — blocked for the whole prefill"]
-    end
-    subgraph G1["1 GPU"]
-        PF1["Prefill<br/>P P P<br/>P P P"]
-        KV1["KV cache — local<br/>P · A · B"]
-    end
-    subgraph O1["Output tokens"]
-        N1["New<br/>nothing yet"]
-        OA1["A A A A A"]
-        OB1["B B B B B"]
+    subgraph REQ["Long prompt arrives"]
+        direction LR
+        p1["P"] --- p2["P"] --- p3["P"] --- p4["P"] --- p5["P"] --- p6["P"]
     end
 
-    P1 --> PF1
-    AB1 -.-> W1
-    W1 x--x PF1
-    PF1 --> KV1
-    KV1 --> N1
-    KV1 --> OA1
-    KV1 --> OB1
+    subgraph LIVE["Live streams, already decoding"]
+        direction TB
+        sA["A"]
+        sB["B"]
+    end
+
+    subgraph GPU["1 GPU — one job at a time"]
+        direction TB
+        subgraph BATCH["Prefill batch — all 6 tokens, indivisible"]
+            direction LR
+            b1["P"] --- b2["P"] --- b3["P"]
+            b4["P"] --- b5["P"] --- b6["P"]
+        end
+        subgraph KVC["KV cache (local)"]
+            direction TB
+            kP["P rows — being written"]
+            kA["A rows"]
+            kB["B rows"]
+        end
+        BATCH --> KVC
+    end
+
+    subgraph OUT["Output"]
+        direction TB
+        oN["New request: nothing yet"]
+        oA["A A A A A"]
+        oB["B B B B B"]
+    end
+
+    p6 --> BATCH
+    sA --x|"BLOCKED"| GPU
+    sB --x|"BLOCKED"| GPU
+    kA --> oA
+    kB --> oB
+    kP --> oN
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -59,10 +75,12 @@ flowchart LR
     classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
     classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 
-    class IN1,LS1,G1,O1 deep
-    class P1,AB1,N1,OA1,OB1 base
-    class KV1 steel
-    class PF1,W1 bright
+    class REQ,LIVE,GPU,OUT,KVC deep
+    class p1,p2,p3,p4,p5,p6,oN,oA,oB base
+    class kP,kA,kB steel
+    class BATCH bright
+    class b1,b2,b3,b4,b5,b6 bright
+    class sA,sB base
 ```
 
 ### 2. Chunked prefill — Sarathi-Serve
@@ -73,28 +91,60 @@ own first token arrives later, which is the trade.
 
 ```mermaid
 flowchart LR
-    subgraph IN2["Long prompt — split into chunks"]
-        C2["P P | P P | P P"]
-    end
-    subgraph LS2["Live streams"]
-        AB2["A · B<br/>never stop"]
-    end
-    subgraph G2["1 GPU"]
-        B2["ONE batched iteration<br/>A · B  P<br/>A' · B' · P'"]
-        KV2["KV cache — local<br/>P · A · B"]
-    end
-    subgraph O2["Output tokens"]
-        N2["New<br/>P P P"]
-        OA2["A A A … A"]
-        OB2["B B B … B"]
+    subgraph REQ2["Long prompt, split into chunks"]
+        direction TB
+        subgraph CK1["chunk 1"]
+            direction LR
+            c1a["P"] --- c1b["P"]
+        end
+        subgraph CK2["chunk 2"]
+            direction LR
+            c2a["P"] --- c2b["P"]
+        end
+        subgraph CK3["chunk 3"]
+            direction LR
+            c3a["P"] --- c3b["P"]
+        end
     end
 
-    C2 -->|"one chunk per iteration"| B2
-    AB2 -.->|"decodes ride along"| B2
-    B2 --> KV2
-    KV2 --> N2
-    KV2 --> OA2
-    KV2 --> OB2
+    subgraph LIVE2["Live streams, never stop"]
+        direction TB
+        sA2["A"]
+        sB2["B"]
+    end
+
+    subgraph GPU2["1 GPU"]
+        direction TB
+        subgraph MIX["ONE batched iteration — this is the whole idea"]
+            direction LR
+            mA["A decode"]
+            mB["B decode"]
+            mP["one P chunk"]
+        end
+        subgraph KVC2["KV cache (local)"]
+            direction TB
+            k2P["P rows — grow one chunk at a time"]
+            k2A["A rows"]
+            k2B["B rows"]
+        end
+        MIX --> KVC2
+    end
+
+    subgraph OUT2["Output"]
+        direction TB
+        o2N["New request: P P P — arrives later"]
+        o2A["A A A … A — small gaps, no stall"]
+        o2B["B B B … B"]
+    end
+
+    CK1 --> mP
+    CK2 --> mP
+    CK3 --> mP
+    sA2 --> mA
+    sB2 --> mB
+    k2P --> o2N
+    k2A --> o2A
+    k2B --> o2B
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -102,10 +152,12 @@ flowchart LR
     classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
     classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 
-    class IN2,LS2,G2,O2 deep
-    class C2,AB2,N2,OA2,OB2 base
-    class KV2 steel
-    class B2 bright
+    class REQ2,LIVE2,GPU2,OUT2,KVC2 deep
+    class CK1,CK2,CK3 dark
+    class c1a,c1b,c2a,c2b,c3a,c3b,sA2,sB2,o2N,o2A,o2B base
+    class k2P,k2A,k2B steel
+    class MIX bright
+    class mA,mB,mP bright
 ```
 
 ### 3. Separate prefill and decode — DistServe
@@ -117,34 +169,49 @@ pool and a transfer.
 
 ```mermaid
 flowchart LR
-    subgraph IN3["Long prompt"]
-        P3["P P P P P P"]
-    end
-    subgraph LS3["Live streams"]
-        AB3["A · B"]
-    end
-    subgraph PP3["Prefill pool"]
-        PF3["Prefill<br/>P P P P P P"]
-        KC3["KV cache"]
-    end
-    subgraph DP3["Decode pool"]
-        DK3["KV — A · B"]
-        DEC3["Decode<br/>never interrupted"]
-    end
-    subgraph O3["Output tokens"]
-        N3["New<br/>nothing yet"]
-        OA3["A A A A A A"]
-        OB3["B B B B B B"]
+    subgraph REQ3["Long prompt"]
+        direction LR
+        q1["P"] --- q2["P"] --- q3["P"] --- q4["P"] --- q5["P"] --- q6["P"]
     end
 
-    P3 --> PF3
-    PF3 --> KC3
-    KC3 -->|"KV copy"| DK3
-    AB3 -.->|"straight to decode"| DEC3
-    DK3 --> DEC3
-    DEC3 --> N3
-    DEC3 --> OA3
-    DEC3 --> OB3
+    subgraph LIVE3["Live streams"]
+        direction TB
+        sA3["A"]
+        sB3["B"]
+    end
+
+    subgraph POOLP["PREFILL POOL — sized for compute"]
+        direction TB
+        pf3["Prefill — all 6 tokens at once"]
+        kc3["KV cache, freshly built"]
+        pf3 --> kc3
+    end
+
+    subgraph POOLD["DECODE POOL — sized for bandwidth, never interrupted"]
+        direction TB
+        d3A["A rows"]
+        d3B["B rows"]
+        d3P["P rows — arrived by copy"]
+        dec3["Decode loop"]
+        d3A --> dec3
+        d3B --> dec3
+        d3P --> dec3
+    end
+
+    subgraph OUT3["Output"]
+        direction TB
+        o3N["New request: starts after the copy"]
+        o3A["A A A A A A — one more than shared"]
+        o3B["B B B B B B"]
+    end
+
+    q6 --> pf3
+    kc3 ==>|"KV copy over the interconnect"| d3P
+    sA3 --> d3A
+    sB3 --> d3B
+    dec3 --> o3N
+    dec3 --> o3A
+    dec3 --> o3B
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -152,11 +219,12 @@ flowchart LR
     classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
     classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 
-    class IN3,LS3,PP3,DP3,O3 deep
-    class P3,AB3,N3,OA3,OB3 base
-    class KC3,DK3 steel
-    class PF3 base
-    class DEC3 bright
+    class REQ3,LIVE3,OUT3 deep
+    class POOLP,POOLD deep
+    class q1,q2,q3,q4,q5,q6,sA3,sB3,o3N,o3A,o3B base
+    class kc3,d3A,d3B,d3P steel
+    class pf3 base
+    class dec3 bright
 ```
 
 ## The same run, on one timeline
@@ -225,7 +293,7 @@ here.**
 
 `serve_bench.py --demo` prints `HOLDS` or `FAILS` against exactly that
 sentence. It printed `FAILS` the first time, for a reason worth keeping —
-see [below](#the-regime-where-chunking-loses).
+see [below](#the-regime-where-chunking-stops-paying).
 
 ## The stall is real, measured against a baseline
 
@@ -248,7 +316,7 @@ single 40 ms decode step is mostly launch overhead and scheduler jitter. The
 *ratio* inherits that noisy denominator and wanders between about 4× and 8×
 across runs while the absolute numbers barely move. Quote the absolutes.
 
-## The obvious fix is the wrong one here
+## On this hardware, the ranking inverts
 
 Feeding the measured constants into the scheduler, at an 8192-token prompt
 against two live streams:
@@ -309,7 +377,7 @@ At 0.6B parameters, batch 1, eager attention, this model is
 **kernel-launch bound**. The bandwidth story is a claim about large models,
 large batches and fused kernels — worth measuring before quoting.
 
-## The regime where chunking loses
+## The regime where chunking stops paying
 
 The first `--dry-run` capped the prompt at 512 tokens — two chunks — and
 printed `FAILS` against the falsifier. That was not a bug in the lab. With a
@@ -331,6 +399,50 @@ iteration, so the decode rides along for free — that is Sarathi-Serve's
 numbers are therefore an **upper bound** on the chunked stall, and the
 simulator models the fused version and reports lower. They are not directly
 comparable, and the tool says so in its own output.
+:::
+
+## Choosing between them
+
+These are three different designs, not three attempts at the same thing, and
+each is the right answer somewhere. The measurements above rank them *on one
+laptop GPU*; the ranking is a property of that machine's cost model, not of
+the policies.
+
+| | hardware | what it costs you | best when |
+|---|---|---|---|
+| **Shared** | 1 GPU | tail latency: a stream stalls for the whole prefill | prompts are short, or nobody is watching latency — batch jobs, offline eval, overnight runs |
+| **Chunked** | 1 GPU **+ a config flag** | TTFT for the *new* request, one pass overhead per chunk | long prompts and no budget for a second pool |
+| **Disaggregated** | **2+ pools + interconnect** | GPU-seconds, a KV transfer, operational complexity | latency SLAs matter and the hardware exists |
+
+Three things decide it in practice, and only the third is about latency:
+
+**Chunked is a config change; disaggregated is an architecture change.** In
+vLLM chunking is a flag. Disaggregation means standing up two fleets, moving
+KV across an interconnect, and operating them. That asymmetry usually settles
+the question before any benchmark does.
+
+**Disaggregation's real prize is not the stall — it is independent sizing.**
+Prefill is compute-bound and decode is bandwidth- (or, as measured here,
+launch-) bound. Once they are separate pools you can scale them to different
+ratios and even buy different hardware for each. No amount of clever
+scheduling on one GPU gives you that, and it is the argument DistServe
+actually makes.
+
+**Shared is not a strawman.** It has the best throughput per GPU, because
+nothing is ever fragmented or copied. If your workload is offline, it wins
+outright. The measurements here are about *interactive* serving, which is a
+different objective function.
+
+:::tip What the measurement on this page does and does not say
+It says: on an RTX 3080 Ti Laptop running eager PyTorch at batch 1, the
+per-forward-pass overhead is 81% of a decode step, which leaves chunking
+almost nothing to work with and makes disaggregation the better trade.
+
+It does **not** say chunking is a bad technique. Sarathi-Serve's results are
+from datacenter GPUs with fused kernels and large batches, where that
+overhead term nearly vanishes — exactly the regime where chunking should
+win, and the regime most readers deploy in. The formula in the next section
+exists so you can tell which regime you are in.
 :::
 
 ## Taking this into your own code
