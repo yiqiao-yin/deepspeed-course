@@ -447,6 +447,93 @@ Here rewards are dense and shaped: forward velocity on every step. The
 critic has real work to do and stays. Same algorithm family, opposite call,
 for a stated reason.
 
+## Next step: how this scales to real humanoid work
+
+The obvious guesses are *more data*, *more GPU*, *a bigger network*. For
+this kind of work the first two are mostly wrong and the third is almost
+always wrong, which is worth knowing before spending money on any of them.
+
+**Data is free and that is not the bottleneck.** A simulator generates
+infinite fresh experience — this lab produced 600,000 transitions in eight
+minutes on a laptop. Reinforcement learning from scratch is not
+data-limited the way supervised learning is. It is limited by *exploration*:
+whether the policy ever stumbles into the behaviour you are paying it for.
+Doubling the steps on a task the robot cannot discover changes nothing, and
+the flat seed on the learning curve above is a 600,000-step run that
+learned to stand still.
+
+**The GPU story is real, but it is about the simulator, not the policy.**
+Measured here: CPU beat an RTX 3080 Ti by 2.3×, because a 10k-parameter
+network is not work. What *is* work is stepping physics for thousands of
+environments at once — and that is exactly what GPU-resident simulators
+exist for. [MuJoCo Playground](https://github.com/google-deepmind/mujoco_playground)
+(`pip install playground`) runs MJX on-device and reports most of its
+environments training in under ten minutes on one GPU; Isaac Lab and Brax
+occupy the same niche. Moving from 16 CPU environments to thousands of GPU
+ones is the single biggest practical speed-up available, and it changes
+nothing about the algorithm.
+
+So the honest ordering of what to change:
+
+| change | what it actually costs you | worth it when |
+|---|---|---|
+| **Degrees of freedom** | exploration difficulty, super-linearly | always — it is the real curriculum |
+| **GPU-parallel simulator** | a rewrite into JAX (MJX/Brax) or Isaac | the moment one run takes more than an hour |
+| **Reward shaping** | your afternoons | constantly; it is where most of the work is |
+| **Bigger policy** | almost nothing, and it rarely helps | only once observations become pixels |
+| **More steps on the same task** | time | only if the curve is still climbing |
+
+### Degrees of freedom are the real difficulty axis
+
+This robot has **three actuated joints and a torso that cannot rotate**.
+Gymnasium's `Walker2d` has six and can fall over; `Humanoid` has
+seventeen and must balance in three dimensions. Each step along that
+ladder is a large jump in how long a policy flails before it finds
+anything, because the space of things to try grows with every joint while
+the fraction of them that help shrinks.
+
+Concretely, in increasing order of pain, and all of them runnable from
+what is already in this folder:
+
+1. **Un-comment the `rooty` hinge.** One line. The torso can now tip, and
+   you have a genuinely hard balance problem. Expect millions of steps and
+   expect to need reward terms you have not thought of yet.
+2. **Swap the XML for `Walker2d` or `Ant`.** Gymnasium ships the models;
+   the training loop here does not care which robot it is driving.
+3. **Add obstacles, then randomise them.** A second box, then varying
+   spacing as well as height. This is domain randomisation, and the
+   obstacle-height range in this lab is already a one-variable version of
+   it.
+4. **Move to a GPU-parallel simulator** once a run stops fitting in a
+   coffee break.
+
+### Where data finally becomes the answer
+
+Everything above is reinforcement learning from scratch, where the
+simulator is the data source and human effort goes into rewards. There is
+a second path, and it is where the field has moved for manipulation:
+**learn from demonstrations instead of from reward.**
+
+That flips every constraint. Demonstrations are scarce and expensive —
+somebody teleoperates a real robot — so now data really is the bottleneck,
+and reward engineering largely disappears.
+[LeRobot](https://huggingface.co/docs/lerobot/en/il_sim) is the open
+ecosystem for it: a shared dataset format, pretrained policies, and
+simulated environments on the Hub.
+
+And it is where the subject of this course finally bites. A
+vision-language-action model such as
+[OpenVLA-7B](https://arxiv.org/abs/2406.09246) needs roughly 27 GB for
+LoRA fine-tuning at minimum and 60–72 GB at a useful batch size. That does
+not fit on one consumer card, and it is the same ZeRO-plus-LoRA problem as
+[`gpt_oss_lora`](/docs/tutorials/llms/gpt-oss-finetuning) — a 7B policy
+instead of a 10k one.
+
+That is the arc of this category: **toy physics → more joints → parallel
+simulation → learned-from-demonstration policies that do not fit on one
+card.** This page is the first rung, and the honest reason it needs no
+GPU is that the first rung does not.
+
 ## Run it
 
 ```bash
