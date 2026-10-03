@@ -20,24 +20,38 @@ long, indivisible block of GPU time, and every live stream stalls behind it.
 The user does not experience this as *"someone else sent a long prompt"*.
 They experience their own tokens stopping.
 
+### 1. Shared worker — the baseline
+
+One GPU, first-come-first-served. The prompt's prefill occupies it
+completely, and the two live streams stop dead for the whole duration.
+That red-flagged break is the entire problem.
+
 ```mermaid
-flowchart TB
-    subgraph SH["shared worker — the baseline"]
-        direction LR
-        S1["live streams<br/>decoding"] --> S2["LONG PREFILL<br/>everything waits"] --> S3["streams resume"]
+flowchart LR
+    subgraph IN1["Long prompt"]
+        P1["P P P P P P"]
+    end
+    subgraph LS1["Live streams"]
+        AB1["A · B"]
+        W1["WAIT — blocked for the whole prefill"]
+    end
+    subgraph G1["1 GPU"]
+        PF1["Prefill<br/>P P P<br/>P P P"]
+        KV1["KV cache — local<br/>P · A · B"]
+    end
+    subgraph O1["Output tokens"]
+        N1["New<br/>nothing yet"]
+        OA1["A A A A A"]
+        OB1["B B B B B"]
     end
 
-    subgraph CH["chunked prefill — Sarathi-Serve"]
-        direction LR
-        C1["chunk + decodes<br/>one iteration"] --> C2["chunk + decodes"] --> C3["chunk + decodes"]
-    end
-
-    subgraph DI["disaggregated — DistServe"]
-        direction LR
-        D1["prefill pool"] -->|"KV copy"| D2["decode pool<br/>never interrupted"]
-    end
-
-    SH --> CH --> DI
+    P1 --> PF1
+    AB1 -.-> W1
+    W1 x--x PF1
+    PF1 --> KV1
+    KV1 --> N1
+    KV1 --> OA1
+    KV1 --> OB1
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -45,10 +59,104 @@ flowchart TB
     classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
     classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 
-    class SH,CH,DI deep
-    class S1,S3,C1,C2,C3,D1 base
-    class S2 bright
-    class D2 steel
+    class IN1,LS1,G1,O1 deep
+    class P1,AB1,N1,OA1,OB1 base
+    class KV1 steel
+    class PF1,W1 bright
+```
+
+### 2. Chunked prefill — Sarathi-Serve
+
+The prompt is split, and each chunk shares **one batched iteration** with
+the live decodes. Nobody waits longer than a single chunk. The prefill's
+own first token arrives later, which is the trade.
+
+```mermaid
+flowchart LR
+    subgraph IN2["Long prompt — split into chunks"]
+        C2["P P | P P | P P"]
+    end
+    subgraph LS2["Live streams"]
+        AB2["A · B<br/>never stop"]
+    end
+    subgraph G2["1 GPU"]
+        B2["ONE batched iteration<br/>A · B  P<br/>A' · B' · P'"]
+        KV2["KV cache — local<br/>P · A · B"]
+    end
+    subgraph O2["Output tokens"]
+        N2["New<br/>P P P"]
+        OA2["A A A … A"]
+        OB2["B B B … B"]
+    end
+
+    C2 -->|"one chunk per iteration"| B2
+    AB2 -.->|"decodes ride along"| B2
+    B2 --> KV2
+    KV2 --> N2
+    KV2 --> OA2
+    KV2 --> OB2
+
+    classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+
+    class IN2,LS2,G2,O2 deep
+    class C2,AB2,N2,OA2,OB2 base
+    class KV2 steel
+    class B2 bright
+```
+
+### 3. Separate prefill and decode — DistServe
+
+Two pools. The prefill GPU and the decode GPU cannot interfere by
+construction, and the KV cache is copied between them. The decode pool is
+never interrupted, so the streams never stutter — paid for with a second
+pool and a transfer.
+
+```mermaid
+flowchart LR
+    subgraph IN3["Long prompt"]
+        P3["P P P P P P"]
+    end
+    subgraph LS3["Live streams"]
+        AB3["A · B"]
+    end
+    subgraph PP3["Prefill pool"]
+        PF3["Prefill<br/>P P P P P P"]
+        KC3["KV cache"]
+    end
+    subgraph DP3["Decode pool"]
+        DK3["KV — A · B"]
+        DEC3["Decode<br/>never interrupted"]
+    end
+    subgraph O3["Output tokens"]
+        N3["New<br/>nothing yet"]
+        OA3["A A A A A A"]
+        OB3["B B B B B B"]
+    end
+
+    P3 --> PF3
+    PF3 --> KC3
+    KC3 -->|"KV copy"| DK3
+    AB3 -.->|"straight to decode"| DEC3
+    DK3 --> DEC3
+    DEC3 --> N3
+    DEC3 --> OA3
+    DEC3 --> OB3
+
+    classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+    classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+    classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+    classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+
+    class IN3,LS3,PP3,DP3,O3 deep
+    class P3,AB3,N3,OA3,OB3 base
+    class KC3,DK3 steel
+    class PF3 base
+    class DEC3 bright
 ```
 
 ## The same run, on one timeline
