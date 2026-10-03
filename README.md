@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 53 pages with
+The documentation site is the primary way to read this material: 54 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -149,7 +149,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 41 suites, no GPU and no downloads
+./tests/run_all.sh                  # 42 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -194,7 +194,7 @@ Adding a postmortem without its record fails CI
 
 ## Folder Structure 📁
 
-Six sections, each number used exactly once. Every example lives at
+Seven sections, each number used exactly once. Every example lives at
 `NN_section/NN_topic` and is self-contained — open one folder and run it
 without touching the rest.
 
@@ -242,11 +242,14 @@ deepspeed-course/
 │   ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
 │   └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
 │
-└── 06_protein_folding/    # Sequence in, 3D structure out — and where ZeRO stops helping
-    ├── 01_esm2_plm/             # ESM-2: sequence alone, no MSA. The control case
-    ├── 02_evoformer/            # The AlphaFold2 trunk. ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB — 4.6%
-    ├── 03_pairformer/           # The AlphaFold3 trunk — deletes the MSA representation
-    └── 04_structure_module/     # IPA + FAPE → coordinates. SE(3)-invariant by construction
+├── 06_protein_folding/    # Sequence in, 3D structure out — and where ZeRO stops helping
+│   ├── 01_esm2_plm/             # ESM-2: sequence alone, no MSA. The control case
+│   ├── 02_evoformer/            # The AlphaFold2 trunk. ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB — 4.6%
+│   ├── 03_pairformer/           # The AlphaFold3 trunk — deletes the MSA representation
+│   └── 04_structure_module/     # IPA + FAPE → coordinates. SE(3)-invariant by construction
+│
+└── 07_physical_ai/        # Acting in a simulated world: physics, not tokens
+    └── 01_obstacle_hopper/      # MuJoCo + PPO from scratch. Why ONE seed proves nothing
 ```
 
 **Every example folder has the same six files** (the contract in

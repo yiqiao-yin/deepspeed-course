@@ -104,6 +104,17 @@ const sidebars = {
               'tutorials/protein/structure-module',
             ],
           },
+          {
+            type: 'category',
+            label: '07 · Physical AI',
+            items: [
+              // Lab 1 is deliberately the simplest thing that is still
+              // real: MuJoCo contact physics and PPO written out. The
+              // category escalates toward vision-language-action models,
+              // where the sharding this course is about becomes necessary.
+              'tutorials/physical/obstacle-hopper',
+            ],
+          },
       ],
     },
     {
