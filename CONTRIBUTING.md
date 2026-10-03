@@ -952,6 +952,83 @@ Add your file to **both**:
 
 ---
 
+## 7a. If your lab claims something is BETTER
+
+Most labs do not. This section applies to one tier, and applying it to the
+others is cargo cult — the same objection as a distributed launcher with
+nothing to distribute.
+
+| tier | what it claims | this section? |
+|---|---|---|
+| 1 | nothing comparative — `01_neuralnet` fits y = 2x + 1 | no |
+| 2 | a systems fact — memory, throughput, tokens/page | budget only |
+| 3 | **X is better than Y on a measured axis** | **yes** |
+
+Tier 3 is where you can be confidently wrong, and this repository has been
+twice. `03_llms/11_moe` published that load balancing makes the model worse;
+a 2-GPU run reported the exact reverse. `02_intermediate/03_learning_to_rank`
+publishes a spread between objectives of **0.041 at one epoch and 0.001 at
+forty** — either number alone, stated as "listwise beats pointwise by X",
+would mislead. Neither was a measurement error. Both were scoping errors.
+
+### Declare a baseline and a budget
+
+Two visible lines near the top of the README, in exactly this form so they
+can be found by eye and by `tests/test_tier3_claims.py`:
+
+```markdown
+**Baseline:** the untrained scorer, NDCG 0.4862 at every row — any objective
+that does not beat it has learned nothing.
+
+**Budget:** epochs 1 to 40, and the budget is part of the finding: the
+spread is 0.041 at one epoch and 0.001 at forty.
+```
+
+**Why a baseline.** `04_video_text/05_video_eval` exists because an eval
+harness once scored a *random* baseline at 100% — its RNG was correlated
+with the answer key. Nothing in the numbers looked wrong. A baseline was the
+only thing that could have revealed it.
+
+**Why a budget.** A measured number and the configuration it was measured
+in are one indivisible fact. Quoting the number alone is not a shortening of
+the claim; it is a different claim, and usually a false one.
+
+The checker confirms the declarations *exist*. Whether your baseline is
+sensible is a human judgement, and a checker that implied otherwise would be
+the "three green checkers, one broken lab" failure again.
+
+### State a falsifier
+
+One line, before you run anything, naming the result that would mean you
+were wrong:
+
+> **If chunked prefill's worst decode gap is not below the shared worker's,
+> chunking does not help on this hardware and the central claim of this lab
+> is wrong here.**
+
+This is **not enforced** — any check for it would be a check for a phrase.
+It is here because it costs one line and it works.
+`03_llms/12_prefill_decode` wrote that sentence before measuring, had its
+tool print `HOLDS`/`FAILS` against it, and got `FAILS` on the first dry run.
+That was not a bug: at a 512-token prompt there are only two chunks, the
+per-pass overhead dominates, and chunking genuinely loses. A regime the lab
+would not otherwise have documented, found because the claim was written
+down in a form that could lose.
+
+### Report repeats, not a single run
+
+If your axis is latency or throughput, one timed call is a sample from a
+distribution, not a measurement. Report the median of several after warmup,
+and print the spread. In `03_llms/12_prefill_decode` the baseline decode
+step varies ±14% run to run while the blocked step varies ±1.5%, so the
+*ratio* between them wanders from 4× to 8× while the absolutes barely move.
+Without repeats that is invisible, and the natural thing to publish is the
+ratio.
+
+The same discipline caught a worse error there: a two-point fit for the
+per-token KV cost returned a **negative** number, which is impossible. One
+sample would have produced a confident wrong constant instead of a refusal.
+
 ## 8. Documentation
 
 ### Your folder README

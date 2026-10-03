@@ -1,5 +1,9 @@
 # 09.4 — Does it actually use both streams?
 
+**Baseline:** model **B**, built on purpose to ignore the video and answer from audio alone. The harness must flag it, and must *not* flag model A — a control in both directions, since either check alone is trivially passable.
+
+**Budget:** the modality-ablation grid runs every condition over the same question set, and the count is reported; a fusion gain computed over a handful of questions is noise with a name.
+
 You have built an omni model. It takes video and speech in, it speaks back, and
 it scores **62%** on a benchmark. Two completely different systems produce that
 number:
