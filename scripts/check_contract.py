@@ -53,6 +53,7 @@ NO_DEEPSPEED = {
     "04_video_text/05_video_eval": "evaluation — short generate() calls",
     "05_video_speech/03_duplex_streaming": "duplex inference — slices arrive in order",
     "05_video_speech/04_omni_eval": "evaluation — modality-ablation generate() calls",
+    "03_llms/12_prefill_decode": "inference scheduling — no optimizer, nothing to shard",
 }
 RUNTIME_DS_CONFIG = {
     "02_intermediate/01_bayesian_neuralnet": "writes a temporary config at runtime",

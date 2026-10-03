@@ -136,6 +136,9 @@ jobs:
       - name: Incident records resolve, and incidents.csv is current
         run: uv run tests/test_incident_records.py
 
+      - name: "Prefill/decode: head-of-line blocking and what chunking costs"
+        run: uv run tests/test_prefill_decode.py
+
       - name: "Pairformer: the AF3 MSA deletion, and the asymptote that survived"
         run: uv run tests/test_pairformer.py
 

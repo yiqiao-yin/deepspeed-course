@@ -196,6 +196,16 @@ EXAMPLES = {
                                          "PARTITIONS the experts across ranks; "
                                          "the routing lesson itself runs on CPU "
                                          "via `uv run moe.py`."),
+    "03_llms/12_prefill_decode": dict(min_vram=16, gpus=1, disk=20,
+                                    script="serve_bench.py",
+                                    launcher="python",
+                                    args="--calibrate --demo --repeats 7",
+                                    note="SIXTH launcher=python exception: this "
+                                         "is inference scheduling. No optimizer, "
+                                         "no gradients, nothing to shard, so a "
+                                         "distributed launcher would be cargo "
+                                         "cult. The scheduling behaviour itself "
+                                         "runs on CPU via `uv run scheduler.py`."),
     "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
                    script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),

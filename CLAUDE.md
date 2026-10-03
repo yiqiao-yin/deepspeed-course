@@ -359,7 +359,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 39 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 40 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it

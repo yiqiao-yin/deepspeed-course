@@ -149,7 +149,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 39 suites, no GPU and no downloads
+./tests/run_all.sh                  # 40 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -224,7 +224,8 @@ deepspeed-course/
 │   ├── 08_gpt_oss_lora/         # LoRA SFT of a 20B model
 │   ├── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
 │   ├── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
-│   └── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
+│   ├── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
+│   └── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
 │
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers

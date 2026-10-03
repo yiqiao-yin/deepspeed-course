@@ -265,6 +265,22 @@ labs:
       - { label: "Expert parallelism (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --expert-parallel --deepspeed_config ds_config_ep.json" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --max-steps 20" }
 
+  - id: 03_llms/12_prefill_decode
+    title: "Prefill and Decode: when to split them"
+    summary: "Head-of-line blocking, chunked prefill, and why the obvious fix loses here."
+    est_minutes: 10
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu, deliberately: scheduler.py is a pure
+      # discrete-event simulator with no torch import at all, so Clawdeck is
+      # right to advertise it as "Runs now".
+      - { label: "The three policies (CPU, no download)", cmd: "uv run --no-project python scheduler.py" }
+      # These DO need a GPU and carry no --num_gpus, so they must say so or
+      # Clawdeck advertises them as CPU-runnable and the learner hits a wall.
+      - { label: "Measure the head-of-line stall", cmd: "uv run serve_bench.py --demo --prompt-len 4096 --chunk 256", primary: true, needs_gpu: true }
+      - { label: "Calibrate the cost model", cmd: "uv run serve_bench.py --calibrate --repeats 9 --warmup 4", needs_gpu: true }
+      - { label: "Quick calibration (3 repeats)", cmd: "uv run serve_bench.py --calibrate --repeats 3 --warmup 1", needs_gpu: true }
+
   - id: 04_video_text/01_hf_baseline
     title: "Video-text baseline"
     summary: "LLaVA-style video trainer; the reference point for 02-05."
