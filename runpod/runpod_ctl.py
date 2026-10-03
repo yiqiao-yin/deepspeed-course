@@ -212,7 +212,7 @@ EXAMPLES = {
                                     args="--total-steps 600000",
                                     note="SEVENTH launcher=python exception: a "
                                          "10k-parameter PPO policy has nothing "
-                                         "for ZeRO to shard, and CPU is 2.3x "
+                                         "for ZeRO to shard, and CPU is 1.7-2.0x "
                                          "FASTER than GPU here (measured). "
                                          "Rentable for convenience, not speed; "
                                          "it runs fine on a laptop."),

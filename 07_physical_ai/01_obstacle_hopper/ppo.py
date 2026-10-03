@@ -219,11 +219,17 @@ def pick_device(requested: str = "auto") -> str:
     if requested == "cpu":
         return "cpu"
     if requested == "auto":
-        # MEASURED on this lab, not assumed: 8,192 environment steps took
-        # 14.2 s on CPU and 32.0 s on an RTX 3080 Ti -- the GPU is 2.3x
-        # SLOWER. The policy is 10k parameters, so the forward pass was
-        # never the bottleneck; MuJoCo stepping is, and it is on the CPU
-        # either way. All the GPU adds is a host-device transfer per step.
+        # MEASURED on this lab, not assumed, and re-measured with repeats
+        # after the first single-run figure was challenged:
+        #
+        #     4 envs   CPU 682 steps/s   CUDA 341   -> CPU 2.0x faster
+        #    16 envs   CPU 2513          CUDA 1480  -> CPU 1.7x faster
+        #
+        # CPU won 5 of 5 paired runs with no overlap, so the DIRECTION is
+        # solid; the RATIO is scoped to the environment count and narrows
+        # as that rises. The policy is 10k parameters, so the forward pass
+        # was never the bottleneck -- MuJoCo stepping is, on the CPU either
+        # way, and the GPU only adds a host-device transfer per step.
         #
         # So `auto` means CPU here. Defaulting to the slower device because
         # a GPU happens to exist is the same reflex this course argues
