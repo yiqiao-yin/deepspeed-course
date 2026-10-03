@@ -536,22 +536,117 @@ GPU is that the first rung does not.
 
 ## Run it
 
+Cold start to a trained robot, with nothing installed. The whole thing is
+CPU-only — no GPU, no model download, no graphics stack.
+
+### 1. Get the repo and the toolchain
+
 ```bash
-cd 07_physical_ai/01_obstacle_hopper
-uv sync
-
-uv run obstacle_env.py       # the world + the random baseline, 10 s
-uv run ppo.py                # the two GAE limits, no simulator
-uv run ../../tests/test_obstacle_hopper.py    # 22 property checks
-
-uv run train_ppo.py --dry-run                 # 30 s smoke test
-uv run train_ppo.py                           # ~8 min, CPU
-uv run train_ppo.py --blind-to-height         # the ablation
-uv run make_figures.py                        # every figure on this page
+git clone https://github.com/yiqiao-yin/deepspeed-course.git
+cd deepspeed-course/07_physical_ai/01_obstacle_hopper
 ```
 
-No GPU, no download, no rendering stack. Training uses state observations,
-so MuJoCo's headless-OpenGL problems never arise.
+Everything here uses [uv](https://docs.astral.sh/uv/). If you do not have
+it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```bash
+uv sync      # reads the committed uv.lock; ~1 min the first time
+```
+
+### 2. Look at the world before training anything
+
+```bash
+uv run obstacle_env.py
+```
+
+```
+BASELINE, random policy, low  (walk over)  [0.02, 0.06] m
+  mean return  130.58   mean max x  0.530 m   cleared 0/10
+BASELINE, random policy, high (must climb)  [0.12, 0.17] m
+  mean return  115.56   mean max x  0.475 m   cleared 0/10
+```
+
+`cleared 0/10` is the point. A random policy never gets past the step, so
+there is something to learn. Run this before trusting any trained number.
+
+### 3. Check the algorithm without a simulator
+
+```bash
+uv run ppo.py                               # the two GAE limits
+uv run ../../tests/test_obstacle_hopper.py  # 28 property checks
+```
+
+```
+lambda=1 matches Monte-Carlo minus baseline : max err 4.77e-07
+lambda=0 matches the one-step TD residual   : max err 0.00e+00
+policy+value parameters: 10,119
+...
+28/28 checks passed
+```
+
+Both run in seconds. If the second one fails, stop — the physics or the
+advantages are wrong and no amount of training will fix it.
+
+### 4. Train
+
+```bash
+uv run train_ppo.py --dry-run     # 30 s: proves the pipeline assembles
+uv run train_ppo.py               # the real run, ~8 min on CPU
+```
+
+Watch the `cleared` column. It sits at 0% for a long while — the robot is
+learning to stand before it can learn to travel — and then moves sharply.
+Expect something like:
+
+```
+  565,248 steps  return   986.7  max_x  4.30m  cleared  100%  (low 100% / high 100%)   438s
+```
+
+against the baseline's `return 129, cleared 0%`. **If it is still at 0%
+after 600k steps, that is a legitimate outcome, not a broken install** —
+one of the three seeds on the chart above never breaks through either.
+Re-run with `--seed 1`.
+
+### 5. The ablation, and the figures
+
+```bash
+uv run train_ppo.py --total-steps 600000 --seed 0 --name seeing_s0
+uv run train_ppo.py --total-steps 600000 --seed 0 --name blind_s0 --blind-to-height
+uv run make_figures.py
+```
+
+`make_figures.py` needs **both** arms for the comparison plots, and tells
+you which run is missing if you only have one. For the seed-spread chart
+on this page, repeat with `--seed 1` and `--seed 2`; six runs is about
+forty-five minutes, or eight if you run them in parallel — they are
+independent processes.
+
+### 6. Pictures of the robot (optional)
+
+```bash
+uv run render.py            # the world stills and both HUD animations
+```
+
+This is the only part that needs OpenGL, and it is deliberately separate:
+training uses state observations and never opens a graphics context. If no
+backend is available the script says so and exits cleanly rather than
+breaking anything else. It probes `glfw`, `egl` and `osmesa` in that order
+and reports which one worked.
+
+### What you end up with
+
+```
+runs/<name>/curve.csv      every evaluation during training
+runs/<name>/summary.json   baseline, final scores, wall time, device
+runs/<name>/policy.pt      the trained weights + observation normaliser
+```
+
+Every figure on this page is generated from those files, so nothing here
+can show a result a run did not produce.
 
 ## References
 

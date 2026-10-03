@@ -278,7 +278,13 @@ def main() -> None:
     print(f"lambda=0 matches the one-step TD residual   : "
           f"max err {(adv0 - td).abs().max():.2e}")
 
-    net = ActorCritic(13, 3)
+    # Import the real dimensions rather than hardcoding them. This read
+    # `ActorCritic(13, 3)` and kept printing 10,375 parameters after the
+    # observation shrank to 11 -- so the script contradicted the book page
+    # and the test suite, both of which say 10,119, on the second command
+    # a reader runs.
+    from obstacle_env import ACT_DIM, OBS_DIM
+    net = ActorCritic(OBS_DIM, ACT_DIM)
     print(f"\npolicy+value parameters: {net.n_params():,} "
           f"— nothing for ZeRO to shard, which is why this lab "
           f"uses launcher=python")

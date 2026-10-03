@@ -259,7 +259,7 @@ def run(args: argparse.Namespace) -> None:
     if args.dry_run:
         print("  DRY RUN COMPLETE — this is a smoke test, not a result.")
         print(f"  It proves the pipeline assembles on {device}. For a real")
-        print("  run drop --dry-run; it takes about five minutes.")
+        print("  run drop --dry-run; it takes about eight minutes.")
     else:
         print(f"  trained {steps_done:,} steps in "
               f"{summary['wall_seconds']:.0f}s on {device}")
