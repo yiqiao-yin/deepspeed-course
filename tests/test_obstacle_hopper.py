@@ -305,6 +305,45 @@ def test_random_baseline_is_weak(r: Results) -> None:
             f"vs front face {BOX_FRONT_X:.2f} m)")
 
 
+def test_the_page_quotes_the_real_source(r: Results) -> None:
+    """
+    The book page shows code. It must be the code that runs.
+
+    The page was audited from the perspective of a strong software
+    engineer with no RL background and failed: 293 lines, one bash block,
+    zero XML and zero Python. It explained what was learned without
+    showing how any of it was built. The fix was to quote the actual
+    reward function, observation and world XML.
+
+    Quoted code rots the instant someone edits the source, and a tutorial
+    that shows a reward function the lab does not use is worse than one
+    that shows none. These are exact substring checks in both directions.
+    """
+    page = (REPO / "docusaurus-docs" / "docs" / "tutorials" / "physical"
+            / "obstacle-hopper.md").read_text()
+    env_src = (REPO / "07_physical_ai" / "01_obstacle_hopper"
+               / "obstacle_env.py").read_text()
+
+    for snippet, what in [
+        ("reward = forward + 1.0 - 1e-3 * float(np.sum(np.square(action)))",
+         "the reward function"),
+        ("[BOX_FRONT_X - q[0]],", "the box-relative distance observation"),
+        ("np.clip(v, -10.0, 10.0),", "the velocity clip"),
+    ]:
+        r.check(snippet in page and snippet in env_src,
+                f"the page quotes {what} verbatim from obstacle_env.py",
+                "page and source disagree — the tutorial is showing code "
+                "that does not run")
+
+    # And the builder-facing material must still be there at all.
+    for marker, what in [("```xml", "the world as XML"),
+                         ("```python", "Python the reader can copy"),
+                         ("env.step(action)", "the environment interface")]:
+        r.check(marker in page, f"the page shows {what}",
+                "a reader who wants to build their own world has nothing "
+                "to copy")
+
+
 def test_policy_is_too_small_to_shard(r: Results) -> None:
     """
     Pins the reason this lab carries launcher="python".
@@ -329,6 +368,7 @@ def main() -> int:
     test_height_randomises_and_is_observable(r)
     test_determinism(r)
     test_random_baseline_is_weak(r)
+    test_the_page_quotes_the_real_source(r)
     test_policy_is_too_small_to_shard(r)
     return r.finish()
 

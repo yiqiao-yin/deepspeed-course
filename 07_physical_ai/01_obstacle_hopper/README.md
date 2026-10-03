@@ -91,7 +91,9 @@ parameters, so this justification cannot go stale quietly.
 Rendered from the actual model. Same world, three draws of the obstacle
 height: a 0.03 m lip, a 0.10 m step, a 0.17 m step.
 
-![Before and after 600k steps of PPO](../../docusaurus-docs/static/img/physical/hopper-before-after.gif)
+![Untrained: the random policy collapses](../../docusaurus-docs/static/img/physical/hopper-before.gif)
+
+![Trained: 600k steps of PPO, clearing the step](../../docusaurus-docs/static/img/physical/hopper-after.gif)
 
 Top: the random baseline collapses in about a second. Bottom: after
 training it gets over the step and stays upright. Same obstacle, same seed.
