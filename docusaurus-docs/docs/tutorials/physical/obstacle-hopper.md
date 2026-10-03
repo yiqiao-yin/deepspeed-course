@@ -19,6 +19,20 @@ failed**, and that turned out to be the most useful thing in it.
 
 ## The world
 
+![The same world at three obstacle heights](/img/physical/hopper-world.png)
+
+That is the actual simulation, rendered from the actual model — a floor, an
+orange step, and a three-link hopper: torso, thigh, shin, foot. The three
+panels are the *same world* at three draws of the obstacle height. On the
+left a 0.03 m lip you could stroll over; on the right a 0.17 m step that
+has to be climbed.
+
+**It is not a humanoid, and it does not walk on two legs.** It has one leg
+and the torso is locked upright — with a free torso rotation this becomes
+the bipedal-balance problem, which is a famously hard benchmark and not
+what the lab is teaching. So it hops and lunges. Freeing that joint is the
+obvious next lab.
+
 ```mermaid
 flowchart LR
     subgraph OBS["What the policy sees — 11 numbers"]
@@ -100,6 +114,29 @@ then an abrupt breakthrough into real locomotion.
 steps — and one `seeing` seed never breaks through at all. That flat blue
 line at the bottom of the right-hand panel is a run that trained for 600,000
 steps and learned to stand still.
+
+## What training looks like
+
+![Random policy collapsing, then the trained policy clearing the step](/img/physical/hopper-before-after.gif)
+
+Both panels are the same obstacle (0.10 m) and the same seed. The only
+difference is 600,000 steps of PPO.
+
+**Top — the random policy.** It folds up and collapses in about a second.
+That is not a hand-picked bad run; it is the lab's measured baseline, the
+same one every number on this page is quoted against. The episode
+terminates when the torso drops below 0.55 m, so the clip freezes on the
+collapse rather than hiding it.
+
+**Bottom — after training.** It stands, drives forward, gets over the step,
+and is still upright when the clip ends. Watch the orange box scroll off to
+the left: the camera tracks the robot, so the step moving behind it *is* the
+robot clearing it.
+
+It is worth being precise about what this is not. The gait is a forward
+lunge rather than smooth walking — with one leg and a locked torso there is
+no other option — and on a 0.15 m step it gets past and then stalls rather
+than striding away. The sweep below shows exactly where that limit sits.
 
 ## The result: the ablation failed
 

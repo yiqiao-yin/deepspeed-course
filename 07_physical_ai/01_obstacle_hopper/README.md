@@ -84,6 +84,23 @@ The GPU story in this category is real from lab 2, where the policy is a
 `tests/test_obstacle_hopper.py` fails if the policy ever exceeds 1M
 parameters, so this justification cannot go stale quietly.
 
+## The world
+
+![The same world at three obstacle heights](../../docusaurus-docs/static/img/physical/hopper-world.png)
+
+Rendered from the actual model. Same world, three draws of the obstacle
+height: a 0.03 m lip, a 0.10 m step, a 0.17 m step.
+
+![Before and after 600k steps of PPO](../../docusaurus-docs/static/img/physical/hopper-before-after.gif)
+
+Top: the random baseline collapses in about a second. Bottom: after
+training it gets over the step and stays upright. Same obstacle, same seed.
+The camera tracks the robot, so the box scrolling left is the robot
+clearing it.
+
+Generate both with `uv run render.py`. Rendering is **optional** — training
+and every test use state observations and never open a graphics context.
+
 ## Training works
 
 ![Learning curves, three seeds per arm](/img/physical/hopper-learning-curves.png)
