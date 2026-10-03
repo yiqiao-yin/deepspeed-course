@@ -226,6 +226,73 @@ def test_the_scenario_is_not_vacuous(r: Results) -> None:
             f"one decode step {bare:.4f}s -- nothing is being blocked")
 
 
+def test_the_timing_diagram_is_generated_from_the_trace(r: Results) -> None:
+    """
+    The docs diagram must describe the run the tables describe.
+
+    A hand-drawn schematic can illustrate a policy the code does not
+    implement and nothing catches the disagreement, so the gantt in the
+    book is emitted from `Trace.events`. These checks are on OUR generator,
+    not on mermaid: mermaid's gantt grammar turned out to accept
+    `dateFormat qqq` and non-numeric dates without complaint, so "it
+    parses" is close to no evidence at all. What can be checked is that the
+    bars are coherent and that nothing is dropped silently.
+    """
+    from scheduler import to_mermaid_gantt
+
+    reqs = head_of_line_scenario(2048, COST)
+    traces = [simulate(p, reqs, COST, chunk=512) for p in POLICIES]
+
+    r.check(all(t.events for t in traces),
+            "every policy records what the GPU actually did",
+            "an empty event log draws an empty diagram")
+
+    # A single worker cannot run two things at once. Checking NON-OVERLAP
+    # per resource replaces a check that the global event list is in
+    # chronological order -- which it is not for `disaggregated`, and the
+    # code is right: two pools run concurrently, so one global ordering is
+    # meaningless. The KV transfer is a third resource (the link), and it
+    # legitimately overlaps the prefill GPU moving on to the next request.
+    def resource(kind: str, who: str) -> str:
+        if kind == "transfer":
+            return "link"
+        return "prefill-pool" if who.startswith("pool-P") else "worker"
+
+    for t in traces:
+        r.check(all(a < b for a, b, _, _ in t.events),
+                f"{t.policy}: every event ends after it starts")
+        buckets: dict[str, list] = {}
+        for a, b, kind, who in t.events:
+            buckets.setdefault(resource(kind, who), []).append((a, b))
+        clashes = []
+        for name, iv in buckets.items():
+            iv.sort()
+            clashes += [f"{name} {x}/{y}" for x, y in zip(iv, iv[1:])
+                        if y[0] < x[1] - 1e-9]
+        r.check(not clashes,
+                f"{t.policy}: no resource runs two things at once",
+                f"double-booked: {clashes[:2]}")
+
+    # The event log must account for the GPU time the summary reports.
+    for t in traces:
+        busy = sum(b - a for a, b, _, _ in t.events)
+        r.check(abs(busy - t.gpu_seconds) < 1e-6,
+                f"{t.policy}: the bars account for all {t.gpu_seconds:.2f}s "
+                f"of GPU time",
+                f"bars total {busy:.4f}s but the trace reports "
+                f"{t.gpu_seconds:.4f}s -- the diagram is hiding work")
+
+    text = to_mermaid_gantt(traces, max_bars=4)
+    r.check(text.startswith("gantt"), "the emitter produces a gantt")
+    r.check(all(f"section {t.policy}" in text for t in traces),
+            "all three policies appear as sections")
+    r.check("more" in text,
+            "truncation is LABELLED, not silent",
+            "with max_bars=4 and ~100 events the chart must say what it "
+            "dropped; a chart that quietly omits half a timeline lies "
+            "about where the time went")
+
+
 def test_bad_input_is_refused(r: Results) -> None:
     """Fail loudly: a misconfigured run must not quietly return a number."""
     reqs = [Request("a", 0.0, 128, 8)]
@@ -259,6 +326,7 @@ def main() -> int:
     test_the_chunk_knob_behaves(r)
     test_disaggregation_removes_interference_and_charges_for_it(r)
     test_the_scenario_is_not_vacuous(r)
+    test_the_timing_diagram_is_generated_from_the_trace(r)
     test_bad_input_is_refused(r)
     return r.finish()
 

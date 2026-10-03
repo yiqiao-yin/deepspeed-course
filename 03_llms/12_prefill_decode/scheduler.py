@@ -205,6 +205,12 @@ class Trace:
     prefill_tokens_processed: int
     decode_steps: int
     gpu_seconds: float
+    # (start, end, kind, who) for every iteration the GPU ran. Recorded so
+    # the timing diagram in the docs is GENERATED from a trace rather than
+    # drawn by hand -- a hand-drawn schematic can illustrate a policy the
+    # code does not implement, which is the diagram equivalent of a stale
+    # measurement.
+    events: list[tuple[float, float, str, str]] = field(default_factory=list)
 
     def ttfts(self) -> list[float]:
         return [r.ttft for r in self.requests]
@@ -286,6 +292,7 @@ def _colocated(reqs: list[Request], cost: CostModel, chunk: int,
     kv: dict[str, int] = {r.rid: 0 for r in reqs}
     steps = 0
     tokens_prefilled = 0
+    events: list[tuple[float, float, str, str]] = []
 
     pending = sorted(reqs, key=lambda r: (r.arrival, r.rid))
 
@@ -314,9 +321,12 @@ def _colocated(reqs: list[Request], cost: CostModel, chunk: int,
                 # decodes share one iteration, so the decodes advance.
                 kv_total = sum(kv[r.rid] for r in decoding)
                 dt = max(dt, cost.decode_step(kv_total, len(decoding)))
+                t0 = now
                 now += dt
                 gpu += dt
                 steps += 1
+                events.append((t0, now, "fused",
+                               f"chunk+{len(decoding)} decodes"))
                 for r in decoding:
                     emitted[r.rid] += 1
                     kv[r.rid] += 1
@@ -326,8 +336,10 @@ def _colocated(reqs: list[Request], cost: CostModel, chunk: int,
                     if emitted[r.rid] >= r.output_len:
                         r.done_at = now
             else:
+                t0 = now
                 now += dt
                 gpu += dt
+                events.append((t0, now, "prefill", victim.rid))
 
             prefill_done[victim.rid] += take
             tokens_prefilled += take
@@ -337,9 +349,11 @@ def _colocated(reqs: list[Request], cost: CostModel, chunk: int,
         # Pure decode iteration over everything that is ready.
         kv_total = sum(kv[r.rid] for r in decoding)
         dt = cost.decode_step(kv_total, len(decoding))
+        t0 = now
         now += dt
         gpu += dt
         steps += 1
+        events.append((t0, now, "decode", f"{len(decoding)} streams"))
         for r in decoding:
             emitted[r.rid] += 1
             kv[r.rid] += 1
@@ -350,7 +364,7 @@ def _colocated(reqs: list[Request], cost: CostModel, chunk: int,
                 r.done_at = now
 
     return Trace("chunked" if chunked else "shared", reqs, now,
-                 tokens_prefilled, steps, gpu)
+                 tokens_prefilled, steps, gpu, events)
 
 
 def _disaggregated(reqs: list[Request], cost: CostModel) -> Trace:
@@ -365,6 +379,7 @@ def _disaggregated(reqs: list[Request], cost: CostModel) -> Trace:
     prefill_free = 0.0
     tokens_prefilled = 0
     gpu = 0.0
+    events: list[tuple[float, float, str, str]] = []
     ready: list[tuple[float, Request]] = []
 
     for r in sorted(reqs, key=lambda r: (r.arrival, r.rid)):
@@ -373,9 +388,12 @@ def _disaggregated(reqs: list[Request], cost: CostModel) -> Trace:
         prefill_free = start + dt
         gpu += dt
         tokens_prefilled += r.prompt_len
+        events.append((start, prefill_free, "prefill", f"pool-P {r.rid}"))
 
         transfer = cost.kv_transfer_per_token * r.prompt_len
         gpu += transfer
+        events.append((prefill_free, prefill_free + transfer, "transfer",
+                       f"KV {r.rid}"))
         ready.append((prefill_free + transfer, r))
 
     # Decode pool: one worker, continuous batching.
@@ -397,9 +415,11 @@ def _disaggregated(reqs: list[Request], cost: CostModel) -> Trace:
 
         kv_total = sum(kv[r.rid] for r in batch)
         dt = cost.decode_step(kv_total, len(batch))
+        t0 = now
         now += dt
         gpu += dt
         steps += 1
+        events.append((t0, now, "decode", f"pool-D {len(batch)} streams"))
         for r in batch:
             emitted[r.rid] += 1
             kv[r.rid] += 1
@@ -410,7 +430,7 @@ def _disaggregated(reqs: list[Request], cost: CostModel) -> Trace:
                 r.done_at = now
 
     return Trace("disaggregated", reqs, max(now, prefill_free),
-                 tokens_prefilled, steps, gpu)
+                 tokens_prefilled, steps, gpu, events)
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +495,60 @@ def max_decode_stall(trace: Trace) -> float:
     gaps = [g for r in trace.requests if r.rid.startswith("stream")
             for g in r.itls()]
     return max(gaps) if gaps else 0.0
+
+
+def to_mermaid_gantt(traces: list[Trace], max_bars: int = 14) -> str:
+    """
+    Render traces as a mermaid gantt — GENERATED, not drawn.
+
+    The point of generating it is that a hand-drawn schematic can illustrate
+    a policy the code does not implement, and nothing would catch the
+    disagreement. Here the bars come from `Trace.events`, so the picture is
+    a view of the same run the tables report.
+
+    Consecutive iterations of the same kind are coalesced into one bar,
+    because a real trace has ~110 events and a legible diagram has a dozen.
+    `max_bars` then truncates, and the truncation is LABELLED rather than
+    silent — a chart that quietly drops half a timeline is a chart that
+    lies about where the time went.
+
+    Colour via gantt's own tags, since gantt ignores classDef:
+    `crit` for prefill (the thing that blocks), `active` for decode,
+    `done` for a KV transfer.
+    """
+    TAG = {"prefill": "crit", "decode": "active", "fused": "active",
+           "transfer": "done"}
+
+    out = ["gantt",
+           "    title Prefill and decode on one timeline (milliseconds)",
+           "    dateFormat x",
+           "    axisFormat %L"]
+
+    for t in traces:
+        # Coalesce runs of the same kind.
+        runs: list[list] = []
+        for start, end, kind, _who in t.events:
+            if runs and runs[-1][2] == kind and abs(runs[-1][1] - start) < 1e-9:
+                runs[-1][1] = end
+                runs[-1][3] += 1
+            else:
+                runs.append([start, end, kind, 1])
+
+        shown, dropped = runs[:max_bars], max(0, len(runs) - max_bars)
+        out.append(f"    section {t.policy}")
+        for i, (start, end, kind, n) in enumerate(shown):
+            ms0, ms1 = int(round(start * 1000)), int(round(end * 1000))
+            if ms1 <= ms0:
+                ms1 = ms0 + 1          # gantt refuses a zero-width bar
+            label = kind if n == 1 else f"{kind} x{n}"
+            out.append(f"    {label} :{TAG[kind]}, {t.policy[:3]}{i}, "
+                       f"{ms0}, {ms1}")
+        if dropped:
+            last = shown[-1][1] if shown else 0.0
+            ms0 = int(round(last * 1000))
+            out.append(f"    ...{dropped} more :done, {t.policy[:3]}x, "
+                       f"{ms0}, {ms0 + 1}")
+    return "\n".join(out)
 
 
 def main() -> None:

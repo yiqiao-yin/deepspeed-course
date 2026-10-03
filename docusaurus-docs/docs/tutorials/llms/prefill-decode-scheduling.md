@@ -51,6 +51,59 @@ flowchart TB
     class D2 steel
 ```
 
+## The same run, on one timeline
+
+The diagram above is a schematic. This one is **generated from an actual
+trace** — every bar is an iteration the simulator ran, at the constants
+measured on the GPU. A 2048-token prompt arrives 100 ms into two live
+streams:
+
+```mermaid
+gantt
+    title Prefill and decode on one timeline (milliseconds)
+    dateFormat x
+    axisFormat %L
+    section shared
+    prefill x2 :crit, sha0, 0, 71
+    decode :active, sha1, 71, 109
+    prefill :crit, sha2, 109, 255
+    decode x96 :active, sha3, 255, 3930
+    section chunked
+    prefill :crit, chu0, 0, 35
+    fused :active, chu1, 35, 74
+    decode :active, chu2, 74, 112
+    fused x4 :active, chu3, 112, 353
+    decode x96 :active, chu4, 353, 4029
+    section disaggregated
+    prefill :crit, dis0, 0, 35
+    transfer :done, dis1, 35, 36
+    prefill :crit, dis2, 35, 71
+    transfer :done, dis3, 71, 72
+    prefill :crit, dis4, 100, 245
+    transfer :done, dis5, 245, 254
+    decode x102 :active, dis6, 36, 3941
+```
+
+Read the `shared` row first. The long red bar from 109 ms to 255 ms is one
+indivisible prefill, and the decode bars stop for its entire duration —
+that gap *is* the head-of-line stall, drawn to scale.
+
+`chunked` breaks the same prefill into `fused` iterations that each carry
+the decodes along, so no single bar is long. `disaggregated` has two
+resources: prefill bars on one pool, and a decode bar that runs
+**continuously from 36 ms** because nothing on its pool ever interrupts it.
+
+:::note Why generate it rather than draw it
+A hand-drawn schematic can illustrate a policy the code does not implement,
+and nothing would catch the disagreement — the diagram equivalent of a stale
+measurement. These bars come from `Trace.events`, the same run the tables
+report, and `tests/test_prefill_decode.py` asserts the bars account for
+every GPU-second the trace claims and that no resource is ever double-booked.
+Consecutive identical iterations are coalesced (`x96`) and any truncation is
+labelled, because a chart that silently drops half a timeline lies about
+where the time went.
+:::
+
 ## The falsifier, stated first
 
 A claim that cannot lose is not a finding. Before measuring anything, this
