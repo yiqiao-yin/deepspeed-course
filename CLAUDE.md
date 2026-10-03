@@ -8,6 +8,11 @@ broken, the hook names the incident and links to the full account in
 rule that looks arbitrary** — most of them are load-bearing and none are
 stylistic.
 
+Each account carries an **incident record** citing the commits that introduced
+and fixed it, so every claim in that file can be checked against the code
+rather than taken on trust — see
+[the incident record convention](#every-postmortem-carries-an-incident-record).
+
 ## What this repository is
 
 A teaching course, not an application. Each numbered directory
@@ -354,7 +359,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 38 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 39 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
@@ -624,6 +629,58 @@ evidence is in `POSTMORTEMS.md`.
   permanently. **A substring is not a fact about the program**: ask the AST
   whether the thing is called, reachable, and in the branch you think it is.
   → [postmortem](POSTMORTEMS.md#watch-a-checker-fail-before-trusting-it)
+
+### Every postmortem carries an incident record
+
+A war story with no commit references cannot be verified and cannot be
+counted. `POSTMORTEMS.md` went thirteen months citing none, which made it an
+anthology rather than a record. **A new postmortem must arrive with its
+record**, and `tests/test_incident_records.py` fails CI if one does not:
+
+```markdown
+## The thing that broke
+
+> **Incident record** · class `silent-wrong` ·
+> introduced [`72bf410`](<repo>/commit/72bf410) ·
+> fixed [`dabdd7b`](<repo>/commit/dabdd7b) ·
+> detector [`tests/test_clawdeck_manifest.py`](<repo>/blob/main/tests/test_clawdeck_manifest.py)
+```
+
+Seven classes, and the split is the point of keeping them:
+
+| class | meaning |
+|---|---|
+| `silent-wrong` | ran clean, plausible output, incorrect |
+| `silent-noop` | reported success having done nothing |
+| `false-green` | a check passed input it should have rejected |
+| `hang` | no error, no progress |
+| `fails-loud` | crashed — the easy class, and the rare one here |
+| `doc-drift` | a published claim diverged from the code |
+| `cross-cutting` | a lesson spanning incidents, not a defect itself |
+
+```bash
+uv run scripts/incidents.py          # the table, with latency from git
+uv run scripts/incidents.py --csv    # regenerate incidents.csv
+```
+
+`incidents.csv` is **derived and committed**, and the suite fails if it drifts
+from the prose — regenerate it in the same commit that adds a record.
+Latencies are computed from git rather than written down, so they cannot rot.
+
+Two things that are easy to get wrong here:
+
+- **One record describes one instance.** The scoped-claim section covers two,
+  and listing all their commits together dated the fix ten days *before* the
+  introduction. Negative latency is now a hard failure rather than a number
+  absorbed into the median.
+- **CI needs `fetch-depth: 0`.** `actions/checkout` defaults to a shallow
+  clone, which makes every SHA unresolvable — and the suite would then pass by
+  finding nothing to check. It detects the shallow case and fails instead.
+
+What the corpus currently supports, as measurements rather than impressions:
+**10 of 13 defects did not crash**, and latency ranges from same-day to 367
+days. That asymmetry — the quiet ones survive a year — is the argument for
+every property-based test in `tests/`.
 
 ## The Clawdeck lab manifest
 

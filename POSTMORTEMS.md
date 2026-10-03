@@ -47,6 +47,11 @@ rules are phrased as "assert the property" rather than "be careful".
 
 ## Synthetic data must carry a signal, and the summary must not lie
 
+> **Incident record** · class `silent-wrong` ·
+> introduced [`b39b89b`](https://github.com/yiqiao-yin/deepspeed-course/commit/b39b89b) ·
+> fixed [`1238af1`](https://github.com/yiqiao-yin/deepspeed-course/commit/1238af1), [`198c47d`](https://github.com/yiqiao-yin/deepspeed-course/commit/198c47d), [`0d5146a`](https://github.com/yiqiao-yin/deepspeed-course/commit/0d5146a) ·
+> detector [`tests/test_synthetic_data_is_learnable.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_synthetic_data_is_learnable.py)
+
 `01_basics/02_convnet` drew `x = randn(...)` and `y = randint(...)` — labels
 independent of the images, so **zero mutual information**. On 10 classes ~10%
 was not a poor result, it was the information-theoretic **ceiling**. The script
@@ -149,6 +154,11 @@ would pass while returning True unconditionally.
 
 ## A slow data source can make a lab unrunnable, and it looks like success
 
+> **Incident record** · class `silent-noop` ·
+> introduced [`b39b89b`](https://github.com/yiqiao-yin/deepspeed-course/commit/b39b89b) ·
+> fixed [`a205330`](https://github.com/yiqiao-yin/deepspeed-course/commit/a205330), [`080d748`](https://github.com/yiqiao-yin/deepspeed-course/commit/080d748) ·
+> detector [`tests/test_cifar10_source.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_cifar10_source.py)
+
 `01_basics/03_convnet_cifar10` fetched CIFAR-10 through
 `torchvision.datasets.CIFAR10(download=True)`, i.e. from `cs.toronto.edu`.
 Measured raw fetch from two unrelated networks — a rented cloud box and a home
@@ -190,6 +200,11 @@ Without it every rank does the same fetch and decode.
 ---
 
 ## Only rank 0 downloads, and the others must wait on a barrier
+
+> **Incident record** · class `silent-wrong` ·
+> introduced [`b39b89b`](https://github.com/yiqiao-yin/deepspeed-course/commit/b39b89b) ·
+> fixed [`ce11881`](https://github.com/yiqiao-yin/deepspeed-course/commit/ce11881) ·
+> detector [`tests/test_multigpu_download_guard.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_multigpu_download_guard.py)
 
 `01_basics/03_convnet_cifar10` had a `download_cifar10()` whose docstring read
 *"This prevents multiple processes from downloading simultaneously"* and whose
@@ -277,6 +292,11 @@ guard sits around the wrong statement.
 
 ## Guard the output, never the collective
 
+> **Incident record** · class `hang` ·
+> introduced [`019cdd9`](https://github.com/yiqiao-yin/deepspeed-course/commit/019cdd9) ·
+> fixed [`aebf203`](https://github.com/yiqiao-yin/deepspeed-course/commit/aebf203) ·
+> detector [`tests/test_moe_routing.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_moe_routing.py)
+
 The section above is about making sure only rank 0 does the *work*. This is its
 mirror image, and it cost eleven minutes of silence on two independent boxes
 before anyone could see it.
@@ -320,6 +340,11 @@ Sync every parameter unconditionally, materialising zeros.
 
 ## Sizing multi-GPU jobs: model it per GPU, not in aggregate
 
+> **Incident record** · class `fails-loud` ·
+> introduced [`75da649`](https://github.com/yiqiao-yin/deepspeed-course/commit/75da649) ·
+> fixed [`430b680`](https://github.com/yiqiao-yin/deepspeed-course/commit/430b680) ·
+> detector [`tests/test_qwen38_arch.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_qwen38_arch.py)
+
 The weights shard under ZeRO-3. **Activations, gather buffers and
 fragmentation do not** — every rank pays those in full. An aggregate
 "total VRAM vs the weights" check passed 2 × 48 GB for a 55.6 GB model that
@@ -343,6 +368,9 @@ Two signatures worth recognising:
 ---
 
 ## "Rent a bigger box" was the wrong answer three times running
+
+> **Incident record** · class `cross-cutting` ·
+> fixed [`aab6636`](https://github.com/yiqiao-yin/deepspeed-course/commit/aab6636), [`fe5d1a4`](https://github.com/yiqiao-yin/deepspeed-course/commit/fe5d1a4), [`430b680`](https://github.com/yiqiao-yin/deepspeed-course/commit/430b680)
 
 Twice the symptom looked like size and was not, and a larger machine would have
 **masked** each rather than fixed it:
@@ -369,6 +397,11 @@ this shard on my GPUs" in one step without a training run.
 
 ## A custom torch index pins its companions too, or nothing works
 
+> **Incident record** · class `fails-loud` ·
+> introduced [`a397700`](https://github.com/yiqiao-yin/deepspeed-course/commit/a397700) ·
+> fixed [`6cd9ee0`](https://github.com/yiqiao-yin/deepspeed-course/commit/6cd9ee0) ·
+> detector [`tests/test_torch_index_pins.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_torch_index_pins.py)
+
 `01_basics/03_convnet_cifar10` passed every check and still could not run:
 
     RuntimeError: operator torchvision::nms does not exist
@@ -393,6 +426,10 @@ against a different index fails even while `pyproject.toml` still looks right.
 ---
 
 ## A verification harness that does not install the artifact verifies nothing
+
+> **Incident record** · class `false-green` ·
+> fixed [`7ba8659`](https://github.com/yiqiao-yin/deepspeed-course/commit/7ba8659) ·
+> detector [`tests/gpu/verify_uv_sync_cuda.sh`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/gpu/verify_uv_sync_cuda.sh)
 
 `runpod/runpod_ctl.py run` is the tool that proves an example works on real
 hardware. For most of its life it did:
@@ -438,6 +475,10 @@ lab's committed lock rather than from whatever the container image shipped.
 ---
 
 ## Library API drift comes in three classes, and only one is obvious
+
+> **Incident record** · class `fails-loud` ·
+> fixed [`84d48f5`](https://github.com/yiqiao-yin/deepspeed-course/commit/84d48f5), [`2b4d766`](https://github.com/yiqiao-yin/deepspeed-course/commit/2b4d766), [`132af59`](https://github.com/yiqiao-yin/deepspeed-course/commit/132af59), [`994734d`](https://github.com/yiqiao-yin/deepspeed-course/commit/994734d) ·
+> detector [`tests/test_config_kwargs.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_config_kwargs.py)
 
 `tests/test_config_kwargs.py` covers all three. Each is syntactically valid, so
 `compileall` catches none of them:
@@ -494,6 +535,11 @@ names the file, the line and the exact kwarg.
 
 ## A lab is its COMMAND, not just its code
 
+> **Incident record** · class `silent-wrong` ·
+> introduced [`72bf410`](https://github.com/yiqiao-yin/deepspeed-course/commit/72bf410) ·
+> fixed [`dabdd7b`](https://github.com/yiqiao-yin/deepspeed-course/commit/dabdd7b), [`9226f5a`](https://github.com/yiqiao-yin/deepspeed-course/commit/9226f5a) ·
+> detector [`tests/test_clawdeck_manifest.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_clawdeck_manifest.py)
+
 `03_llms/03_ocr` OOMed on the 24 GB it advertised. The obvious readings were
 "declare 48 GB" or "shrink the config". Both were wrong. The manifest ran
 
@@ -546,6 +592,11 @@ guarantees will be quiet.
 
 ## Three green checkers, one broken lab
 
+> **Incident record** · class `cross-cutting` ·
+> introduced [`72bf410`](https://github.com/yiqiao-yin/deepspeed-course/commit/72bf410) ·
+> fixed [`dabdd7b`](https://github.com/yiqiao-yin/deepspeed-course/commit/dabdd7b), [`9226f5a`](https://github.com/yiqiao-yin/deepspeed-course/commit/9226f5a) ·
+> detector [`tests/test_clawdeck_manifest.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_clawdeck_manifest.py)
+
 The bug above was invisible to every static check on both sides of the
 integration at once:
 
@@ -562,6 +613,11 @@ coverage of the ones it does not.
 ---
 
 ## The RunPod harness lies less than it used to
+
+> **Incident record** · class `false-green` ·
+> introduced [`c21d192`](https://github.com/yiqiao-yin/deepspeed-course/commit/c21d192) ·
+> fixed [`19b2b80`](https://github.com/yiqiao-yin/deepspeed-course/commit/19b2b80), [`c87f49f`](https://github.com/yiqiao-yin/deepspeed-course/commit/c87f49f), [`af8a911`](https://github.com/yiqiao-yin/deepspeed-course/commit/af8a911) ·
+> detector [`tests/test_runpod_ctl.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_runpod_ctl.py)
 
 Four bugs in `runpod/runpod_ctl.py` were found and fixed by actually running
 pods. Each made a **failed** run look successful, which is the worst failure
@@ -589,6 +645,10 @@ Two operational facts that cost real time:
 ---
 
 ## Watch a checker fail before trusting it
+
+> **Incident record** · class `false-green` ·
+> fixed [`0cef32b`](https://github.com/yiqiao-yin/deepspeed-course/commit/0cef32b), [`3ff738a`](https://github.com/yiqiao-yin/deepspeed-course/commit/3ff738a), [`c5bc807`](https://github.com/yiqiao-yin/deepspeed-course/commit/c5bc807) ·
+> detector [`tests/test_clawdeck_manifest.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_clawdeck_manifest.py)
 
 A check you have not seen reject bad input is not a check. This is not
 hypothetical caution — four checkers written in this repo shipped a bug that
@@ -621,6 +681,11 @@ how to shut the pod down.
 
 ## A measured claim is scoped to the configuration it was measured in
 
+> **Incident record** · class `doc-drift` ·
+> introduced [`d9cc6bf`](https://github.com/yiqiao-yin/deepspeed-course/commit/d9cc6bf) ·
+> fixed [`f21f153`](https://github.com/yiqiao-yin/deepspeed-course/commit/f21f153), [`79fe97c`](https://github.com/yiqiao-yin/deepspeed-course/commit/79fe97c) ·
+> detector [`tests/test_published_protein_numbers.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_published_protein_numbers.py)
+
 `11_moe` published, from six seeds and two expert counts, that load balancing
 makes the model strictly *worse* — a tax paid for schedulability rather than a
 quality improvement. A 2-GPU run then reported the exact reverse, with the
@@ -628,6 +693,7 @@ unbalanced arm 33x worse and its loss **rising** through training.
 
 Neither number was wrong. The claim was: it had been measured only
 single-process, and said "every configuration".
+The re-scoping landed in [`39a05b0`](https://github.com/yiqiao-yin/deepspeed-course/commit/39a05b0).
 
 What was done about it is the point. Before touching the thesis:
 
@@ -711,6 +777,11 @@ configuration is not a shortening of the claim — it is a different claim,
 and usually a false one.
 
 ## A script with no end-to-end run makes its derivations the only testable surface
+
+> **Incident record** · class `silent-wrong` ·
+> introduced [`3ed103f`](https://github.com/yiqiao-yin/deepspeed-course/commit/3ed103f) ·
+> fixed [`12c45c8`](https://github.com/yiqiao-yin/deepspeed-course/commit/12c45c8) ·
+> detector [`tests/test_kimi_k3_plan.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_kimi_k3_plan.py)
 
 `03_llms/01_llm_finetuning/analyze_kimi_k3.py` is named `analyze_`, not
 `train_`, because it does not train — Kimi K3 is 2.78 T parameters / 1,561 GB

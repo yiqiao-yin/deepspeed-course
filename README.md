@@ -149,7 +149,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 31 suites, no GPU and no downloads
+./tests/run_all.sh                  # 39 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -161,6 +161,36 @@ uv run tests/test_ds_configs.py     # a single suite
 | `test_video_frames.py` | Frame "extraction" that returns one image repeated |
 
 See [`tests/README.md`](tests/README.md).
+
+### Where those tests come from
+
+Almost every suite above exists because something shipped broken, and
+[`POSTMORTEMS.md`](POSTMORTEMS.md) is the account of what. Each entry carries
+an **incident record** naming the commits that introduced and fixed it and the
+test that now catches it, so the claims can be checked against the code rather
+than taken on trust:
+
+```bash
+uv run scripts/incidents.py          # the table, latency computed from git
+uv run scripts/incidents.py --csv    # regenerate incidents.csv
+```
+
+[`incidents.csv`](incidents.csv) is the same data in machine-readable form.
+What it currently shows:
+
+| | |
+|---|---|
+| documented incidents | 15 (13 defects, 2 cross-cutting lessons) |
+| **did not crash** | **10 of 13** — silent-wrong, silent-noop, false-green, hang |
+| time from introduced to fixed | same-day to **367 days** |
+
+The asymmetry is the point. Crashes were found in hours; the three defects
+that ran clean and produced plausible output sat for roughly a year each. That
+is the argument for asserting mathematical properties rather than shapes — a
+shape assertion would have passed on all three.
+
+Adding a postmortem without its record fails CI
+(`tests/test_incident_records.py`).
 
 ## Folder Structure 📁
 

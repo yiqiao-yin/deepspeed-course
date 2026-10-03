@@ -23,6 +23,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Full history: tests/test_incident_records.py resolves the
+          # commit SHAs cited in POSTMORTEMS.md. The default shallow
+          # clone makes every one of them unresolvable, and the suite
+          # would pass by finding nothing to check.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -126,6 +132,9 @@ jobs:
 
       - name: Synthetic MSAs carry coevolution (and the counterexample does not)
         run: uv run tests/test_evoformer_data_is_learnable.py
+
+      - name: Incident records resolve, and incidents.csv is current
+        run: uv run tests/test_incident_records.py
 
       - name: "Pairformer: the AF3 MSA deletion, and the asymptote that survived"
         run: uv run tests/test_pairformer.py

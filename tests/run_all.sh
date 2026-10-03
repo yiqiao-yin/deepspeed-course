@@ -29,6 +29,7 @@ TESTS=(
     tests/test_video_frames.py
     tests/test_runpod_ctl.py
     tests/test_docs_style.py
+    tests/test_incident_records.py
     tests/test_token_compression.py
     tests/test_star_memory.py
     tests/test_video_eval.py

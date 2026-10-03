@@ -231,7 +231,7 @@ at all.
 ### What needs no GPU at all
 
 ```bash
-./tests/run_all.sh     # 38 suites, ~1,560 checks — configs, data, objectives
+./tests/run_all.sh     # 39 suites, ~1,570 checks — configs, data, objectives
 ```
 
 The test suite validates the *logic* of every example without a GPU or a model

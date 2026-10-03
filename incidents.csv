@@ -1,0 +1,16 @@
+title,class,introduced,fixed,detector,latent_days,fix_span_days
+"Synthetic data must carry a signal, and the summary must not lie",silent-wrong,b39b89b,1238af1 198c47d 0d5146a,tests/test_synthetic_data_is_learnable.py,366,6
+"A slow data source can make a lab unrunnable, and it looks like success",silent-noop,b39b89b,a205330 080d748,tests/test_cifar10_source.py,357,14
+"Only rank 0 downloads, and the others must wait on a barrier",silent-wrong,b39b89b,ce11881,tests/test_multigpu_download_guard.py,367,
+"Guard the output, never the collective",hang,019cdd9,aebf203,tests/test_moe_routing.py,1,
+"Sizing multi-GPU jobs: model it per GPU, not in aggregate",fails-loud,75da649,430b680,tests/test_qwen38_arch.py,0,
+"""Rent a bigger box"" was the wrong answer three times running",cross-cutting,,aab6636 fe5d1a4 430b680,,,18
+"A custom torch index pins its companions too, or nothing works",fails-loud,a397700,6cd9ee0,tests/test_torch_index_pins.py,9,
+A verification harness that does not install the artifact verifies nothing,false-green,,7ba8659,tests/gpu/verify_uv_sync_cuda.sh,,
+"Library API drift comes in three classes, and only one is obvious",fails-loud,,84d48f5 2b4d766 132af59 994734d,tests/test_config_kwargs.py,,14
+"A lab is its COMMAND, not just its code",silent-wrong,72bf410,dabdd7b 9226f5a,tests/test_clawdeck_manifest.py,17,1
+"Three green checkers, one broken lab",cross-cutting,72bf410,dabdd7b 9226f5a,tests/test_clawdeck_manifest.py,17,1
+The RunPod harness lies less than it used to,false-green,c21d192,19b2b80 c87f49f af8a911,tests/test_runpod_ctl.py,6,0
+Watch a checker fail before trusting it,false-green,,0cef32b 3ff738a c5bc807,tests/test_clawdeck_manifest.py,,5
+A measured claim is scoped to the configuration it was measured in,doc-drift,d9cc6bf,f21f153 79fe97c,tests/test_published_protein_numbers.py,0,0
+A script with no end-to-end run makes its derivations the only testable surface,silent-wrong,3ed103f,12c45c8,tests/test_kimi_k3_plan.py,0,
