@@ -56,12 +56,16 @@ uv run make_figures.py
 
 ## CPU or GPU — measured, not assumed
 
-Both work. **CPU is 2.3× faster**, and the number is the point:
+Both work, and **CPU is faster here** — the reason is the point:
 
-| device | 8,192 environment steps |
-|---|---|
-| **CPU** | **14.2 s** |
-| CUDA (RTX 3080 Ti) | 32.0 s |
+| configuration | CPU | CUDA (RTX 3080 Ti) | CPU faster by |
+|---|---|---|---|
+| 4 envs (`--dry-run`) | **682** steps/s | 341 steps/s | **2.0×** |
+| 16 envs (the default) | **2,513** steps/s | 1,480 steps/s | **1.7×** |
+
+Median of repeated paired runs; CPU won **5 of 5** with no overlap between
+the two sets. Note the gap *narrows* as the environment count rises, which
+is the whole story — see below.
 
 The policy is **10,119 parameters**. The matrix multiplications are
 trivial; the cost is MuJoCo stepping sixteen environments, which happens on

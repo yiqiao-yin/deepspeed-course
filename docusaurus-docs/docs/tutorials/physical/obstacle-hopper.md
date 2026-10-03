@@ -392,16 +392,31 @@ is nothing to shard.
 
 Measured, rather than assumed:
 
-| device | 8,192 environment steps |
-|---|---|
-| **CPU** | **14.2 s** |
-| CUDA (RTX 3080 Ti) | 32.0 s |
+| configuration | CPU | CUDA (RTX 3080 Ti) | CPU faster by |
+|---|---|---|---|
+| 4 envs (`--dry-run`) | **682** steps/s | 341 steps/s | **2.0×** |
+| 16 envs (the default) | **2,513** steps/s | 1,480 steps/s | **1.7×** |
 
-**CPU is 2.3× faster.** The matrix multiplications are trivial and the cost
-is MuJoCo stepping sixteen environments, which happens on the CPU either
-way — the GPU only adds a transfer to the part that was never the
-bottleneck. So `--device auto` resolves to CPU, and this lab is the
-**seventh** declared `launcher="python"` exception.
+Median of repeated paired runs; CPU won **5 of 5** with no overlap between
+the two sets. Note the gap *narrows* as the environment count rises, which
+is the whole story — see below.
+
+The policy is **10,119 parameters**. The matrix multiplications are
+trivial; the cost is MuJoCo stepping environments, which happens on the CPU
+either way, so moving a 10k-parameter forward pass to a GPU adds a
+host-device transfer to the part that was never the bottleneck.
+
+**The ratio is scoped to the environment count, and that matters more than
+the ratio.** At 4 environments the GPU is 2.0× behind; at 16 it is 1.7×.
+Extrapolating the trend rather than the number: with enough parallel
+environments the GPU should win, which is exactly why GPU-resident
+simulators exist. The useful conclusion is not *"CPU is faster"* but
+*"the policy was never the bottleneck — parallelism in the SIMULATOR is
+the lever."*
+
+So `--device auto` resolves to CPU here. `--device cuda` is supported and
+reported, not recommended. This lab is the **seventh** declared
+`launcher="python"` exception.
 
 That is not an apology for the category. It is the first rung. Lab 2 is a
 7B vision-language-action policy that needs ~27 GB for LoRA fine-tuning at
@@ -463,8 +478,8 @@ the flat seed on the learning curve above is a 600,000-step run that
 learned to stand still.
 
 **The GPU story is real, but it is about the simulator, not the policy.**
-Measured here: CPU beat an RTX 3080 Ti by 2.3×, because a 10k-parameter
-network is not work. What *is* work is stepping physics for thousands of
+Measured here: CPU beat an RTX 3080 Ti by 1.7–2.0× depending on the
+environment count, because a 10k-parameter network is not work. What *is* work is stepping physics for thousands of
 environments at once — and that is exactly what GPU-resident simulators
 exist for. [MuJoCo Playground](https://github.com/google-deepmind/mujoco_playground)
 (`pip install playground`) runs MJX on-device and reports most of its
