@@ -9,6 +9,8 @@ dependencies = [
     "gymnasium>=1.0",
     "numpy>=1.26",
     "matplotlib>=3.8",
+    "imageio>=2.34",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]

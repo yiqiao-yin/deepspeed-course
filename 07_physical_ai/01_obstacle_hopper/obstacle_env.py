@@ -100,13 +100,27 @@ MODEL_XML = f"""
 <mujoco model="obstacle_hopper">
   <compiler angle="degree" inertiafromgeom="true"/>
   <option integrator="RK4" timestep="0.002"/>
+  <!-- Offscreen framebuffer for render.py. MuJoCo defaults to 640x480 and
+       raises rather than silently downscaling, so the size has to be
+       declared here. Visual only; no effect on the dynamics. -->
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096"/>
+  </visual>
   <default>
     <joint armature="1" damping="1" limited="true"/>
     <geom conaffinity="1" condim="3" contype="1" friction="0.9 0.1 0.1"
           rgba="0.42 0.62 0.82 1" solimp="0.95 0.95 0.01" solref="0.01 1"/>
   </default>
   <worldbody>
-    <light pos="0 0 4" dir="0 0 -1" diffuse="0.9 0.9 0.9"/>
+    <!-- Lights and cameras are VISUAL ONLY -- MuJoCo does not use them in
+         the dynamics, so adding them cannot change a single measurement in
+         this lab. They exist so render.py produces something legible. -->
+    <light pos="0 -1.5 4" dir="0 0.3 -1" diffuse="0.85 0.85 0.85"
+           specular="0.2 0.2 0.2" castshadow="true"/>
+    <light pos="3 2 3" dir="-0.5 -0.4 -1" diffuse="0.45 0.5 0.6"
+           castshadow="false"/>
+    <camera name="side" pos="1.0 -3.6 1.0" xyaxes="1 0 0 0 0.35 0.94"/>
     <geom name="floor" type="plane" pos="0 0 0" size="40 2 0.1"
           conaffinity="1" condim="3" rgba="0.16 0.20 0.25 1"/>
     <geom name="step" type="box"
