@@ -22,9 +22,31 @@ They experience their own tokens stopping.
 
 ### 1. Shared worker — the baseline
 
-One GPU, first-come-first-served. The prompt's prefill occupies it
-completely, and the two live streams stop dead for the whole duration.
-That red-flagged break is the entire problem.
+One GPU, first-come-first-served — the arrangement you get by default.
+
+**Reading the diagram left to right.** A new request arrives as six prompt
+tokens. They enter the GPU as a *single* `Prefill batch`, and the label says
+`indivisible` because that is the literal situation: prefill is **one
+forward pass** over every prompt position at once. The model computes
+queries, keys and values for all six tokens together, which is exactly why
+prefill is efficient — it is a few large matrix multiplications rather than
+six small ones. The output of that pass lands in the `KV cache`, drawn as
+three row-groups: the new `P` rows being written now, and the `A` and `B`
+rows left over from two conversations that are already mid-answer.
+
+**Now look at the two edges marked `BLOCKED`.** Streams A and B each want to
+run a decode step — one forward pass that emits their next token. They
+cannot, and the reason is sharper than "the queue is busy": the GPU is
+*inside* a forward pass. You cannot suspend a sequence of CUDA kernels
+halfway through, hand the device to someone else, and resume later. The
+prefill runs to completion or it does not run.
+
+**What that costs.** A and B still emit five tokens each, so nothing is lost
+— but there is a hole in the middle of both streams, and a user reading
+along sees the text freeze. The critical property is that **the hole is as
+long as the prefill**, so it scales with the *other* request's prompt. A
+colleague pasting a 100k-token document stalls your 50-token chat, and
+nothing about your own request explains why.
 
 ```mermaid
 flowchart LR
@@ -85,9 +107,35 @@ flowchart LR
 
 ### 2. Chunked prefill — Sarathi-Serve
 
-The prompt is split, and each chunk shares **one batched iteration** with
-the live decodes. Nobody waits longer than a single chunk. The prefill's
-own first token arrives later, which is the trade.
+The same prompt, cut into pieces — but the cutting is only half the idea.
+
+**What the diagram shows that the first one does not.** The prompt is now
+three `chunk` subgraphs of two tokens each, and crucially they do not feed a
+prefill box. They feed `ONE batched iteration`, the node that *also*
+contains `A decode` and `B decode`. Prefill work and decode work are sitting
+in the same forward pass.
+
+**Why that is even legal** is worth spelling out, because it is the
+technical unlock and it is easy to miss. A transformer forward pass does not
+know or care whether a given row in its batch is "the 4000th token of
+someone's prompt" or "the next token of an ongoing answer". Every row is
+just a position with its own slice of KV cache to attend over. So a
+scheduler is free to assemble a batch from both kinds of work, and the GPU
+processes them in one go. That is Sarathi-Serve's *stall-free* half, and it
+is **separable from chunking** — you could co-schedule without chunking at
+all, and the lab's tests pin that distinction.
+
+**Follow the KV rows.** `P rows` grow one chunk at a time rather than
+appearing all at once, while `A` and `B` rows advance every iteration. In
+the output, A and B show small gaps instead of one hole: they are never
+blocked for longer than a single chunk, no matter how long the prompt is.
+
+**The trade is visible in the output too.** The new request's own tokens
+arrive *later* than they would have under the shared worker, because its
+prefill is now spread across three passes — and each pass re-reads the
+entire model's weights from memory. You have moved the pain from the
+incumbent streams onto the new arrival, which is usually the right trade,
+and sometimes is not.
 
 ```mermaid
 flowchart LR
@@ -162,10 +210,33 @@ flowchart LR
 
 ### 3. Separate prefill and decode — DistServe
 
-Two pools. The prefill GPU and the decode GPU cannot interfere by
-construction, and the KV cache is copied between them. The decode pool is
-never interrupted, so the streams never stutter — paid for with a second
-pool and a transfer.
+Stop scheduling the conflict and remove it instead.
+
+**The structural change.** There are now two separate groups of GPUs. The
+`PREFILL POOL` does nothing but prefill — note it runs all six tokens in one
+pass again, with no chunking, because there is no longer anyone waiting
+behind it to protect. The `DECODE POOL` does nothing but decode. Interference
+is not scheduled away; it is impossible, because the two phases never share
+a device.
+
+**Follow the two paths into the decode pool.** The thick `KV copy` edge
+carries the freshly built cache across the interconnect and lands it as the
+`P rows`. Meanwhile the live streams A and B route *straight* to the decode
+pool, bypassing the prefill hardware entirely — they never queue behind a
+prompt because they never touch the machine doing prompts.
+
+**Count the output tokens.** Six each for A and B, against five in the
+shared-worker diagram. That is not decoration: the decode loop never pauses,
+so in the same wall-clock window it completes more iterations.
+
+**What you pay.** A second pool of GPUs, and a transfer that is not free —
+the KV cache for a long prompt is gigabytes, and it crosses a real link. The
+underrated benefit is the one that does not appear in the picture: with the
+phases separated you can **size and provision each pool independently**.
+Prefill is compute-hungry and decode is memory-hungry, so they want
+different machines and different scaling ratios. No scheduling trick on a
+single GPU can give you that, and it is the argument DistServe actually
+makes.
 
 ```mermaid
 flowchart LR
