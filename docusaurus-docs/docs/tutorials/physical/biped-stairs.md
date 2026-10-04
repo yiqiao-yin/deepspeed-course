@@ -48,24 +48,24 @@ ever reaches the top. **Budget:** 800k steps, three seeds, four cells.
 
 | cell | return (3 seeds) | treads climbed /3 | summit |
 |---|---|---|---|
-| 1 leg, locked | 788 · 871 · 771 | 0.0 · 1.9 · 0.0 | 0% |
-| 1 leg, free | 356 · 342 · 231 | 2.0 · 2.0 · 1.0 | 0% |
-| **2 legs, locked** | **1866 · 1447 · 2123** | **3.0 · 3.0 · 3.0** | **100%** |
-| 2 legs, free | 633 · 874 · 726 | 3.0 · 2.8 · 3.0 | 93% |
+| 1 leg, locked | 788 · 875 · 771 | 0.0 · 1.9 · 0.0 | 0% · 10% · 0% |
+| 1 leg, free | 377 · 361 · 224 | 2.0 · 2.1 · 0.0 | 20% · 30% · 0% |
+| **2 legs, locked** | **1884 · 2277 · 2449** | **3.0 · 3.0 · 3.0** | **100%** |
+| 2 legs, free | 645 · 1559 · 750 | 3.0 · 3.0 · 2.8 | 100% · 100% · 80% |
 
 ![The 2x2 on both metrics](/img/physical/stairs-2x2.png)
 
 **The limb dominates.** Mean treads climbed goes 0.63 → 3.00 with a locked
-torso and 1.67 → 2.93 with a free one. Every two-legged seed summits; no
+torso and 1.37 → 2.93 with a free one. Every two-legged seed summits; no
 one-legged seed ever does.
 
 ## But the switches interact
 
 ![Interaction plot](/img/physical/stairs-interaction.png)
 
-With **one** leg, freeing the torso **helps**: 0.63 → 1.67 treads. With
+With **one** leg, freeing the torso **helps**: 0.63 → 1.37 treads. With
 **two**, it costs a little climbing and a lot of return: 3.00 → 2.93
-treads, 1812 → 744.
+treads, 2203 → 985.
 
 The lines are not parallel, so no main-effects summary of this experiment
 is honest. You cannot say "freeing the torso costs X" — it depends on what
@@ -86,6 +86,18 @@ robot — the obvious choice, since it is the better robot — it would have
 concluded that freeing the torso is simply bad, and missed that it is the
 *only thing* that makes a one-legged robot climb at all.
 :::
+
+## The whole job, end to end
+
+![The trained two-legged robot walking, climbing, and carrying on](/img/physical/stairs-showcase.gif)
+
+One uninterrupted 700-step episode of the strongest cell. It walks on the
+flat, reaches the staircase, takes all three treads, and keeps going —
+**11.3 m in total, still upright when the episode times out.**
+
+The panel is read from the live simulation every frame. Watch `treads
+climbed` reach 3/3 and the status chip turn **AT THE TOP** around step
+150, then the distance keep climbing long after.
 
 ## Watch the difference
 

@@ -138,7 +138,7 @@ def frames_for(policy, env, *, seed: int, every: int, width: int,
                        ("distance", f"{x:+.2f} m"),
                        ("to the step", f"{gap:+.2f} m" if gap > 0 else "past"),
                        ("torso height", f"{env.torso_height():.2f} m"),
-                       ("treads climbed", f"{env.steps_climbed()}/{N_STAIRS}"),
+                       ("treads climbed", f"{env.best_tread()}/{N_STAIRS}"),
                        ("rise / step", f"{env.rise:.2f} m"),
                        ("return", f"{total:.0f}")],
                 status=("AT THE TOP" if env.at_top() else
@@ -366,6 +366,40 @@ def do_gif(args) -> None:
                   args.colors)
 
 
+def do_showcase(args) -> None:
+    """
+    One long clip of the best policy doing the whole job.
+
+    The two comparison clips are short and cut off, because their purpose
+    is a side-by-side. This one is the opposite: a full 700-step episode
+    of the strongest cell, so a reader can watch it walk on the flat,
+    arrive at the staircase, climb all three treads, and keep walking.
+
+    Measured before filming, rather than hoped for: `2leg_locked` at a
+    0.06 m rise survives the entire episode, reaches 11.4 m, and takes
+    all three treads. A showcase clip of a policy that falls over would
+    be a worse advertisement than no clip.
+    """
+    import json
+
+    from stairs_env import BipedStairs
+
+    run = best_run("2leg_locked")
+    policy, meta = load_policy(run)
+    f = meta["final"]
+    env = BipedStairs(legs=2, locked_torso=True, fixed_rise=args.show_rise,
+                      max_steps=args.show_steps)
+    frames = frames_for(
+        policy, env, seed=11, every=args.show_every,
+        width=args.show_width, height=args.show_height,
+        max_frames=args.show_max_frames,
+        title="TRAINED — WALK, CLIMB, CARRY ON",
+        subtitle=f"2 legs · torso locked · {meta['total_steps'] // 1000}k "
+                 f"steps of PPO · summit {f['at_top']:.0%}")
+    _save_gif(frames, OUT / "stairs-showcase.gif", args.frame_ms,
+              args.colors)
+
+
 def _save_gif(frames, path, frame_ms: int, colors: int) -> None:
     """Palette-quantise; full colour costs four times the bytes here."""
     from PIL import Image
@@ -382,6 +416,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stills", action="store_true")
     ap.add_argument("--gif", action="store_true")
+    ap.add_argument("--showcase", action="store_true",
+                    help="the long clip of the best policy")
+    ap.add_argument("--show-rise", type=float, default=0.06)
+    ap.add_argument("--show-steps", type=int, default=700)
+    ap.add_argument("--show-every", type=int, default=7)
+    ap.add_argument("--show-max-frames", type=int, default=100)
+    ap.add_argument("--show-width", type=int, default=820)
+    ap.add_argument("--show-height", type=int, default=430)
     ap.add_argument("--rise", type=float, default=0.07)
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height-px", type=int, default=340)
@@ -390,8 +432,8 @@ def main() -> int:
     ap.add_argument("--frame-ms", type=int, default=80)
     ap.add_argument("--colors", type=int, default=48)
     args, _ = ap.parse_known_args()
-    if not (args.stills or args.gif):
-        args.stills = args.gif = True
+    if not (args.stills or args.gif or args.showcase):
+        args.stills = args.gif = args.showcase = True
 
     os.environ["MUJOCO_GL"] = pick_backend()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -401,6 +443,8 @@ def main() -> int:
         do_stills(args)
     if args.gif:
         do_gif(args)
+    if args.showcase:
+        do_showcase(args)
     return 0
 
 

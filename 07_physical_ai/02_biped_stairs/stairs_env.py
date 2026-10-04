@@ -138,30 +138,42 @@ class BipedStairs:
         tread it has passed is the combination that can only mean it is
         standing on the thing.
         """
-        x = float(self.data.qpos[0])
-        # FOOT LIFT above its own resting height on flat ground. This
-        # took three attempts and each wrong answer was quietly plausible:
+        # Which tread is the SUPPORTING foot resting on?
         #
-        #   1. torso qpos[1] vs an absolute tread height -- ignored that
-        #      the robot rests at -0.196, so a policy standing on the top
-        #      step counted as climbing nothing.
-        #   2. torso lift above resting -- a robot on a tread with BENT
-        #      legs sits lower than one standing straight on the floor.
-        #      Measured crouched on a 0.07 m tread: +0.032 against a 0.042
-        #      threshold, missed.
-        #   3. raw foot z -- the foot capsule has a 0.045 m radius, so a
-        #      foot flat on the ground already clears the first tread's
-        #      threshold and a robot that never left the floor read 1/3.
+        # Everything here is the supporting foot's own position -- not the
+        # torso's. Using torso x was the fourth wrong answer: the foot
+        # capsule runs from -0.08 to +0.14 of the ankle, so torso x and
+        # foot x disagree by up to a tread's width, and a robot squarely
+        # on the top step was credited with the step below.
         #
-        # Measuring the foot against ITS OWN flat-ground height is immune
-        # to all three.
-        foot_lift = (min(float(self.data.geom_xpos[g][2])
-                         for g in self._feet) - self._foot_rest_z)
-        n = 0
-        for x0, x1, top in stair_tops(self.rise):
-            if x >= x0 and foot_lift > 0.6 * top:
-                n += 1
-        return n
+        # Count = how many tread tops the foot has risen above. Standing
+        # on tread 3 of a 0.06 m staircase means a lift of ~0.18, which
+        # clears 0.06, 0.12 and 0.18 -> three. Standing on open floor
+        # means a lift of ~0 -> none, whatever x says.
+        zs = [float(self.data.geom_xpos[g][2]) for g in self._feet]
+        k = int(np.argmin(zs))
+        foot_x = float(self.data.geom_xpos[self._feet[k]][0])
+        foot_lift = zs[k] - self._foot_rest_z
+
+        # Outside the staircase there is nothing to be standing on, so a
+        # high swing foot on open ground cannot be mistaken for a climb.
+        if not (STAIR_X0 - 0.25 <= foot_x <= STAIR_END_X + 0.25):
+            return 0
+        # Treads are evenly spaced by `rise`, so the tread index is just
+        # the lift divided by the rise, rounded. A `foot_lift > 0.6 * top`
+        # test per tread was the fifth wrong answer: standing on tread 2
+        # of a 0.06 m staircase lifts 0.12, which clears 60% of tread 3's
+        # 0.18 and credited three. Division has no tolerance to tune.
+        return int(np.clip(round(foot_lift / self.rise), 0, N_STAIRS))
+
+    def best_tread(self) -> int:
+        """Highest tread reached so far. A running maximum, not a snapshot.
+
+        `steps_climbed` is instantaneous and correctly falls back to zero
+        once the robot walks off the far end. What a reader wants to see,
+        and what the reward pays on, is the best reached in the episode.
+        """
+        return self._climbed
 
     # -- observation --------------------------------------------------------
 
@@ -232,7 +244,7 @@ class BipedStairs:
             self.t >= self.max_steps, {
                 "x": float(self.data.qpos[0]),
                 "rise": self.rise,
-                "climbed": climbed,
+                "climbed": self._climbed,     # running max, not a snapshot
                 "at_top": self.at_top(),
                 "height": self.torso_height(),
                 "pitch": self.pitch(),
