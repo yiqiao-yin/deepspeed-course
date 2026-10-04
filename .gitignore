@@ -35,3 +35,10 @@ runpod/results/
 
 # RL training output: regenerate with train_ppo.py
 **/runs/
+
+# Generated training data. `07_physical_ai/03_terrain_vision/data/bc.npz` is
+# 23 MB of rendered depth frames produced by `collect.py` in about nine
+# minutes -- reproducible output, so it belongs with runs/ rather than in
+# git history. (Contrast `05_video_speech/data/`, which is real recorded
+# media and IS committed: it cannot be regenerated.)
+07_physical_ai/*/data/*.npz

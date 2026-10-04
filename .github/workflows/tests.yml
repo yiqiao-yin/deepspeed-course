@@ -138,6 +138,8 @@ jobs:
 
       - name: "Biped stairs: the 2x2 is a controlled comparison"
         run: uv run tests/test_biped_stairs.py
+      - name: Terrain vision (head is cosmetic, camera cannot see it)
+        run: uv run tests/test_terrain_vision.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

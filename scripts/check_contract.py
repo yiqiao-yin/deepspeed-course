@@ -48,6 +48,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Documented exceptions, with the reason. An exception with no reason is a bug.
 NO_DEEPSPEED = {
+    "07_physical_ai/03_terrain_vision":
+        "a 193k-parameter CNN student has nothing for ZeRO to shard. "
+        "Note this is the one exception where a GPU DOES help -- 13.6x, "
+        "measured -- so the reason is not the usual one: a GPU helping "
+        "and DeepSpeed helping are different claims",
     "03_llms/09_multi_agency": "drives TRL's GRPOTrainer directly",
     "04_video_text/04_streaming_memory": "streaming inference — sequential, no optimizer",
     "04_video_text/05_video_eval": "evaluation — short generate() calls",

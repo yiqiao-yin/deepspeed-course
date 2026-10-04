@@ -3,7 +3,7 @@
 #SBATCH --nodes=1                       # one node
 #SBATCH --ntasks-per-node=1             # one process: nothing to distribute
 #SBATCH --cpus-per-task=16              # MuJoCo stepping is the bottleneck
-#SBATCH --gres=gpu:0                    # NO GPU: see the README. CPU is 2.3x faster
+#SBATCH --gres=gpu:0                    # NO GPU: not faster here (see README)
 #SBATCH --mem=16G                       # the whole world is an XML string
 #SBATCH --time=01:00:00                 # ~8 min a run; 6 runs fits easily
 #SBATCH --partition=cpu                 # adjust to your cluster

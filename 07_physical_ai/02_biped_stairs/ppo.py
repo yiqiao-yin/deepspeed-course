@@ -157,15 +157,23 @@ class RunningNorm:
 
 class ActorCritic(nn.Module):
     """
-    Two small MLPs and a state-independent log-std. About 20k parameters.
+    Two small MLPs and a state-independent log-std. 10,375 to 11,597
+    parameters, depending on which of the 2x2 cells is being built --
+    the observation grows with the pitch joint and the second leg.
 
     Worth stating plainly, because it decides how this lab is launched:
     **there is nothing here for DeepSpeed to shard.** ZeRO partitions
     optimizer state, gradients and parameters, and all three are negligible
-    at this size. The bottleneck is MuJoCo stepping on the CPU. This lab is
-    therefore registered with `launcher="python"`, and the GPU story in this
-    category arrives with lab 2, where the model is a 7B vision-language-
-    action policy and the sharding is real.
+    at this size, and the bottleneck is MuJoCo stepping on the CPU. This
+    lab is therefore registered with `launcher="python"`.
+
+    This docstring used to promise that "the GPU story in this category
+    arrives with lab 2, where the model is a 7B vision-language-action
+    policy". That never happened -- lab 2 is another small-policy lab,
+    and the GPU story actually arrives in lab 3 as a 193k-parameter
+    vision STUDENT (13.6x +/- 0.9 on a GPU), which is still not a
+    DeepSpeed case. A docstring that predicts the future dates badly;
+    this one now describes what is here.
     """
 
     def __init__(self, obs_dim: int, act_dim: int, hidden: int = 64) -> None:
