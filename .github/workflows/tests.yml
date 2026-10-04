@@ -136,6 +136,9 @@ jobs:
       - name: Incident records resolve, and incidents.csv is current
         run: uv run tests/test_incident_records.py
 
+      - name: "Biped stairs: the 2x2 is a controlled comparison"
+        run: uv run tests/test_biped_stairs.py
+
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py
 

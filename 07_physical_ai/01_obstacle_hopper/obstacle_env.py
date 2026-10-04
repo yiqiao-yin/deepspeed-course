@@ -204,6 +204,34 @@ class ObstacleHopper:
         self.box_height = BOX_HEIGHT_DEFAULT
         self.t = 0
         self._cleared_awarded = False
+        self._rest_z = self._measure_rest_z()
+
+    def _measure_rest_z(self) -> float:
+        """
+        What `qpos[1]` reads standing on flat ground. Measured, not assumed.
+
+        `on_box` compared the root-z OFFSET against an ABSOLUTE box height
+        and so was always False: this robot rests at -0.152 on the floor,
+        reads -0.036 standing on a 0.15 m box, and the threshold was
+        +0.070. The reported `climbed 0/10` in this lab was that bug, not
+        a fact about the gait, and the page's explanation -- that it hops
+        over without resting -- was wrong.
+
+        Nothing else moves. The reward and the headline metric both use
+        `cleared()`, which is an x-position test and was never affected,
+        so every published number in this lab stands. Found while writing
+        lab 2, where the same expression also gated a reward term and did
+        real damage.
+        """
+        import mujoco
+
+        probe = mujoco.MjData(self.model)
+        mujoco.mj_resetData(self.model, probe)
+        probe.qpos[0] = -5.0
+        mujoco.mj_forward(self.model, probe)
+        for _ in range(120):
+            mujoco.mj_step(self.model, probe)
+        return float(probe.qpos[1])
 
     # -- the obstacle -------------------------------------------------------
 
@@ -250,8 +278,8 @@ class ObstacleHopper:
         """
         x = self.data.qpos[0]
         inside = BOX_FRONT_X <= x <= BOX_BACK_X
-        raised = self.data.qpos[1] > 0.6 * self.box_height - 0.02
-        return bool(inside and raised)
+        lift = self.data.qpos[1] - self._rest_z      # vs flat ground
+        return bool(inside and lift > 0.6 * self.box_height)
 
     def cleared(self) -> bool:
         """Got past the far face. The goal, at every height."""

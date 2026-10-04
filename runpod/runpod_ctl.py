@@ -206,6 +206,15 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/02_biped_stairs": dict(min_vram=16, gpus=1, disk=15,
+                                    script="train_ppo.py",
+                                    launcher="python",
+                                    args="--sweep --seeds 3 --jobs 6",
+                                    note="EIGHTH launcher=python exception: a "
+                                         "12k-parameter PPO policy, nothing "
+                                         "for ZeRO to shard. The 2x2 is twelve "
+                                         "independent processes, so --jobs "
+                                         "helps and a GPU does not."),
     "07_physical_ai/01_obstacle_hopper": dict(min_vram=16, gpus=1, disk=15,
                                     script="train_ppo.py",
                                     launcher="python",

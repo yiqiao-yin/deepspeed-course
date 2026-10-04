@@ -55,6 +55,7 @@ NO_DEEPSPEED = {
     "05_video_speech/04_omni_eval": "evaluation — modality-ablation generate() calls",
     "03_llms/12_prefill_decode": "inference scheduling — no optimizer, nothing to shard",
     "07_physical_ai/01_obstacle_hopper": "RL control — a 10k-parameter policy, nothing to shard",
+    "07_physical_ai/02_biped_stairs": "RL control — a 12k-parameter policy, nothing to shard",
 }
 RUNTIME_DS_CONFIG = {
     "02_intermediate/01_bayesian_neuralnet": "writes a temporary config at runtime",
