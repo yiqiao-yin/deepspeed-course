@@ -268,6 +268,19 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/02_biped_stairs
+    title: "Biped Stairs: a limb or a constraint?"
+    summary: "Four robots, one staircase, and two switches that turn out to interact."
+    est_minutes: 12
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is XML, the policy is 12k params.
+      - { label: "The four robots (CPU)", cmd: "uv run morphology.py" }
+      - { label: "Random baselines (CPU)", cmd: "uv run stairs_env.py" }
+      - { label: "Train one cell (~4 min)", cmd: "uv run train_ppo.py --cell 2leg_free", primary: true }
+      - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
+
   - id: 07_physical_ai/01_obstacle_hopper
     title: "Obstacle Hopper: learning to climb"
     summary: "Real MuJoCo physics, PPO from scratch, and why one seed proves nothing."

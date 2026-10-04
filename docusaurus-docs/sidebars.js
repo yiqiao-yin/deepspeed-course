@@ -113,6 +113,7 @@ const sidebars = {
               // category escalates toward vision-language-action models,
               // where the sharding this course is about becomes necessary.
               'tutorials/physical/obstacle-hopper',
+              'tutorials/physical/biped-stairs',
             ],
           },
       ],
