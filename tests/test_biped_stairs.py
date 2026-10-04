@@ -208,6 +208,61 @@ def test_climbing_needs_height_and_position(r: Results) -> None:
             "the positive case fails, so the two negatives prove nothing")
 
 
+def test_the_climb_detector_is_exact(r: Results) -> None:
+    """
+    Place the robot on a known tread; the count must be that tread.
+
+    This is the check the lab needed from the start. The detector took
+    FIVE attempts and every wrong version produced a clean, consistent,
+    publishable table:
+
+      1. torso height vs an absolute tread height -- ignored the -0.196
+         resting offset, so a policy that walked 14.5 m past the whole
+         staircase reported 0 climbed;
+      2. torso lift above resting -- a robot on a tread with bent legs
+         sits lower than one standing straight on the floor;
+      3. raw foot height -- the foot capsule's 0.045 m radius already
+         clears tread one, so a robot on the floor read 1;
+      4. foot lift but TORSO x for the footprint -- the foot runs -0.08
+         to +0.14 of the ankle, so a robot squarely on the top step was
+         credited with the one below;
+      5. `lift > 0.6 * top` per tread -- standing on tread 2 of a 0.06 m
+         staircase lifts 0.12, which clears 60% of tread 3's 0.18.
+
+    The working version divides the supporting foot's lift by the rise.
+    Three of those five also corrupted the reward, so they cost whole
+    training sweeps rather than just a wrong printout.
+    """
+    for rise in (RISE_MIN, 0.06, RISE_MAX):
+        for i, (x0, x1, top) in enumerate(stair_tops(rise)):
+            env = BipedStairs(legs=2, locked_torso=True, fixed_rise=rise)
+            env.reset(seed=0)
+            env.data.qpos[0] = (x0 + x1) / 2
+            env.data.qpos[1] = env._rest_z + top
+            env._mj.mj_forward(env.model, env.data)
+            for _ in range(60):
+                env.step(np.zeros(env.act_dim))
+            got = env.steps_climbed()
+            r.check(got == i + 1,
+                    f"rise {rise:.2f}, placed on tread {i + 1} -> counts "
+                    f"{i + 1}",
+                    f"counted {got}; the detector is off by "
+                    f"{got - (i + 1):+d} and the reward pays on it")
+
+    for x, where in ((9.0, "far past the staircase"), (-2.0, "before it")):
+        env = BipedStairs(legs=2, locked_torso=True, fixed_rise=0.06)
+        env.reset(seed=0)
+        env.data.qpos[0] = x
+        env.data.qpos[1] = env._rest_z
+        env._mj.mj_forward(env.model, env.data)
+        for _ in range(40):
+            env.step(np.zeros(env.act_dim))
+        r.check(env.steps_climbed() == 0,
+                f"standing on open floor {where} counts zero",
+                f"counted {env.steps_climbed()} — a walking gait's swing "
+                f"foot is being read as a climb")
+
+
 def test_rise_randomises_and_is_observable(r: Results) -> None:
     env = BipedStairs(legs=1, locked_torso=True)
     rises = {round(env.reset(seed=s)[1]["rise"], 5) for s in range(20)}
@@ -305,6 +360,7 @@ def main() -> int:
     test_a_locked_torso_cannot_tip(r)
     test_the_staircase_is_real(r)
     test_climbing_needs_height_and_position(r)
+    test_the_climb_detector_is_exact(r)
     test_rise_randomises_and_is_observable(r)
     test_determinism(r)
     test_random_baseline_never_summits(r)

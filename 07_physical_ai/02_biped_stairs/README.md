@@ -33,23 +33,23 @@ Same staircase, same reward, same episode length. Only the robot changes.
 
 | cell | return (3 seeds) | treads climbed /3 | summit |
 |---|---|---|---|
-| 1 leg, locked | 788 · 871 · 771 | 0.0 · 1.9 · 0.0 | 0% |
-| 1 leg, free | 356 · 342 · 231 | 2.0 · 2.0 · 1.0 | 0% |
-| **2 legs, locked** | **1866 · 1447 · 2123** | **3.0 · 3.0 · 3.0** | **100%** |
-| 2 legs, free | 633 · 874 · 726 | 3.0 · 2.8 · 3.0 | 93% |
+| 1 leg, locked | 788 · 875 · 771 | 0.0 · 1.9 · 0.0 | 0% · 10% · 0% |
+| 1 leg, free | 377 · 361 · 224 | 2.0 · 2.1 · 0.0 | 20% · 30% · 0% |
+| **2 legs, locked** | **1884 · 2277 · 2449** | **3.0 · 3.0 · 3.0** | **100%** |
+| 2 legs, free | 645 · 1559 · 750 | 3.0 · 3.0 · 2.8 | 100% · 100% · 80% |
 
 ![The 2x2 on both metrics](../../docusaurus-docs/static/img/physical/stairs-2x2.png)
 
 **Adding a leg is transformative.** Mean treads climbed goes 0.63 → 3.00
-with a locked torso, and 1.67 → 2.93 with a free one. Every two-legged
+with a locked torso, and 1.37 → 2.93 with a free one. Every two-legged
 seed summits; no one-legged seed ever does.
 
 **Freeing the torso interacts with it.**
 
 ![Interaction plot](../../docusaurus-docs/static/img/physical/stairs-interaction.png)
 
-With one leg it **helps**: 0.63 → 1.67 treads. With two legs it costs a
-little climbing and a lot of return: 3.00 → 2.93 treads, 1812 → 744.
+With one leg it **helps**: 0.63 → 1.37 treads. With two legs it costs a
+little climbing and a lot of return: 3.00 → 2.93 treads, 2203 → 985.
 
 The lines are not parallel, so the switches are not independent, and no
 main-effects summary of this experiment is honest. The mechanism is
@@ -59,6 +59,11 @@ simply put one foot up, so the torso freedom stops being useful and
 becomes pure instability.
 
 ## Watch it
+
+![Walk, climb, carry on](../../docusaurus-docs/static/img/physical/stairs-showcase.gif)
+
+One uninterrupted 700-step episode of the best cell: walks the flat,
+climbs all three treads, carries on to 11.3 m, still upright at timeout.
 
 ![Torso locked](../../docusaurus-docs/static/img/physical/stairs-2leg_locked.gif)
 
