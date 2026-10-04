@@ -206,6 +206,26 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/03_terrain_vision": dict(min_vram=16, gpus=1, disk=20,
+                                    script="train_student.py",
+                                    launcher="python",
+                                    args="--auto --device cuda --epochs 40",
+                                    note="NINTH launcher=python exception, and "
+                                         "the first for a NEW reason. The other "
+                                         "eight skip DeepSpeed because a GPU "
+                                         "buys nothing; here a GPU buys 13.6x "
+                                         "+/- 0.9 over 5 repeats (2860 vs 38677 "
+                                         "samples/s) "
+                                         "because the student is a conv net on "
+                                         "a fixed dataset with no simulator in "
+                                         "the loop. DeepSpeed is still wrong -- "
+                                         "193k parameters have nothing for ZeRO "
+                                         "to shard. --auto is load-bearing: "
+                                         "neither runs/ nor the 23 MB rendered "
+                                         "dataset is committed, so on a fresh "
+                                         "pod the student would have nothing to "
+                                         "train on. It trains a teacher and "
+                                         "renders the data first, ~25 min."),
     "07_physical_ai/02_biped_stairs": dict(min_vram=16, gpus=1, disk=15,
                                     script="train_ppo.py",
                                     launcher="python",

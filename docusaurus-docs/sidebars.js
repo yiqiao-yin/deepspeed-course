@@ -114,6 +114,7 @@ const sidebars = {
               // where the sharding this course is about becomes necessary.
               'tutorials/physical/obstacle-hopper',
               'tutorials/physical/biped-stairs',
+              'tutorials/physical/terrain-vision',
             ],
           },
       ],

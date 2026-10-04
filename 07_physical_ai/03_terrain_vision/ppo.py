@@ -2,6 +2,14 @@
 """
 PPO, written out rather than imported, because the parts are the lesson.
 
+COPIED VERBATIM FROM `07_physical_ai/01_obstacle_hopper/ppo.py`, apart from
+this note and the device comment below. That duplication is the
+repository's rule, not an oversight: a reader must be able to open one
+folder and run it without the other twenty-three existing. The GAE limits
+and the clipped objective are identical, and `tests/test_biped_stairs.py`
+re-asserts them here rather than trusting that the sibling lab still
+holds.
+
 Stable-Baselines3 would train this task in fifteen lines. It would also make
 the two pieces that actually matter here invisible: how an advantage is
 estimated, and what the clipped objective does to a policy update. Both are
@@ -149,21 +157,23 @@ class RunningNorm:
 
 class ActorCritic(nn.Module):
     """
-    Two small MLPs and a state-independent log-std. 10,119 parameters.
+    Two small MLPs and a state-independent log-std. 11,469 parameters
+    with the privileged observation, 10,829 without it.
 
     Worth stating plainly, because it decides how this lab is launched:
     **there is nothing here for DeepSpeed to shard.** ZeRO partitions
     optimizer state, gradients and parameters, and all three are negligible
-    at this size, and the bottleneck is MuJoCo stepping on the CPU. This
-    lab is therefore registered with `launcher="python"`.
+    at this size. The bottleneck is MuJoCo stepping on the CPU, so the
+    teachers are registered with `launcher="python"` and left there --
+    labs 1 and 2 both measured CPU as FASTER than a GPU for exactly this
+    reason.
 
-    This docstring used to promise that "the GPU story in this category
-    arrives with lab 2, where the model is a 7B vision-language-action
-    policy". That never happened -- lab 2 is another small-policy lab,
-    and the GPU story actually arrives in lab 3 as a 193k-parameter
-    vision STUDENT (13.6x +/- 0.9 on a GPU), which is still not a
-    DeepSpeed case. A docstring that predicts the future dates badly;
-    this one now describes what is here.
+    Where the GPU does arrive in this lab is the vision STUDENT, not this
+    network: a 193,222-parameter conv encoder trained supervised over a
+    fixed dataset, measured at 13.6x +/- 0.9 on a GPU. That is still not a
+    DeepSpeed case -- 193k parameters have nothing to shard either. "A GPU
+    helps" and "DeepSpeed helps" are different claims, and this lab is
+    where they come apart.
     """
 
     def __init__(self, obs_dim: int, act_dim: int, hidden: int = 64) -> None:
@@ -295,11 +305,11 @@ def main() -> None:
     # observation shrank to 11 -- so the script contradicted the book page
     # and the test suite, both of which say 10,119, on the second command
     # a reader runs.
-    from obstacle_env import ACT_DIM, OBS_DIM
-    net = ActorCritic(OBS_DIM, ACT_DIM)
-    print(f"\npolicy+value parameters: {net.n_params():,} "
-          f"— nothing for ZeRO to shard, which is why this lab "
-          f"uses launcher=python")
+    from morphology import act_dim, obs_dim
+    net = ActorCritic(obs_dim(2, False), act_dim(2))
+    print(f"\npolicy+value parameters (2 legs, free torso): "
+          f"{net.n_params():,} — still nothing for ZeRO to shard, which "
+          f"is why this lab also uses launcher=python")
 
 
 if __name__ == "__main__":

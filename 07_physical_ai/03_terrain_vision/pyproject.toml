@@ -1,0 +1,28 @@
+[project]
+name = "terrain-vision"
+version = "0.1.0"
+description = "Four terrains, a depth camera, and whether the robot needs to look"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.9",
+    "mujoco>=3.2",
+    "gymnasium>=1.0",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "imageio>=2.34",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+tracking = ["wandb>=0.18"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

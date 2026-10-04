@@ -77,6 +77,7 @@ TIER3 = {
     "05_video_speech/04_omni_eval": "claims a model does or does not fuse",
     "07_physical_ai/01_obstacle_hopper": "compares a height-blind policy against a seeing one",
     "07_physical_ai/02_biped_stairs": "compares four morphologies on one staircase",
+    "07_physical_ai/03_terrain_vision": "claims a depth camera beats proprioception",
 }
 
 BASELINE = re.compile(r"\*\*Baseline:\*\*\s*\S", re.I)

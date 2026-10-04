@@ -268,6 +268,21 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/03_terrain_vision
+    title: "Terrain Vision: looking before you step"
+    summary: "You cannot feel for a descent. The first lab here where the robot needs an eye."
+    est_minutes: 15
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is XML, the teachers are 11k params.
+      - { label: "The three terrains (CPU)", cmd: "uv run vision_env.py" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_teacher.py --dry-run" }
+      - { label: "Train the teacher (~13 min)", cmd: "uv run train_teacher.py --name v3_priv_s0" }
+      - { label: "Train the blind control (~12 min)", cmd: "uv run train_teacher.py --no-privileged --name v3_blind_s0" }
+      # These two need a GPU to be worth doing, and the student needs the dataset.
+      - { label: "CPU vs GPU on the student", cmd: "uv run train_student.py --auto --bench", needs_gpu: true }
+      - { label: "Train the vision student", cmd: "uv run train_student.py --auto --device cuda", primary: true, needs_gpu: true }
+
   - id: 07_physical_ai/02_biped_stairs
     title: "Biped Stairs: a limb or a constraint?"
     summary: "Four robots, one staircase, and two switches that turn out to interact."
