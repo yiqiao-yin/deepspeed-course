@@ -2,10 +2,9 @@
 """
 Render the terrains, the policies, and what the robot actually sees.
 
-    uv run render.py --clip blind      # a trained policy with NO camera
-    uv run render.py --clip vision     # the same task, with depth
-    uv run render.py --clip tour       # one long run, all three terrains
-    uv run render.py --all
+    uv run render.py --all             # all six clips
+    uv run render.py --clip compare    # blind vs vision, the controlled pair
+    uv run render.py --clip heldout    # a staircase steeper than it trained on
 
 WHY THERE IS A DEPTH INSET
 --------------------------
@@ -20,17 +19,19 @@ the network -- not a prettier second render. Watch the staircase darken
 as the robot approaches it. That, plus the blank-image ablation in
 `train_student.py`, is the evidence; the animation alone is not.
 
-WHY `blind` IS THE HONEST "BEFORE"
-----------------------------------
-An under-trained policy falls over, which looks bad but shows nothing:
-every policy falls over early, with or without a camera. `blind` is a
-FULLY trained policy -- same algorithm, same steps, same reward -- that
-differs from the vision student in one respect only. When it misses the
-first tread it is not because it is under-trained. It is because it
-cannot see.
+WHICH "BLIND" ARM THE COMPARISON USES
+-------------------------------------
+`--clip compare` runs the blind BEHAVIOUR-CLONED student, not the blind
+PPO policy the first version of this lab animated. That matters: the
+PPO arm differs from the vision student in the camera AND in how it was
+trained, so animating the two side by side invited exactly the wrong
+conclusion -- and the published numbers drew it. The BC arm differs in
+one thing.
 
-`--clip blind --undertrained` renders the other thing as well, from a
-2-epoch checkpoint, for anyone who wants the ordinary before/after.
+One clip per scenario, because the terrains behave differently and an
+average over them hides the result: `flat` and `down` are cleared with
+no camera at all, and `up` is the only place the camera is worth
+anything.
 """
 
 from __future__ import annotations
@@ -240,27 +241,39 @@ def load_ppo(run: str):
     return act, meta
 
 
-def load_student(run: str = "student"):
-    """The vision student. Takes the depth frame as well as proprioception."""
+def load_student(run: str = "student_s2"):
+    """
+    A behaviour-cloned student, with or without a camera.
+
+    `use_depth` has to come from the CHECKPOINT. Building the camera
+    network by default and loading blind weights into it fails loudly
+    here (a 15-vs-271 shape mismatch), which is the good case -- but the
+    same omission in a scoring path would silently compare the wrong
+    architecture.
+    """
     import torch
     import torch.nn as nn
 
     from train_student import build
 
     ck = torch.load(HERE / "runs" / run / "student.pt", weights_only=False)
-    net = build(torch, nn, ck["proprio_dim"], 6, ck["width"])
+    use_depth = ck.get("use_depth", True)
+    net = build(torch, nn, ck["proprio_dim"], 6, ck["width"],
+                use_depth=use_depth)
     net.load_state_dict(ck["model"])
     net.eval()
 
     def act(obs, depth):
+        import numpy as np
         with torch.no_grad():
+            img = depth if depth is not None else np.zeros((64, 64), np.float32)
             return net(
-                torch.as_tensor(depth).unsqueeze(0),
+                torch.as_tensor(img).unsqueeze(0),
                 torch.as_tensor(obs[:ck["proprio_dim"]],
                                 dtype=torch.float32).unsqueeze(0),
             ).squeeze(0).numpy()
 
-    return act, {}
+    return act, use_depth
 
 
 def best_blind() -> str:
@@ -280,7 +293,7 @@ def best_blind() -> str:
 
 def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
             width: int, height: int, every: int, show_depth: bool,
-            needs_depth: bool):
+            needs_depth: bool, rise: float | None = None):
     """
     One episode, returned as HUD'd frames.
 
@@ -295,7 +308,8 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
     from vision_env import TerrainWorld
 
     env = TerrainWorld(kind=kind, privileged=False,
-                       depth=needs_depth or show_depth, seed=0)
+                       depth=needs_depth or show_depth, seed=0,
+                       fixed_rise=rise)
     obs, _ = env.reset(seed=seed)
 
     r = mujoco.Renderer(env.model, height=height, width=width)
@@ -317,13 +331,18 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
             # stick figure it was two labs ago. 108 shows the head's
             # width while keeping enough of the terrain's side profile
             # to see what the treads are doing.
-            cam.lookat[:] = [info["x"] + 0.18, 0, env.torso_height() - 0.42]
-            cam.distance, cam.elevation, cam.azimuth = 3.2, -9, 108
+            # Framed for the BD-1 head, which stands ~0.9 m above the
+            # torso origin. The earlier 3.2 m / -0.42 framing was set
+            # for a head a third the height and cut the new one off at
+            # the top of every frame.
+            cam.lookat[:] = [info["x"] + 0.05, 0, env.torso_height() + 0.02]
+            cam.distance, cam.elevation, cam.azimuth = 4.4, -7, 108
             r.update_scene(env.data, cam)
             alive = not info["fell"]
             frames.append(overlay(
                 r.render(), title=title, subtitle=subtitle,
-                stats=[("terrain", kind),
+                stats=[("terrain", kind if rise is None
+                                   else f"{kind}  rise {rise:.2f} m"),
                        ("distance", f"{info['x']:+.2f} m"),
                        ("torso height", f"{env.torso_height():.2f} m"),
                        ("return", f"{total:.0f}")],
@@ -341,80 +360,123 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
 
 
 # ------------------------------------------------------------------- clips
+#
+# One clip per scenario, and the comparison clip uses the RIGHT control.
+#
+# The first version of this lab animated a blind PPO policy against the
+# vision student and let the viewer conclude the camera was the
+# difference. It was not a controlled comparison -- those two arms
+# differ in the camera AND in how they were trained. `compare` now runs
+# the blind BEHAVIOUR-CLONED student, which differs from the vision
+# student in exactly one thing.
 
-def clip_blind(a) -> None:
-    """A fully trained policy that cannot see, meeting a staircase."""
-    run = best_blind()
-    act, meta = load_ppo(run)
-    print(f"  blind policy: {run} (past_all {meta['final']['past_all']:.0%})")
-    frames = []
-    for kind in ("up", "down"):
-        f, res = episode(act, kind, seed=a.seed,
-                         title="No camera", subtitle=f"{run} · proprioception only",
+
+def _student(a, blind: bool):
+    run = a.blind_student if blind else a.student
+    act, use_depth = load_student(run)
+    # Catch a mislabelled run rather than animating the wrong arm: a
+    # "blind" clip driven by a camera network would look identical and
+    # be a lie.
+    assert use_depth is not blind, (
+        f"{run} has use_depth={use_depth} but was asked for blind={blind}")
+    return act, run
+
+
+def clip_terrain(a, kind: str, blurb: str) -> None:
+    """One terrain, the vision student, with the depth inset."""
+    act, run = _student(a, blind=False)
+    f, res = episode(act, kind, seed=a.seed,
+                     title=f"Terrain: {kind}", subtitle=blurb,
+                     width=a.width, height=a.height, every=a.every,
+                     show_depth=True, needs_depth=True)
+    print(f"    {kind:<5} reached x={res['x']:+.2f}  "
+          f"{'cleared' if res['past'] else 'did NOT clear'}  ({run})")
+    _save(f, OUT / f"terrain-{kind}.gif", a)
+
+
+def clip_flat(a) -> None:
+    clip_terrain(a, "flat", "solved without a camera too — this is the control")
+
+
+def clip_up(a) -> None:
+    clip_terrain(a, "up", "the ONLY terrain where the camera measurably helps")
+
+
+def clip_down(a) -> None:
+    clip_terrain(a, "down", "100% without a camera — the thesis was backwards here")
+
+
+def clip_compare(a) -> None:
+    """
+    The controlled comparison: same teacher, same objective, one camera.
+
+    Both arms here are behaviour-cloned students. The only difference is
+    whether the network receives the depth image.
+    """
+    # A SELECTED episode, and the clip says so. On this blind
+    # checkpoint -- seed 0, the strongest of the three at 71% -- the
+    # blind student clears 12 of these 16 episode seeds. 8005 is one of
+    # the four where it does not. Picking an episode that shows the
+    # effect is fine; picking one and implying it is typical is not, so
+    # the rates are on the title card and in the caption.
+    frames = card(a.width, a.height, "Same teacher. Same training.",
+                  "The only difference is the camera.", 16)
+    frames += card(a.width, a.height, "One selected episode",
+                   "across seeds: no camera 45.8%, with camera 88.9%", 14)
+    for blind, label, blurb in (
+            (True,  "NO camera", "blind student — clears 45.8% of episodes"),
+            (False, "WITH camera", "vision student — clears 88.9%")):
+        act, run = _student(a, blind=blind)
+        frames += card(a.width, a.height, label, blurb, 12)
+        f, res = episode(act, "up", seed=a.compare_seed, title=label,
+                         subtitle=blurb,
                          width=a.width, height=a.height, every=a.every,
-                         show_depth=False, needs_depth=False)
-        print(f"    {kind:<5} reached x={res['x']:+.2f}  "
-              f"{'cleared' if res['past'] else 'did NOT clear'}")
-        frames += f + card(a.width, a.height, "", "", 6)
-    _save(frames[:-6], OUT / "terrain-blind.gif", a)
+                         show_depth=not blind, needs_depth=not blind)
+        print(f"    {label:<12} reached x={res['x']:+.2f}  "
+              f"{'cleared' if res['past'] else 'did NOT clear'}  ({run})")
+        frames += f
+    _save(frames, OUT / "terrain-compare.gif", a)
 
 
-def clip_vision(a) -> None:
-    """The student, same terrains, with the depth inset."""
-    act, _ = load_student(a.student)
-    frames = []
-    for kind in ("up", "down"):
-        f, res = episode(act, kind, seed=a.seed,
-                         title="With a camera",
-                         subtitle="vision student · 64×64 depth + proprioception",
-                         width=a.width, height=a.height, every=a.every,
-                         show_depth=True, needs_depth=True)
-        print(f"    {kind:<5} reached x={res['x']:+.2f}  "
-              f"{'cleared' if res['past'] else 'did NOT clear'}")
-        frames += f + card(a.width, a.height, "", "", 6)
-    _save(frames[:-6], OUT / "terrain-vision.gif", a)
+def clip_heldout(a) -> None:
+    """
+    A staircase steeper than any it trained on.
+
+    Training drew the rise from [0.06, 0.11] m. This is 0.13 m, where
+    the measured clear rate is 0%. The point of the clip is that the
+    failure is not a stumble -- the gait simply does not reach.
+    """
+    act, run = _student(a, blind=False)
+    frames = card(a.width, a.height, "Never trained on this",
+                  "rise 0.13 m — outside the training range of 0.06–0.11", 16)
+    f, res = episode(act, "up", seed=a.seed, rise=0.13,
+                     title="Unseen geometry",
+                     subtitle="rise 0.13 m — measured clear rate here is 0%",
+                     width=a.width, height=a.height, every=a.every,
+                     show_depth=True, needs_depth=True)
+    print(f"    heldout 0.13 reached x={res['x']:+.2f}  "
+          f"{'cleared' if res['past'] else 'did NOT clear'}  ({run})")
+    _save(frames + f, OUT / "terrain-heldout.gif", a)
 
 
 def clip_tour(a) -> None:
-    """The long one: every terrain, back to back, camera view throughout."""
-    act, _ = load_student(a.student)
+    """All three terrains, back to back, on one set of weights."""
+    act, run = _student(a, blind=False)
     frames = card(a.width, a.height, "One policy, three terrains",
-                  "flat · upstairs · downstairs — it is told which only by its camera", 14)
+                  "it is told which only by its camera", 14)
     for kind, blurb in (("flat", "nothing to do but walk"),
                         ("up", "three treads up — lift before contact"),
-                        ("down", "three treads down — you cannot feel a descent")):
+                        ("down", "three treads down")):
         frames += card(a.width, a.height, kind.upper(), blurb, 10)
         f, res = episode(act, kind, seed=a.seed,
                          title=f"Terrain: {kind}",
-                         subtitle="vision student · the same weights on all three",
-                         width=a.width, height=a.height, every=a.every,
-                         show_depth=True, needs_depth=True)
-        print(f"    {kind:<5} reached x={res['x']:+.2f}  "
-              f"{'cleared' if res['past'] else 'did NOT clear'}  "
-              f"({res['steps']} steps)")
-        frames += f
-    _save(frames, OUT / "terrain-tour.gif", a)
-
-
-def clip_untrained(a) -> None:
-    """The ordinary before/after: a 2-epoch student on the same terrain."""
-    if not (HERE / "runs" / "student_poor" / "student.pt").exists():
-        print("  no under-trained checkpoint. Make one:\n"
-              "      uv run train_student.py --epochs 2 --tag student_poor",
-              file=sys.stderr)
-        return
-    act, _ = load_student("student_poor")
-    frames = []
-    for kind in ("up", "down"):
-        f, res = episode(act, kind, seed=a.seed,
-                         title="Under-trained",
-                         subtitle="same network, 2 epochs instead of 40",
+                         subtitle="the same weights on all three",
                          width=a.width, height=a.height, every=a.every,
                          show_depth=True, needs_depth=True)
         print(f"    {kind:<5} reached x={res['x']:+.2f}  "
               f"{'cleared' if res['past'] else 'did NOT clear'}")
-        frames += f + card(a.width, a.height, "", "", 6)
-    _save(frames[:-6], OUT / "terrain-untrained.gif", a)
+        frames += f
+    _save(frames, OUT / "terrain-tour.gif", a)
 
 
 def _save(frames, path, a) -> None:
@@ -431,8 +493,8 @@ def _save(frames, path, a) -> None:
           f"{path.stat().st_size / 1024:.0f} KB)")
 
 
-CLIPS = {"blind": clip_blind, "vision": clip_vision, "tour": clip_tour,
-         "untrained": clip_untrained}
+CLIPS = {"flat": clip_flat, "up": clip_up, "down": clip_down,
+         "compare": clip_compare, "heldout": clip_heldout, "tour": clip_tour}
 
 
 def main() -> int:
@@ -440,7 +502,18 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--clip", choices=sorted(CLIPS), default="tour")
     ap.add_argument("--all", action="store_true")
-    ap.add_argument("--student", default="student")
+    ap.add_argument("--student", default="student_s2",
+                    help="the vision arm to animate")
+    ap.add_argument("--blind-student", default="student_blind",
+                    help="the CONTROL arm: a behaviour-cloned student "
+                         "with no camera. Not the blind PPO policy, "
+                         "which differs in two things at once.")
+    ap.add_argument("--compare-seed", type=int, default=8005,
+                    help="episode seed for the comparison clip. Selected so "
+                         "the measured difference is visible; the blind arm "
+                         "clears 12 of 16 nearby seeds, so this is one of "
+                         "the four it misses, and the clip labels it as "
+                         "selected rather than typical.")
     ap.add_argument("--seed", type=int, default=8002,
                     help="8002 clears all three terrains. The student is "
                          "79%% on `up`, so some seeds genuinely fail -- "

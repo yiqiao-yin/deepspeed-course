@@ -173,6 +173,57 @@ The mean-image control lands at 62–71% on upstairs, which is where the
 of "no usable camera" agreeing is the consistency check that says the
 control measures what it claims.
 
+## Watch it
+
+One clip per scenario, because the terrains do not behave alike and an
+average over them hides the result. Every clip carries the **64×64 depth
+image the policy is actually driving on**, from the same call that feeds
+the network.
+
+### The controlled comparison
+
+![blind vs vision on upstairs](/img/physical/terrain-compare.gif)
+
+Two behaviour-cloned students, same teacher, same objective. The only
+difference is the camera. **This is a selected episode** — across seeds
+the blind arm clears 45.8% and the vision arm 88.9%, so this is one of
+the roughly half the blind student misses, chosen because it shows the
+effect. It is not a typical episode and the clip says so.
+
+### The three terrains
+
+![flat](/img/physical/terrain-flat.gif)
+
+`flat` is the control. A student with no camera clears it 100% of the
+time too.
+
+![upstairs](/img/physical/terrain-up.gif)
+
+`upstairs` is the only terrain where the camera measurably helps — the
+foot has to be lifted *before* contact.
+
+![downstairs](/img/physical/terrain-down.gif)
+
+`downstairs` is where the original thesis said vision was essential.
+Every arm clears it 100% of the time, camera or not.
+
+### Where it breaks
+
+![a staircase steeper than it trained on](/img/physical/terrain-heldout.gif)
+
+Rise 0.13 m, outside the training range of 0.06–0.11. The measured clear
+rate here is **0%**, and the failure is not a stumble — the gait simply
+does not reach the first tread.
+
+### All three, one set of weights
+
+![the tour](/img/physical/terrain-tour.gif)
+
+```bash
+uv run render.py --all
+```
+
+
 ## Does it generalise?
 
 Training drew the stair rise from **[0.06, 0.11] m**. This walks it
