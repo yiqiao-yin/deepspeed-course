@@ -64,8 +64,14 @@ one-legged seed ever does.
 ![Interaction plot](/img/physical/stairs-interaction.png)
 
 With **one** leg, freeing the torso **helps**: 0.63 → 1.37 treads. With
-**two**, it costs a little climbing and a lot of return: 3.00 → 2.93
-treads, 2203 → 985.
+**two**, it costs a lot of return and **nothing measurable in climbing**:
+2203 → 985 return (p = 0.022), against 3.00 → 2.93 treads (p = 0.37, i.e.
+one seed landing at 2.8 — noise).
+
+The interaction is carried by the return metric and by the one-legged
+side. An earlier version of this paragraph also claimed the torso cost
+"a little climbing"; three seeds do not support that, and the claim has
+been withdrawn.
 
 The lines are not parallel, so no main-effects summary of this experiment
 is honest. You cannot say "freeing the torso costs X" — it depends on what
@@ -156,8 +162,9 @@ The useful parallelism is `--jobs`: a sweep is twelve independent
 processes, and twelve cores beat any GPU for this shape of work. That
 remains true until the policy itself is large, which is where
 [lab 1's Next Step section](./obstacle-hopper#next-step-how-this-scales-to-real-humanoid-work)
-picks up — vision-language-action models at 7B, where the sharding this
-course is about becomes necessary.
+picks up. [Lab 3](./terrain-vision) is where a GPU first wins in this
+category — a 193k-parameter vision student at 13.6× — and even that is
+not a sharding problem.
 
 ## Run it
 

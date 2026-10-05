@@ -59,47 +59,112 @@ def student() -> dict:
     return json.loads((RUNS / "student" / "summary.json").read_text())
 
 
+def results() -> dict:
+    import json
+    return json.loads((RUNS / "results.json").read_text())
+
+
 def fig_arms(plt) -> None:
     """
-    The figure the lab exists for: three arms, per terrain.
+    Four arms, because two was not enough to say anything.
 
-    Per terrain and never averaged. `flat` is solvable blind, so a mean
-    over all three would dilute the only two columns that carry the
-    result -- and would have reported a modest overall gap instead of
-    the 71-point one on ascent.
+    The lab originally compared a VISION student against a BLIND PPO
+    policy and attributed the whole gap to the camera. Those two differ
+    in the camera AND in how they were trained, so the comparison could
+    not separate them. The two middle bars are the arms that were
+    missing.
     """
     import numpy as np
 
-    priv, blind, st = load("v3_priv"), load("v3_blind"), student()
-    fig, ax = plt.subplots(figsize=(8.4, 4.6))
+    r = results()["arms"]
+    fig, ax = plt.subplots(figsize=(9.2, 4.8))
     fig.patch.set_facecolor(DEEP)
 
+    def bc(depth):
+        return [a["rollout"]["vision"] for n, a in r.items()
+                if n.startswith("student") and a.get("use_depth") is depth]
+
+    ARMS = [
+        ("blind\nPPO", [s for s in r["blind_ppo"]["seeds"]], BLIND),
+        ("blind\nBC", bc(False), "#e8a33d"),
+        ("vision\nBC", bc(True), VISION),
+        ("privileged\nPPO (oracle)", [s for s in r["privileged_ppo"]["seeds"]], PRIV),
+    ]
     xs = np.arange(len(KINDS))
-    w = 0.26
-    for k, (name, colour, vals, err) in enumerate((
-        ("privileged — told the terrain", PRIV,
-         [np.mean([j["final"][f"past_{t}"] for j in priv]) for t in KINDS],
-         [np.std([j["final"][f"past_{t}"] for j in priv]) for t in KINDS]),
-        ("blind — proprioception only", BLIND,
-         [np.mean([j["final"][f"past_{t}"] for j in blind]) for t in KINDS],
-         [np.std([j["final"][f"past_{t}"] for j in blind]) for t in KINDS]),
-        ("vision — 64×64 depth", VISION,
-         [st["rollout"]["vision"][t] for t in KINDS], None),
-    )):
-        ax.bar(xs + (k - 1) * w, vals, w, yerr=err, color=colour,
-               edgecolor=GRID, ecolor=MUTED, capsize=4, label=name)
+    w = 0.2
+    for i, (name, seeds, colour) in enumerate(ARMS):
+        m = [np.mean([s[k] for s in seeds]) for k in KINDS]
+        e = [np.std([s[k] for s in seeds], ddof=1) for k in KINDS]
+        ax.bar(xs + (i - 1.5) * w, m, w, yerr=e, color=colour, edgecolor=GRID,
+               ecolor=MUTED, capsize=3, label=name.replace("\n", " "))
 
     ax.set_xticks(xs)
     ax.set_xticklabels(["flat", "upstairs", "downstairs"])
-    ax.set_ylim(0, 1.08)
+    ax.set_ylim(0, 1.14)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    style(ax, "What the camera buys, terrain by terrain", "",
-          "episodes clearing the terrain")
+    ax.annotate("only this column moves", xy=(1, 1.06), ha="center",
+                color=MUTED, fontsize=9)
+    style(ax, "Four arms, three seeds each — flat and downstairs are "
+              "solved WITHOUT a camera", "", "episodes clearing the terrain")
     legend(ax)
     fig.tight_layout()
     fig.savefig(OUT / "terrain-arms.png", dpi=150, facecolor=DEEP)
     plt.close(fig)
     print("  terrain-arms.png")
+
+
+def fig_decomposition(plt) -> None:
+    """Where the published 12.5% -> 89% on `up` actually came from."""
+    import numpy as np
+
+    r = results()["arms"]
+    ppo = np.mean([s["up"] for s in r["blind_ppo"]["seeds"]])
+    bcb = np.mean([a["rollout"]["vision"]["up"] for n, a in r.items()
+                   if n.startswith("student") and not a.get("use_depth")])
+    bcv = np.mean([a["rollout"]["vision"]["up"] for n, a in r.items()
+                   if n.startswith("student") and a.get("use_depth")])
+
+    fig, ax = plt.subplots(figsize=(8.6, 3.2))
+    fig.patch.set_facecolor(DEEP)
+    ax.barh([0], [ppo], color=BLIND, edgecolor=GRID, label="blind PPO baseline")
+    ax.barh([0], [bcb - ppo], left=[ppo], color="#e8a33d", edgecolor=GRID,
+            label=f"+{100*(bcb-ppo):.0f} from DISTILLATION (no camera)")
+    ax.barh([0], [bcv - bcb], left=[bcb], color=VISION, edgecolor=GRID,
+            label=f"+{100*(bcv-bcb):.0f} from the CAMERA")
+    ax.set_yticks([])
+    ax.set_xlim(0, 1.0)
+    ax.xaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    style(ax, "Upstairs: the headline was two effects, not one", "", "")
+    legend(ax)
+    fig.tight_layout()
+    fig.savefig(OUT / "terrain-decomposition.png", dpi=150, facecolor=DEEP)
+    plt.close(fig)
+    print("  terrain-decomposition.png")
+
+
+def fig_heldout(plt) -> None:
+    """Does it work on stairs steeper than it ever trained on? Upstairs, no."""
+    r = results()["heldout"]
+    fig, ax = plt.subplots(figsize=(8.2, 4.2))
+    fig.patch.set_facecolor(DEEP)
+
+    for terrain, colour in (("up", VISION), ("down", PRIV)):
+        xs = sorted(float(k) for k in r[terrain])
+        ys = [r[terrain][f"{x:.2f}"]["rate"] for x in xs]
+        ax.plot(xs, ys, color=colour, lw=2.2, marker="o", markersize=7,
+                label=terrain)
+    ax.axvspan(0.06, 0.11, color="#1e5f8f", alpha=0.18)
+    ax.annotate("trained here", xy=(0.085, 1.04), ha="center", color=MUTED,
+                fontsize=9)
+    ax.set_ylim(-0.05, 1.12)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    style(ax, "Outside the training range, only UPSTAIRS breaks",
+          "stair rise (m)", "episodes clearing the terrain")
+    legend(ax)
+    fig.tight_layout()
+    fig.savefig(OUT / "terrain-heldout.png", dpi=150, facecolor=DEEP)
+    plt.close(fig)
+    print("  terrain-heldout.png")
 
 
 def fig_ablation(plt) -> None:
@@ -112,23 +177,28 @@ def fig_ablation(plt) -> None:
     """
     import numpy as np
 
-    st = student()
-    fig, ax = plt.subplots(figsize=(7.0, 4.3))
+    r = results()["arms"]
+    st = r["student_s2"]["rollout"]
+    fig, ax = plt.subplots(figsize=(8.2, 4.3))
     fig.patch.set_facecolor(DEEP)
 
     xs = np.arange(len(KINDS))
-    w = 0.34
-    ax.bar(xs - w / 2, [st["rollout"]["vision"][t] for t in KINDS], w,
-           color=VISION, edgecolor=GRID, label="camera working")
-    ax.bar(xs + w / 2, [st["rollout"]["blank"][t] for t in KINDS], w,
-           color=BLIND, edgecolor=GRID, label="camera blanked")
+    w = 0.26
+    ax.bar(xs - w, [st["vision"][t] for t in KINDS], w,
+           color=VISION, edgecolor=GRID, label="real depth")
+    ax.bar(xs, [st["mean"][t] for t in KINDS], w,
+           color="#e8a33d", edgecolor=GRID,
+           label="training-set MEAN image (in-distribution control)")
+    ax.bar(xs + w, [st["blank"][t] for t in KINDS], w,
+           color=BLIND, edgecolor=GRID,
+           label="all zeros (OUT-of-distribution — a weak control)")
 
     ax.set_xticks(xs)
     ax.set_xticklabels(["flat", "upstairs", "downstairs"])
     ax.set_ylim(0, 1.08)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    style(ax, "Feed the same policy a blank image", "",
-          "episodes clearing the terrain")
+    style(ax, "The zeros control destroys even FLAT, which needs no camera",
+          "", "episodes clearing the terrain")
     legend(ax)
     fig.tight_layout()
     fig.savefig(OUT / "terrain-ablation.png", dpi=150, facecolor=DEEP)
@@ -226,6 +296,8 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     print(f"  writing to {OUT}")
     fig_arms(plt)
+    fig_decomposition(plt)
+    fig_heldout(plt)
     fig_ablation(plt)
     fig_curves(plt)
     fig_depth(plt)

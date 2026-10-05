@@ -418,13 +418,17 @@ So `--device auto` resolves to CPU here. `--device cuda` is supported and
 reported, not recommended. This lab is the **seventh** declared
 `launcher="python"` exception.
 
-That is not an apology for the category. It is the first rung. Lab 2 is a
-7B vision-language-action policy that needs ~27 GB for LoRA fine-tuning at
-minimum and 60–72 GB at a useful batch size — genuine ZeRO territory, the
-same shape as [`gpt_oss_lora`](/docs/tutorials/llms/gpt-oss-finetuning).
-The progression is *toy physics → learned control → robot foundation models
-that do not fit on one card*, and pretending the first rung needs sharding
-would be the cargo cult this course argues against everywhere else.
+That is not an apology for the category. It is the first rung.
+
+This paragraph used to predict that *"lab 2 is a 7B vision-language-action
+policy needing ~27 GB for LoRA"*. That never happened —
+[lab 2](./biped-stairs) is another small-policy study (11,597 parameters)
+and [lab 3](./terrain-vision) is a 193k-parameter vision student, which is
+the first place in this category a GPU wins at all (13.6×) and is *still*
+not a sharding problem. The direction is right and the timetable was
+invented; VLA models at 7B are genuine ZeRO territory, the same shape as
+[`gpt_oss_lora`](/docs/tutorials/llms/gpt-oss-finetuning), and this course
+has not reached them. A page that predicts the future dates badly.
 
 `tests/test_obstacle_hopper.py` fails if the policy ever exceeds 1M
 parameters, so that justification cannot go stale quietly.

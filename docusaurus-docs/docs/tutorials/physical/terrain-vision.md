@@ -2,30 +2,28 @@
 sidebar_position: 3
 ---
 
-# You cannot feel for a descent
+# The ablation that changed two things
 
-[Lab 1](./obstacle-hopper) gave a hopper the height of the obstacle in
-front of it, then took it away. No difference. [Lab 2](./biped-stairs)
-gave a biped the rise of each tread, then took it away. No difference.
+:::warning This page was wrong, and the correction is the lesson
+This lab originally reported that a depth camera took a robot from
+**12.5% to 79%** on a staircase, and concluded that vision was necessary
+because *"you cannot feel for a descent."*
 
-Both nulls were real, and both reproduce a known result: blind
-proprioceptive locomotion is genuinely capable, because **a leg that
-touches something can feel it**. Four more designs after those came back
-null too. The honest conclusion was not "vision does not help" — it was
-that we had not yet built a task where vision is *necessary*.
+An audit found the comparison varied **two** things at once. The missing
+control has now been run. The camera is real but smaller than claimed,
+and the thesis pointed the **wrong way**: descent is the one terrain
+solved perfectly *without* a camera.
 
-This lab is that task, and the thing that makes it work is one
-asymmetry:
+The original claim, the error, and the corrected numbers are all below.
+Nothing has been quietly edited.
+:::
 
-> You cannot feel for a descent. By the time the swinging foot finds
-> nothing underneath it, the robot is already falling.
+## The task
 
-![Three arms, per terrain](/img/physical/terrain-arms.png)
-
-## The design
-
-A two-legged robot walks along a raised plateau. Partway along, the
-ground does one of three things.
+A two-legged robot walks along a raised plateau. Partway along the ground
+stays flat, climbs three steps, or drops three steps. The approach slab
+is identical in all three, so from its own joints the robot cannot tell
+which is coming.
 
 ```mermaid
 flowchart LR
@@ -50,389 +48,245 @@ flowchart LR
   class U,D bright
 ```
 
-The approach slab is **identical in all three**, so a robot standing on
-it cannot tell from its own joints what is coming. The three demand
-incompatible responses. `flat` is the control that proves the other two
-are not merely "harder".
+## The mistake
 
-## Three arms
+The first version of this lab compared two robots:
 
-| arm | sees | deployable? |
+| arm | information | **how it was trained** |
 |---|---|---|
-| **privileged** | the terrain type and geometry, handed over | no — an oracle |
-| **blind** | proprioception only, 15 numbers | yes, and it is the baseline |
-| **vision** | proprioception **+ a 64×64 depth image** | yes — the thing being tested |
+| blind | proprioception only | PPO, from scratch, 1.5M steps |
+| vision | proprioception **+ depth** | **behaviour cloning from a privileged teacher** |
 
-The privileged arm is a *teacher*: it needs no rendering, so it trains
-at full speed. The vision arm is a *student* trained by behaviour
-cloning on the teacher's actions. The blind arm is what the student has
-to beat.
+Those differ in **two** respects, not one. The vision arm does not merely
+have a camera — it is imitating a teacher that was handed the terrain
+type directly. Crediting the whole gap to the camera assumes the training
+method contributed nothing, and nobody checked.
 
-### The result
+**Behaviour cloning** (BC) means: run a teacher that *was* told the
+answer, record what a real robot could have seen paired with what the
+teacher did, then train a network to reproduce those actions by ordinary
+supervised regression. No reward, no exploration. It is the standard
+teacher–student recipe from quadruped locomotion (Lee et al. 2020;
+Kumar et al. 2021).
 
-Teachers: 3 seeds × 1.5M steps. Vision: one seed, 24 evaluation
-episodes per terrain. Fraction of episodes clearing the terrain.
+The missing cell is obvious once stated: **a student distilled from the
+same teacher, by the same objective, with no camera.**
 
-| terrain | privileged | blind | **vision** |
+## Four arms, three seeds each
+
+![Four arms, per terrain](/img/physical/terrain-arms.png)
+
+Fraction of 24 evaluation episodes clearing the terrain, mean of three
+seeds.
+
+| arm | flat | **upstairs** | downstairs |
 |---|---|---|---|
-| flat | 100% | 100% | 100% |
-| upstairs | 83% | **12.5%** | **79%** |
-| downstairs | 100% | **54.2%** | **100%** |
+| blind PPO (the original baseline) | 100% | 12.5% | 54.2% |
+| **blind BC** — distilled, no camera | 100% | **45.8%** | **100%** |
+| **vision BC** — distilled, with camera | 100% | **88.9%** | 100% |
+| privileged PPO (oracle, undeployable) | 100% | 83.3% | 100% |
 
-The camera has **71 points to recover on ascent and 46 on descent**.
-Depth recovers most of the first and all of the second, from images
-alone, with nothing privileged at deployment.
+Read the `flat` and `downstairs` columns first. **Every arm scores 100%,
+including the one with no camera.** Whatever the camera is worth, it is
+worth nothing there.
 
-## Nobody told it to learn flat first
+### Decomposing the original headline
 
-![Learning curves per terrain](/img/physical/terrain-curves.png)
+![Where the gain came from](/img/physical/terrain-decomposition.png)
 
-| steps | return | flat | up | down |
-|---|---|---|---|---|
-| 12k | 125 | 0% | 0% | 0% |
-| 197k | 801 | **100%** | 0% | 62% |
-| 381k | 1211 | 100% | 50% | **100%** |
-| 565k | 1426 | 100% | **100%** | 100% |
+On `upstairs`, the published 12.5% → 89% was two effects stacked:
 
-Flat, then descent, then ascent. The reward function contains no
-curriculum — that ordering is what falls out of the difficulty.
+- **+33 points from distillation alone** (12.5% → 45.8%), no camera involved
+- **+43 points from the camera** (45.8% → 88.9%)
 
-## The objectives, written out
+The camera is the larger single contributor — but the original page
+credited it with all 76, and roughly 33 of those belonged to the training
+method.
 
-Two different losses run in this lab, and the split is the point: the
-teacher is trained by reinforcement learning, the student by supervised
-regression onto the teacher's output.
+:::danger Neither effect is significant at three seeds
+Camera: p = 0.098. Distillation: p = 0.221. Both *look* real and neither
+is established. The seed spread is large enough that three runs cannot
+separate them — the same lesson
+[lab 1](./obstacle-hopper#the-result-the-ablation-failed) learned the
+hard way.
+:::
 
-```mermaid
-flowchart LR
-  subgraph RL["TEACHER — reinforcement learning, CPU"]
-    direction TB
-    R1["privileged state<br/>15 proprioception + 5 terrain"]
-    R2["PPO: clipped surrogate + GAE"]
-    R1 --> R2
-  end
-  subgraph REC["COLLECT — once, not in a loop"]
-    direction TB
-    C1["roll out the teacher<br/>+ exploration noise"]
-    C2["render depth ONCE<br/>43,102 frames"]
-    C1 --> C2
-  end
-  subgraph BC["STUDENT — behaviour cloning, GPU"]
-    direction TB
-    B1["64x64 depth + 15 proprioception"]
-    B2["regress onto the teacher's<br/>CLEAN action"]
-    B1 --> B2
-  end
-  RL --> REC --> BC
+### The claim that does survive: reliability
 
-  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
-  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
-  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
-  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
-  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
-
-  class RL,REC,BC deep
-  class R1,C1,C2,B1 base
-  class R2 steel
-  class B2 bright
-```
-
-### What the teacher is paid
-
-Dense and deliberately plain — forward velocity, a survival bonus, and a
-small penalty on torque:
-
-$$
-r_t = \underbrace{\frac{x_t - x_{t-1}}{\Delta t}}_{\text{forward velocity}}
-    + \underbrace{1.0}_{\text{alive}}
-    - \underbrace{10^{-3}\lVert a_t \rVert^2}_{\text{control cost}}
-$$
-
-with $\Delta t = 0.01\,\text{s}$. Nothing in $r_t$ mentions terrain, stairs,
-or which foot to lift. The entire curriculum — flat, then descent, then
-ascent — emerges from this.
-
-The survival bonus is why the episode must *terminate* on a fall rather
-than merely stop paying: at $+1.0$ per step over 600 steps, standing
-still is worth 600, which has to be made unavailable rather than merely
-unattractive.
-
-### Advantages: GAE
-
-The critic's error at each step, and the exponentially-weighted sum of
-those errors:
-
-$$
-\begin{aligned}
-\delta_t &= r_t + \gamma\,(1 - d_t)\,V(s_{t+1}) - V(s_t) \\[4pt]
-\hat{A}_t &= \delta_t + \gamma\lambda\,(1 - d_t)\,\hat{A}_{t+1}
-\end{aligned}
-$$
-
-with $\gamma = 0.99$, $\lambda = 0.95$, and $d_t$ marking a terminal
-transition. The $(1 - d_t)$ factor appears **twice** on purpose — once to
-stop the next state's value leaking across an episode boundary, and once
-to stop the advantage recursion doing the same. Dropping either produces
-advantages that quietly blend two unrelated episodes, which trains to
-something mediocre rather than failing.
-
-The two limits are worth knowing, and `tests/test_obstacle_hopper.py`
-pins both to $10^{-6}$: at $\lambda = 1$ this collapses to the
-Monte-Carlo return, and at $\lambda = 0$ to one-step TD.
-
-### The policy loss: PPO's clipped surrogate
-
-With the importance ratio
-$\rho_t(\theta) = \exp\!\big(\log \pi_\theta(a_t \mid s_t) - \log \pi_{\theta_{\text{old}}}(a_t \mid s_t)\big)$:
-
-$$
-\mathcal{L}^{\text{policy}}(\theta)
-= -\,\mathbb{E}_t\Big[
-\min\big(\rho_t \hat{A}_t,\;
-\operatorname{clip}(\rho_t,\,1-\epsilon,\,1+\epsilon)\,\hat{A}_t\big)
-\Big]
-$$
-
-with $\epsilon = 0.2$. The $\min$ is what makes the objective
-*pessimistic*: the clip may always make the update worse, never better.
-Taking $\max$ instead — an easy slip — yields a loss that still descends
-while removing the trust region entirely.
-
-### The student loss
-
-Plain mean squared error onto the teacher's action. Given depth image
-$I_t$, proprioception $p_t$, and student $f_\phi$:
-
-$$
-\mathcal{L}^{\text{BC}}(\phi)
-= \frac{1}{N}\sum_{t=1}^{N}
-\big\lVert f_\phi(I_t,\,p_t) - a^{\text{teacher}}_t \big\rVert^2
-$$
-
-The label $a^{\text{teacher}}_t$ is the teacher's **clean** action, while
-the action actually *executed* during collection carried exploration
-noise $a_t = \operatorname{clip}(a^{\text{teacher}}_t + \eta,\,-1,\,1)$,
-$\eta \sim \mathcal{N}(0,\,0.15^2)$.
-
-That mismatch is deliberate. The noise is there to put the robot into
-states slightly off the ideal line, so the dataset contains *recoveries*;
-the label says what the teacher would do **here**, not how it got here.
-Train on noise-free trajectories and the student has never seen the
-first state it drifts into.
-
-Measured: validation MSE falls $0.1611 \rightarrow 0.0164$ over 40
-epochs, a $9.8\times$ reduction and still falling.
-
-### What the camera reports
-
-Depth is clipped to a fixed window and rescaled to $[0, 1]$:
-
-$$
-I_t = \frac{\operatorname{clip}(z_t,\,z_{\text{near}},\,z_{\text{far}})
-             - z_{\text{near}}}
-            {z_{\text{far}} - z_{\text{near}}},
-\qquad z_{\text{near}} = 0.8,\; z_{\text{far}} = 3.5
-$$
-
-The window is **fixed**, not per-frame. Normalising each frame to its own
-$\min$/$\max$ was tried first and destroyed the signal — absolute
-distance *is* the information, and per-frame scaling is precisely the
-operation that discards it.
-
-## A good score is not evidence
-
-Both previous labs produced convincing animations of policies that
-turned out not to be using the information in question. So this lab's
-burden of proof is explicit, and all three checks run every time the
-student trains.
-
-### Blank the camera
-
-![The blank-image ablation](/img/physical/terrain-ablation.png)
-
-Feed the trained student a black image and re-measure. If it still
-scores, it was reading proprioception all along.
-
-| terrain | camera working | camera blanked |
-|---|---|---|
-| flat | 100% | **0%** |
-| upstairs | 79% | **0%** |
-| downstairs | 100% | **0%** |
-
-It does not degrade — it collapses.
-
-### Probe the frozen encoder
-
-A single linear layer on the encoder's features, predicting terrain
-type: **64.0% against a 34.3% chance baseline.** Terrain is close to
-linearly decodable from what the encoder learned, which is what "it has
-learned to see" means operationally.
-
-### Report per terrain, never averaged
-
-`flat` is solvable blind. An average across three terrains would have
-reported a modest overall gap instead of the 71-point one that is
-actually there.
-
-## What the camera receives
-
-![Mean depth image per terrain](/img/physical/terrain-depth.png)
-
-Averaged over every frame of each terrain in the training set. The three
-mean images differ visibly — the cheapest possible evidence that the
-task is not blind-equivalent.
-
-The separation is not subtle: mean depth is **1.86 m looking up a
-staircase against 3.03 m looking down one**. That gap is what the
-encoder learns, and it is exactly what per-frame normalisation would
-have destroyed — see [the camera's rescaling](#what-the-camera-reports).
-
-## The animation, with the camera feed
-
-![The tour](/img/physical/terrain-tour.gif)
-
-Every clip carries the 64×64 depth image the policy is **actually
-driving on**, from the same call that feeds the network — not a prettier
-second render. Watch the staircase resolve into bands as the robot
-approaches it.
-
-```bash
-uv run render.py --all
-```
-
-The honest "before" is `terrain-blind.gif`: a **fully trained** policy
-that differs from the student in exactly one respect. An under-trained
-policy also falls over, but that shows nothing — every policy falls over
-early, camera or not. When the blind policy misses a tread, the camera
-is the only available explanation.
-
-## The terrain that argued the other way
-
-A fourth terrain — a gap to leap — was built, trained and **excluded**.
-On `hop`, the ablation reversed:
-
-| seed | 0 | 1 | 2 |
+| arm, `upstairs` | seeds | mean | sd |
 |---|---|---|---|
-| blind | 1.00 | 1.00 | 1.00 |
-| privileged | 0.50 | 1.00 | 0.00 |
+| blind BC | 71% · **8%** · 58% | 45.8% | **0.331** |
+| vision BC | 79% · 88% · 100% | 88.9% | **0.105** |
 
-The arm that cannot see won, on every seed. That is not noise, it is the
-task: you do not need to *see* a gap to clear one, because committing to
-a maximal leap works either way. Specialists trained on `hop` alone
-scored 0.75 / 0.50 / 0.25.
+The blind student's worst seed is **8%**. The vision student's worst is
+79%. Vision is **3.2× more consistent**, and its *worst* run beats the
+blind arm's *mean*.
 
-Including it would have meant publishing a four-terrain average in which
-one terrain silently argued the opposite of the other three — which is
-precisely the mistake [`11_moe`](../llms/moe-routing) shipped once, a finding
-that reversed at world size 2. The terrain stays buildable, stays out of
-the measured set, and the negative result is written down.
+"Vision makes climbing reliable" is better supported here than "vision
+makes climbing better" — and it is the more useful claim anyway. A
+locomotion policy that works on one training run in three is not a
+policy.
 
-## Where the GPU finally earns its place
+### The thesis was backwards
 
-This is the first lab in `07_physical_ai` where a GPU wins:
+The original page argued the lab existed because **you cannot feel for a
+descent**. Good intuition; not what the data says.
 
-```
-$ uv run train_student.py --bench
-  cpu       2860 +/-  145 samples/s
-  cuda     38677 +/-  778 samples/s      13.6x +/- 0.9
-```
+Descending is solved at **100% by every arm, on every seed, at every
+geometry tested** — including a student with no camera at all. The
+camera's entire measurable value is in **ascent**, where the foot must be
+lifted *before* contact rather than after it.
 
-Five repeats each. One timed call is a sample rather than a
-measurement, and the first run taken here read 12.9x purely because it
-landed at the bottom of a 12.5-14.5x range -- the ratio moves more than
-either absolute does, so the absolutes are the number to quote.
+The intuition fails on the reward's structure rather than the physics:
+falling ends the episode, so stepping down cautiously and absorbing the
+drop is already near-optimal. Nothing forces anticipation.
 
-Labs 1 and 2 both measured **CPU as faster** — 2.0× and 1.7× — because
-their work was MuJoCo stepping rather than arithmetic. The student here
-is a convolutional encoder about a hundred times larger, trained
-supervised over a fixed dataset with no simulator in the loop.
+## The ablation that proved less than it looked
 
-DeepSpeed is still the wrong tool. **193,222 parameters have nothing for
-ZeRO to shard.** "A GPU helps" and "DeepSpeed helps" are different
-claims, and this is the one lab in the category where they come apart.
+The original page's strongest-sounding evidence was: blank the camera,
+and performance collapses to 0% on every terrain.
 
-### Why behaviour cloning rather than on-policy RL
+![Camera ablations](/img/physical/terrain-ablation.png)
 
-Rendering costs **250×**: 7,077 physics steps/s with no camera, 79
-frames/s with depth. An on-policy vision run would take eight hours
-instead of four minutes.
+That control is invalid, and the figure shows why: **the zeros condition
+destroys `flat` too** — a terrain a camera-less student clears 100% of
+the time. A control that breaks a task solvable *without* the input is
+not measuring information.
 
-Behaviour cloning moves that cost out of the loop. The teacher acts on
-privileged state at full speed, depth is rendered **once** alongside it,
-and the student trains supervised on a fixed dataset — which is also the
-only part of the lab with real work for a GPU.
+The cause is in the encoding. Depth is normalised so `0.0` means **0.8 m**,
+the near clip. An all-zeros frame does not say *"no information"*; it says
+*"a wall 80 cm from your face"* — a confident reading, in a configuration
+the network never saw across 43,102 training frames. It broke the model
+rather than starving it.
 
-The dataset carries **exploration noise on the executed action** while
-the *label* stays the teacher's clean action. A dataset of perfect
-trajectories teaches a student nothing about recovering, and the first
-time it drifts it has never seen the state it is in.
+The right control is the **pixelwise mean of the training set**:
+in-distribution by construction, carrying no per-episode information.
 
-## The head that nearly broke the data
+| terrain | real depth | training mean | zeros |
+|---|---|---|---|
+| flat | 100% | 100% | 0% |
+| upstairs | 100% | 62% | 0% |
+| downstairs | 100% | 100% | 8% |
 
-The robot wears a large BD-1-style head. It is decoration — but making
-it decoration took care, because the head is not a decal. It is a rigid
-body carrying 19% of the robot's mass **and** the depth camera the whole
-lab is about.
+The mean-image control lands at 62–71% on upstairs, which is where the
+*separately trained* blind student lands too. Two different constructions
+of "no usable camera" agreeing is the consistency check that says the
+control measures what it claims.
 
-MuJoCo derives mass from geom volume, so scaling the head up multiplies
-its mass — about 6× here — silently changing the robot that 1.5M
-training steps were spent on. Instead every decorative geom is
-`density="0" contype="0" conaffinity="0"` and the body carries an
-explicit `<inertial>` pinned to the original's measured values.
+## Does it generalise?
 
-| | before | after |
-|---|---|---|
-| head mass | 4.252544 kg | 4.252544 kg |
-| total mass | 22.686363 kg | 22.686362 kg |
-| depth pixels | — | 0 difference |
+Training drew the stair rise from **[0.06, 0.11] m**. This walks it
+outside that range:
 
-The subtler risk is the second row. The camera is mounted **inside that
-body**, so decoration reaching into its field of view would put a
-constant blob in every depth frame the student ever trains on — while
-training still converged and the render looked better than before.
+![Held-out geometry](/img/physical/terrain-heldout.png)
 
-`tests/test_terrain_vision.py` proves geometrically that this cannot
-happen. The decoration is rigidly attached to the lens, so if every
-vertex of every head geom lies behind the camera's view plane in the
-head frame, no head geom can appear in any frame, in any pose, ever — a
-guarantee a render comparison cannot give, since it only samples the
-poses it happens to try.
+| rise (m) | 0.05 | 0.07 | 0.09 | 0.11 | 0.13 | 0.15 |
+|---|---|---|---|---|---|---|
+| | **out** | in | in | in | **out** | **out** |
+| upstairs | 92% | 100% | 92% | 92% | **0%** | **58%** |
+| downstairs | 100% | 100% | 100% | 100% | 100% | 100% |
 
-That check **failed on its first run**. A neck cylinder reached 1.64 cm
-into the view half-space and rendered harmlessly only because MuJoCo's
-near clipping plane happened to cut it. Accidental safety is not safety:
-widen the field of view later and a grey bar appears across every
-training image. The neck was removed.
+Descending is unaffected by geometry it has never seen. Climbing holds
+when extrapolating *shallower* and breaks when extrapolating *steeper* —
+and does so **non-monotonically**: 0% at 0.13 m, then 58% at 0.15 m.
 
-## Running it
+That reversal is not explained. At twelve episodes a cell it may be
+noise, or the rise may interact with gait phase. It is reported rather
+than smoothed, because an unexplained non-monotonicity is information
+about how narrow the result is.
+
+## What this lab now claims
+
+- Teacher–student distillation closes most of the gap on terrain a blind
+  policy struggles with — **including all of descent**.
+- A depth camera adds a further large gain on **ascent only**, and makes
+  it **far more reliable across seeds**.
+- Neither effect is statistically established at n=3.
+- Nothing generalises to stairs steeper than those trained on.
+
+What it no longer claims: that vision is *necessary*, that descent
+requires anticipation, or that the blanking test demonstrated anything.
+
+This is the **seventh** design in this category where a vision ablation
+came back weaker than it first appeared. The pattern is worth stating
+plainly: blind proprioceptive locomotion is far more capable than
+intuition suggests, and a controlled comparison is the only way to learn
+what a sensor is actually worth.
+
+## The failure mode worth taking away
+
+The original result was not a typo or a bad run. It was **a plausible
+number, produced by correct code, that nobody controlled**. It agreed
+with a good intuition, it came with a figure generated from real run
+artifacts, and it passed a test that looked rigorous.
+
+Shipping the scripts guarantees the numbers match what the code
+produced. It does not guarantee the *comparison* was the right one. That
+gap is where this page went wrong, and it is the gap worth watching in
+any ML system: not the models that are obviously broken, but the ones
+that look right for a reason nobody tested.
+
+An ablation means something only if it changes **one** thing. This one
+changed two, and the direction of the error was the direction of the
+hypothesis — exactly when it is hardest to notice.
+
+## Reproducing all of it
 
 ```bash
 cd 07_physical_ai/03_terrain_vision
 uv sync
 
-uv run vision_env.py                                    # the terrains, untrained
-uv run train_teacher.py --name v3_priv_s0               # ~13 min, CPU
-uv run train_teacher.py --no-privileged --name v3_blind_s0
-uv run collect.py --episodes 120                        # ~9 min, writes 23 MB
-uv run train_student.py --device cuda                   # ~2 min + the three checks
-uv run train_student.py --bench                         # CPU vs GPU
+# the RL half — ~13 min per run on CPU, three seeds per arm
+for s in 0 1 2; do
+  uv run train_teacher.py                 --seed $s --name v3_priv_s$s  --quiet
+  uv run train_teacher.py --no-privileged --seed $s --name v3_blind_s$s --quiet
+done
+
+uv run collect.py --episodes 120              # renders the BC dataset once
+
+# the four student arms
+for s in 0 1 2; do
+  uv run train_student.py            --seed $s --tag student_s$s       --device cuda
+  uv run train_student.py --no-depth --seed $s --tag student_blind_s$s --device cuda
+done
+
+uv run ablations.py                           # consolidates the arms + held-out sweep
 uv run make_figures.py && uv run render.py --all
 ```
 
-No downloads: the world is an XML string and the data is generated.
+`--no-depth` is the control arm. The three camera conditions (real
+depth / training mean / zeros) are measured by `train_student.py` itself
+and land in each run's `summary.json`; `ablations.py` collects those into
+`runs/results.json` and adds the held-out geometry sweep. Every figure is
+read from those files, so nothing here can show a result a run did not
+produce.
 
-The logic checks need no GPU and no OpenGL, because the camera-occlusion
-check is geometric rather than a render comparison:
+Re-verify the arms independently, if you want to pay for it:
 
 ```bash
-uv run tests/test_terrain_vision.py
+uv run ablations.py --only arms      # ~1 h, re-rolls every arm from its checkpoint
+uv run ablations.py --only camera    # ~20 min, re-rolls the camera conditions
 ```
 
-## What this lab does not claim
+## Hardware
 
-- **The student is one seed.** The teachers are three per arm. A
-  24-episode evaluation moves by one episode for free, so the student's
-  per-terrain rates carry corresponding uncertainty.
-- **Nothing here has touched hardware.** There is no sim-to-real claim.
-- **`up` is not solved.** 79% is a large recovery from 12.5%, not a
-  solution.
+All of it ran on one laptop — RTX 3080 Ti (16 GB), 20-core i9. The
+teachers run on the **CPU**, where they are faster; only the students
+touch the GPU, at **13.6× ± 0.9** over five repeats. That is the first
+GPU win in this category, and it is still not a DeepSpeed case: 193,222
+parameters have nothing for ZeRO to shard.
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — the teacher–student-with-privileged-information template
+- Kumar et al., [RMA: Rapid Motor Adaptation](https://arxiv.org/abs/2107.04034), 2021
+- Miki et al., [Learning robust perceptive locomotion](https://arxiv.org/abs/2201.08117),
+  Science Robotics 2022 — proprioception and exteroception fused
+- Agarwal et al., [Legged locomotion in challenging terrains using egocentric vision](https://arxiv.org/abs/2211.07638),
+  CoRL 2022
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why three seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
