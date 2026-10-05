@@ -87,41 +87,41 @@ HEAD = """
         <inertial pos="0.003131217 0.00005429857 0" mass="4.252544"
                   quat="0.500663 0.499336 -0.500663 0.499336"
                   diaginertia="0.02797353 0.02100553 0.01533584"/>
-        <geom type="box" pos="-0.092 0 0.062" euler="0 -9 0"
-              size="0.160 0.300 0.092" rgba="0.86 0.86 0.84 1"
+        <geom type="box" pos="-0.132 0 0.240" euler="0 -9 0"
+              size="0.200 0.320 0.250" rgba="0.86 0.86 0.84 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="box" pos="-0.104 0 0.160" euler="0 -9 0"
-              size="0.138 0.288 0.018" rgba="0.31 0.34 0.39 1"
+        <geom type="box" pos="-0.150 0 0.490" euler="0 -9 0"
+              size="0.176 0.308 0.026" rgba="0.31 0.34 0.39 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="box" pos="0.036 0 0.114" euler="0 -9 0"
-              size="0.030 0.301 0.017" rgba="0.72 0.20 0.17 1"
+        <geom type="box" pos="0.030 0 0.365" euler="0 -9 0"
+              size="0.038 0.322 0.030" rgba="0.72 0.20 0.17 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="box" pos="-0.218 0 0.062" euler="0 -9 0"
-              size="0.038 0.302 0.090" rgba="0.72 0.20 0.17 1"
+        <geom type="box" pos="-0.300 0 0.240" euler="0 -9 0"
+              size="0.046 0.323 0.248" rgba="0.72 0.20 0.17 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="box" pos="-0.092 0 -0.026" euler="0 -9 0"
-              size="0.150 0.292 0.016" rgba="0.38 0.40 0.44 1"
+        <geom type="box" pos="-0.132 0 -0.045" euler="0 -9 0"
+              size="0.186 0.312 0.022" rgba="0.38 0.40 0.44 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="cylinder" fromto="0.000 0.218 0.062 0.058 0.218 0.053"
-              size="0.086" rgba="0.90 0.90 0.88 1"
+        <geom type="cylinder" fromto="0.010 0.232 0.240 0.092 0.232 0.228"
+              size="0.140" rgba="0.90 0.90 0.88 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="cylinder" fromto="0.030 0.218 0.058 0.066 0.218 0.052"
-              size="0.058" rgba="0.13 0.26 0.52 1"
+        <geom type="cylinder" fromto="0.048 0.232 0.236 0.100 0.232 0.228"
+              size="0.098" rgba="0.13 0.26 0.52 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="cylinder" fromto="0.010 -0.218 0.062 0.062 -0.218 0.054"
-              size="0.070" rgba="0.58 0.60 0.63 1"
+        <geom type="cylinder" fromto="0.014 -0.232 0.240 0.094 -0.232 0.229"
+              size="0.112" rgba="0.58 0.60 0.63 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="cylinder" fromto="0.028 -0.218 0.058 0.068 -0.218 0.053"
-              size="0.044" rgba="0.30 0.32 0.35 1"
+        <geom type="cylinder" fromto="0.050 -0.232 0.236 0.098 -0.232 0.229"
+              size="0.070" rgba="0.30 0.32 0.35 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="cylinder" fromto="0.020 0.030 0.046 0.064 0.030 0.040"
-              size="0.048" rgba="0.10 0.14 0.30 1"
+        <geom type="cylinder" fromto="0.020 0.040 0.155 0.086 0.040 0.146"
+              size="0.070" rgba="0.10 0.14 0.30 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="capsule" fromto="-0.200 0.205 0.165 -0.300 0.232 0.520"
-              size="0.0085" rgba="0.18 0.19 0.21 1"
+        <geom type="capsule" fromto="-0.300 0.240 0.490 -0.372 0.258 0.730"
+              size="0.013" rgba="0.18 0.19 0.21 1"
               density="0" contype="0" conaffinity="0"/>
-        <geom type="capsule" fromto="-0.200 -0.205 0.165 -0.300 -0.232 0.520"
-              size="0.0085" rgba="0.18 0.19 0.21 1"
+        <geom type="capsule" fromto="-0.300 -0.240 0.490 -0.372 -0.258 0.730"
+              size="0.013" rgba="0.18 0.19 0.21 1"
               density="0" contype="0" conaffinity="0"/>
 """
 

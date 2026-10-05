@@ -230,40 +230,53 @@ and per-frame scaling throws exactly that away.
 
 ## The animations
 
-```bash
-uv run render.py --all
-```
+One clip per scenario, because the terrains do not behave alike and an
+average over them hides the result. Every clip carries the **64×64 depth
+image the policy is actually driving on**, from the same call that feeds
+the network.
 
-Every vision clip carries the **64×64 depth image the policy is actually
-driving on**, drawn from the same `env.depth()` call that feeds the
-network — not a prettier second render.
+### The controlled comparison
 
-| clip | what it shows |
-|---|---|
-| `terrain-blind.gif` | a **fully trained** policy with no camera, missing the first tread |
-| `terrain-vision.gif` | the same two terrains, with depth |
-| `terrain-tour.gif` | all three terrains back to back on one set of weights |
-| `terrain-untrained.gif` | a 2-epoch checkpoint, for the conventional before/after |
+![blind vs vision on upstairs](../../docusaurus-docs/static/img/physical/terrain-compare.gif)
+
+Two behaviour-cloned students, same teacher, same objective. The only
+difference is the camera. **This is a selected episode** — across seeds
+the blind arm clears 45.8% and the vision arm 88.9%, so this is one of
+the roughly half the blind student misses, chosen because it shows the
+effect. It is not a typical episode and the clip says so.
+
+### The three terrains
+
+![flat](../../docusaurus-docs/static/img/physical/terrain-flat.gif)
+
+`flat` is the control. A student with no camera clears it 100% of the
+time too.
+
+![upstairs](../../docusaurus-docs/static/img/physical/terrain-up.gif)
+
+`upstairs` is the only terrain where the camera measurably helps — the
+foot has to be lifted *before* contact.
+
+![downstairs](../../docusaurus-docs/static/img/physical/terrain-down.gif)
+
+`downstairs` is where the original thesis said vision was essential.
+Every arm clears it 100% of the time, camera or not.
+
+### Where it breaks
+
+![a staircase steeper than it trained on](../../docusaurus-docs/static/img/physical/terrain-heldout.gif)
+
+Rise 0.13 m, outside the training range of 0.06–0.11. The measured clear
+rate here is **0%**, and the failure is not a stumble — the gait simply
+does not reach the first tread.
+
+### All three, one set of weights
 
 ![the tour](../../docusaurus-docs/static/img/physical/terrain-tour.gif)
 
-`blind` is the honest "before", and `untrained` is offered separately
-for a reason. An under-trained policy falls over, which looks bad but
-shows nothing — *every* policy falls over early, camera or not. The
-blind policy is fully trained and differs in exactly one respect, so
-when it misses a tread, the camera is the only available explanation.
-
-The clips use seed 8002, which clears all three terrains. Across three
-seeds the vision student averages 88.9% on `up` with a worst seed of
-79%, so roughly one episode in nine fails; the tables above are the
-claim and the clip is an illustration of it.
-
-The `terrain-blind.gif` clip shows the **blind PPO** policy, which is
-the original uncontrolled baseline rather than the proper control. It is
-kept because it is a real, fully-trained policy failing on a staircase,
-but what separates it from the vision student is the training method as
-well as the camera. The controlled comparison is the table, not the
-animation.
+```bash
+uv run render.py --all
+```
 
 ---
 
