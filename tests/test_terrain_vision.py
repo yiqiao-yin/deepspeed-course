@@ -155,6 +155,60 @@ def check_bootstrap() -> None:
           neither == ["train_teacher.py", "collect.py"], f"ran {neither}")
 
 
+def check_controls() -> None:
+    """
+    The controls that this lab shipped without, and the numbers they gave.
+
+    The first version compared a VISION student against a BLIND PPO
+    policy and credited the whole gap to the camera. Those arms differ
+    in the camera AND in how they were trained, so the comparison could
+    not separate them -- and roughly a third of the gap turned out to
+    belong to the training method.
+
+    What is pinned here is not the result (three seeds cannot establish
+    it) but the SHAPE of the experiment, because that is what regressed:
+
+      - the control arm has to exist at all, and be reachable by a flag
+      - the ablation has to include an IN-DISTRIBUTION condition; the
+        all-zeros frame reads as "a wall at 0.8 m" and knocks out even
+        `flat`, which needs no camera
+      - flat and descent must still be reported, because they are the
+        columns showing the camera is worth nothing there
+    """
+    import json
+
+    lab_src = (LAB / "train_student.py").read_text()
+    check("a no-camera student is buildable",
+          "--no-depth" in lab_src and "use_depth" in lab_src)
+    check("the ablation includes an in-distribution control",
+          '"mean"' in lab_src and "mean_img" in lab_src)
+
+    f = LAB / "runs" / "results.json"
+    if not f.exists():
+        print("  SKIP  runs/results.json absent (artifacts are gitignored)")
+        return
+    r = json.loads(f.read_text())["arms"]
+
+    blind = [a["rollout"]["vision"] for n, a in r.items()
+             if n.startswith("student") and a.get("use_depth") is False]
+    vis = [a["rollout"]["vision"] for n, a in r.items()
+           if n.startswith("student") and a.get("use_depth") is True]
+    check("both student arms have three seeds",
+          len(blind) == 3 and len(vis) == 3,
+          f"blind {len(blind)}, vision {len(vis)}")
+
+    # The load-bearing negative result: no camera, still perfect.
+    for t in ("flat", "down"):
+        ok = all(a[t] == 1.0 for a in blind)
+        check(f"the camera-less student still clears `{t}` on every seed", ok,
+              f"{[a[t] for a in blind]}")
+
+    # And the undertrained animation checkpoint must stay out of the mean.
+    check("the under-trained checkpoint is excluded from the aggregate",
+          "student_poor" not in r,
+          "it is a 2-epoch artifact for a GIF, not a seed")
+
+
 def main() -> int:
     import mujoco
 
@@ -229,6 +283,7 @@ def main() -> int:
     # costs milliseconds instead of the 25 minutes a real bootstrap
     # takes.
     check_bootstrap()
+    check_controls()
 
     print()
     if _fails:

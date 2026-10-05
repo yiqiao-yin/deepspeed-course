@@ -56,7 +56,8 @@ class VisionPolicy:
     """Built lazily so `--help` does not import torch."""
 
 
-def build(torch, nn, proprio_dim: int, act_dim: int, width: int = 32):
+def build(torch, nn, proprio_dim: int, act_dim: int, width: int = 32,
+          use_depth: bool = True):
     class Net(nn.Module):
         """
         A small conv encoder over depth, concatenated with proprioception.
@@ -69,13 +70,22 @@ def build(torch, nn, proprio_dim: int, act_dim: int, width: int = 32):
 
         def __init__(self) -> None:
             super().__init__()
+            self.use_depth = use_depth
             self.enc = nn.Sequential(
                 nn.Conv2d(1, width, 5, stride=2, padding=2), nn.ReLU(),
                 nn.Conv2d(width, width * 2, 3, stride=2, padding=1), nn.ReLU(),
                 nn.Conv2d(width * 2, width * 2, 3, stride=2, padding=1), nn.ReLU(),
                 nn.AdaptiveAvgPool2d(2), nn.Flatten(),
             )
-            self.feat = width * 2 * 4
+            # THE CONTROL ARM. Dropping the encoder rather than feeding it
+            # a constant keeps the comparison about INFORMATION: a
+            # proprioception-only student distilled from the same teacher,
+            # by the same objective, on the same frames. Without this cell
+            # "vision beats blind" conflates having a camera with being
+            # distilled from an oracle, because the blind PPO arm differs
+            # in BOTH. The head is identical, so only the camera branch
+            # and its 61k parameters are gone.
+            self.feat = width * 2 * 4 if use_depth else 0
             self.head = nn.Sequential(
                 nn.Linear(self.feat + proprio_dim, 256), nn.ReLU(),
                 nn.Linear(256, 256), nn.ReLU(),
@@ -86,6 +96,8 @@ def build(torch, nn, proprio_dim: int, act_dim: int, width: int = 32):
             return self.enc(depth.unsqueeze(1))
 
         def forward(self, depth, proprio):
+            if not self.use_depth:
+                return self.head(proprio)
             return self.head(torch.cat([self.encode(depth), proprio], dim=-1))
 
     return Net()
@@ -100,6 +112,10 @@ def main() -> None:
     ap.add_argument("--width", type=int, default=32)
     ap.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--no-depth", action="store_true",
+                    help="train the student WITHOUT the camera -- the "
+                         "control arm for the lab's central claim. Same "
+                         "teacher, same objective, same frames, no depth.")
     ap.add_argument("--auto", action="store_true",
                     help="produce the prerequisites if they are missing: "
                          "train a teacher, then render the dataset, then "
@@ -208,15 +224,19 @@ def run(a) -> None:
     dev = pick(torch, a.device)
     torch.manual_seed(a.seed)
     out = HERE / "runs" / (a.tag or "student")
-    net = build(torch, nn, proprio.shape[1], action.shape[1], a.width).to(dev)
+    net = build(torch, nn, proprio.shape[1], action.shape[1], a.width,
+                use_depth=not a.no_depth).to(dev)
 
     if a.eval_only:
         ck = torch.load(out / "student.pt", weights_only=False)
+        net = build(torch, nn, proprio.shape[1], action.shape[1], ck["width"],
+                    use_depth=ck.get("use_depth", True)).to(dev)
         net.load_state_dict(ck["model"])
         print(f"  device {dev}   loaded {out.name}/student.pt   "
               f"{sum(p.numel() for p in net.parameters()):,} parameters")
-        probe(torch, nn, net, dev, depth, terrain)
-        rolls = evaluate(torch, net, dev, a.episodes)
+        if net.use_depth:
+            probe(torch, nn, net, dev, depth, terrain)
+        rolls = evaluate(torch, net, dev, a.episodes, depth)
         prev = json.loads((out / "summary.json").read_text())
         prev.update({"rollout": rolls, "eval_episodes": a.episodes})
         (out / "summary.json").write_text(json.dumps(prev, indent=2))
@@ -253,13 +273,16 @@ def run(a) -> None:
 
     out.mkdir(parents=True, exist_ok=True)
     torch.save({"model": net.state_dict(), "width": a.width,
-                "proprio_dim": proprio.shape[1]}, out / "student.pt")
+                "proprio_dim": proprio.shape[1],
+                "use_depth": not a.no_depth}, out / "student.pt")
 
-    probe(torch, nn, net, dev, depth, terrain)
-    rolls = evaluate(torch, net, dev, a.episodes)
+    if not a.no_depth:
+        probe(torch, nn, net, dev, depth, terrain)
+    rolls = evaluate(torch, net, dev, a.episodes, depth)
     (out / "summary.json").write_text(json.dumps(
         {"device": dev, "frames": int(n), "epochs": a.epochs,
          "params": sum(p.numel() for p in net.parameters()),
+         "use_depth": not a.no_depth, "seed": a.seed,
          "val_mse": round(vl, 5), "rollout": rolls,
          "eval_episodes": a.episodes}, indent=2))
 
@@ -298,27 +321,53 @@ def probe(torch, nn, net, dev, depth, terrain) -> None:
           f"learned to distinguish the terrains")
 
 
-def evaluate(torch, net, dev, episodes: int) -> dict:
-    """Checks 1 and 3: per terrain, with and without a working camera."""
+def evaluate(torch, net, dev, episodes: int, depth_data=None) -> dict:
+    """
+    Checks 1 and 3: per terrain, and under each camera ablation.
+
+    THE BLANK IMAGE IS NOT A CLEAN CONTROL, which is why it is no longer
+    the only one. Depth is normalised so 0.0 means 0.8 m -- the near clip
+    -- so an all-zeros frame does not say "no information", it says "a
+    wall 80 cm from your face", in a configuration the network never saw
+    in 43,102 training frames. Scoring 0% there is equally consistent
+    with having lost information and with being brittle to
+    out-of-distribution input, and those are different claims.
+
+    `mean` fixes that: the pixelwise mean over the training set is
+    in-distribution by construction and carries no per-episode
+    information. It is the control the blanking test should have been.
+    """
     import numpy as np
 
     from terrain import KINDS
     from vision_env import TerrainWorld
 
     net.eval()
+    blind = not net.use_depth
+    modes = ["vision"] if blind else ["vision", "blank", "mean"]
+    mean_img = (depth_data.mean(axis=0).astype(np.float32)
+                if depth_data is not None else None)
+    if mean_img is None and "mean" in modes:
+        modes.remove("mean")
+
     out = {}
-    for blank in (False, True):
-        tag = "blank" if blank else "vision"
-        out[tag] = {}
+    for mode in modes:
+        out[mode] = {}
         for k in KINDS:
             ok = 0
             for i in range(episodes):
-                env = TerrainWorld(kind=k, privileged=False, depth=True,
+                env = TerrainWorld(kind=k, privileged=False, depth=not blind,
                                    seed=0)
                 obs, _ = env.reset(seed=8000 + i)
                 while True:
-                    img = (np.zeros((64, 64), np.float32) if blank
-                           else env.depth())
+                    if blind:
+                        img = np.zeros((64, 64), np.float32)
+                    elif mode == "blank":
+                        img = np.zeros((64, 64), np.float32)
+                    elif mode == "mean":
+                        img = mean_img
+                    else:
+                        img = env.depth()
                     with torch.no_grad():
                         act = net(
                             torch.as_tensor(img, device=dev).unsqueeze(0),
@@ -329,16 +378,20 @@ def evaluate(torch, net, dev, episodes: int) -> dict:
                     if term or trunc:
                         break
                 ok += bool(info["past_event"])
-            out[tag][k] = round(ok / episodes, 3)
+            out[mode][k] = round(ok / episodes, 3)
+
     print()
-    print(f"  {'terrain':<8}{'with camera':>14}{'BLANK image':>14}")
+    hdr = "".join(f"{m:>14}" for m in modes)
+    print(f"  {'terrain':<8}{hdr}   (n={episodes} episodes each)")
     for k in KINDS:
-        print(f"  {k:<8}{out['vision'][k]:>13.0%}{out['blank'][k]:>14.0%}")
-    drop = (np.mean(list(out["vision"].values()))
-            - np.mean(list(out["blank"].values())))
-    print(f"  blanking the camera costs {drop:+.0%} on average")
-    print(f"  -> the policy {'USES' if drop > 0.1 else 'does NOT use'} "
-          f"its camera")
+        print(f"  {k:<8}" + "".join(f"{out[m][k]:>13.0%}" for m in modes))
+    if "mean" in modes:
+        drop = (np.mean(list(out["vision"].values()))
+                - np.mean(list(out["mean"].values())))
+        print(f"  replacing depth with the TRAINING-SET MEAN costs "
+              f"{drop:+.0%} on average")
+        print(f"  -> the policy {'USES' if drop > 0.1 else 'does NOT use'} "
+              f"its camera (in-distribution control)")
     return out
 
 

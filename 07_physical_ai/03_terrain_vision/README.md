@@ -1,4 +1,12 @@
-# Terrain Vision: teaching a robot to look before it steps
+# Terrain Vision: the ablation that changed two things
+
+> **CORRECTION.** This lab first reported that a depth camera took the
+> robot from 12.5% to 79% on stairs, and that vision was needed because
+> *"you cannot feel for a descent."* The comparison varied **two**
+> things — the camera *and* the training method. With the missing
+> control run, the camera is real but smaller than claimed, and descent
+> turns out to be the one terrain solved perfectly **without** it. The
+> original claim and the corrected numbers are both below.
 
 A two-legged robot with a BD-1-style head walks along a raised plateau.
 Partway along, the ground does one of three things: stays flat, climbs
@@ -9,17 +17,21 @@ coming — and the three demand incompatible responses.
 This is the third lab in `07_physical_ai`, and the first where the robot
 has an eye.
 
-**Baseline:** the blind policy — proprioception only, same algorithm,
-same 1.5M steps, three seeds: 100% flat, 12.5% upstairs, 54.2%
-downstairs.
-**Budget:** 1.5M environment steps per teacher × 3 seeds per arm; the
-vision student is 40 epochs over 43,102 rendered frames.
-**Falsifier:** if a 64×64 depth image does not lift the ascent score
-clear of the blind arm's own seed spread (σ = 0.18), the camera is
-decoration and this lab has no result. Written down before the student
-was trained.
+**Baseline:** a **blind student distilled from the same teacher by the
+same objective** — the only arm that differs from the vision student in
+one variable. Three seeds: 100% flat, 45.8% upstairs, 100% downstairs.
+(The original baseline, a blind PPO policy trained from scratch, is
+reported too, but it is NOT a controlled comparison.)
+**Budget:** 1.5M environment steps per teacher × 3 seeds per arm;
+students are 40 epochs over 43,102 rendered frames, 3 seeds per arm,
+24 evaluation episodes per terrain.
+**Falsifier:** if a depth camera does not beat the distilled blind
+student, the camera is decoration. It does on ascent (+43 points,
+p=0.098) and **does not** on flat or descent (0 points, both at 100%).
+Half the falsifier fired.
 
-![three arms, per terrain](../../docusaurus-docs/static/img/physical/terrain-arms.png)
+![four arms, per terrain](../../docusaurus-docs/static/img/physical/terrain-arms.png)
+![where the gain came from](../../docusaurus-docs/static/img/physical/terrain-decomposition.png)
 
 ---
 
@@ -34,14 +46,22 @@ genuinely capable, because a leg that touches something can feel it.
 
 So the question for a third lab was not "does vision help" — it was
 **what task makes vision necessary at all**. Six designs came back null
-before this one. The answer is `down`:
+before this one. The design bet was `down`:
 
 > You cannot feel for a descent. By the time the swinging foot finds
 > nothing underneath it, the robot is already falling.
 
-That asymmetry is the whole design. `up` is hard-but-feelable, `down` is
-not feelable at all, and `flat` is the control that proves the other two
-are not just "harder".
+**That bet lost.** It is a good intuition and the measurements do not
+support it: descent is cleared 100% of the time by every arm, including
+a student with no camera, at every geometry tested. The camera's
+measurable value turned out to be entirely on `up` — where the foot has
+to be lifted *before* contact — and the reason the intuition fails is
+the reward rather than the physics. Falling ends the episode, so
+stepping down cautiously and absorbing the drop is already near-optimal;
+nothing pays for anticipating.
+
+Making this the **seventh** design in this category whose vision
+ablation came back weaker than it first looked.
 
 ### What did NOT work, and why it is written down
 
@@ -85,21 +105,49 @@ to beat.
 
 ### Results
 
-Teachers: 3 seeds × 1.5M steps each. Vision: one seed, 40 epochs,
-**24 evaluation episodes per terrain**. Fraction of episodes clearing
-the terrain.
+Four arms, three seeds each, 24 evaluation episodes per terrain.
 
-| terrain | privileged | blind | **vision** |
+| arm | flat | **upstairs** | downstairs |
 |---|---|---|---|
-| flat | 100% | 100% | 100% |
-| upstairs | 83% | **12.5%** | **79%** |
-| downstairs | 100% | **54.2%** | **100%** |
+| blind PPO — from scratch (the original, uncontrolled baseline) | 100% | 12.5% | 54.2% |
+| **blind BC** — distilled, no camera | 100% | **45.8%** | **100%** |
+| **vision BC** — distilled, with camera | 100% | **88.9%** | 100% |
+| privileged PPO — oracle, undeployable | 100% | 83.3% | 100% |
 
-The gap the camera has to close is **+71 points on ascent** and **+46 on
-descent**. Depth recovers most of the first and all of the second — from
-images alone, with no privileged information at deployment.
+**Flat and downstairs are 100% in every arm, including with no camera.**
+The camera's entire measurable value is on `upstairs`.
 
-Random baseline return, for scale: **178**. Blind: 1057. Privileged: 1516.
+Decomposing the originally published 12.5% → 89% on ascent:
+
+- **+33 points from distillation alone**, no camera (12.5% → 45.8%)
+- **+43 points from the camera** (45.8% → 88.9%)
+
+Neither is significant at three seeds (p = 0.098 and p = 0.221). What is
+better supported is **reliability**:
+
+| arm, `upstairs` | seeds | mean | sd |
+|---|---|---|---|
+| blind BC | 71% · **8%** · 58% | 45.8% | 0.331 |
+| vision BC | 79% · 88% · 100% | 88.9% | **0.105** |
+
+Vision is 3.2× more consistent, and its worst seed beats the blind arm's
+mean.
+
+### Held-out geometry
+
+Training drew the rise from [0.06, 0.11] m.
+
+| rise (m) | 0.05 | 0.07 | 0.09 | 0.11 | 0.13 | 0.15 |
+|---|---|---|---|---|---|---|
+| | **out** | in | in | in | **out** | **out** |
+| upstairs | 92% | 100% | 92% | 92% | **0%** | **58%** |
+| downstairs | 100% | 100% | 100% | 100% | 100% | 100% |
+
+![held-out geometry](../../docusaurus-docs/static/img/physical/terrain-heldout.png)
+
+Descent is unaffected by unseen geometry. Ascent breaks when
+extrapolating steeper, non-monotonically (0% at 0.13, 58% at 0.15) —
+unexplained, and reported rather than smoothed.
 
 ### The learning order is not in the reward
 
@@ -124,21 +172,32 @@ policies that turned out not to be using the information in question.
 So the burden of proof here is explicit, and `train_student.py` runs all
 three every time.
 
-### 1. Blank the camera
+### 1. Ablate the camera — and use the RIGHT ablation
 
-![the blank-image ablation](../../docusaurus-docs/static/img/physical/terrain-ablation.png)
+The original control fed the student an all-zeros image and reported 0%
+on every terrain. **That control is invalid.** It also destroys `flat`,
+which a camera-less student clears 100% of the time — so it was not
+measuring information.
 
-Feed the trained student a black image and re-measure. If it still
-scores, it was reading proprioception and the camera was decoration.
+Depth is normalised so `0.0` means **0.8 m**, the near clip. An all-zeros
+frame says *"a wall 80 cm from your face"*, a confident reading the
+network never saw in 43,102 training frames. It broke the model rather
+than starving it.
 
-| terrain | camera working | camera blanked |
-|---|---|---|
-| flat | 100% | **0%** |
-| upstairs | 79% | **0%** |
-| downstairs | 100% | **0%** |
+The correct control is the **pixelwise training-set mean**:
+in-distribution, and carrying no per-episode information.
 
-It does not merely degrade — it collapses. The policy is genuinely
-driving on the image.
+| terrain | real depth | training mean | zeros (invalid) |
+|---|---|---|---|
+| flat | 100% | 100% | 0% |
+| upstairs | 100% | 62% | 0% |
+| downstairs | 100% | 100% | 8% |
+
+![camera ablations](../../docusaurus-docs/static/img/physical/terrain-ablation.png)
+
+It lands at 62% on ascent, where the separately-trained blind student
+lands at 45.8%–71%. Two different constructions of "no usable camera"
+agreeing is what says the control is sound.
 
 ### 2. Probe the frozen encoder
 
@@ -194,9 +253,17 @@ shows nothing — *every* policy falls over early, camera or not. The
 blind policy is fully trained and differs in exactly one respect, so
 when it misses a tread, the camera is the only available explanation.
 
-The clips use seed 8002, which clears all three terrains. The student
-is 79% on `up`, so roughly one episode in five genuinely fails; the
-table above is the claim and the clip is an illustration of it.
+The clips use seed 8002, which clears all three terrains. Across three
+seeds the vision student averages 88.9% on `up` with a worst seed of
+79%, so roughly one episode in nine fails; the tables above are the
+claim and the clip is an illustration of it.
+
+The `terrain-blind.gif` clip shows the **blind PPO** policy, which is
+the original uncontrolled baseline rather than the proper control. It is
+kept because it is a real, fully-trained policy failing on a staircase,
+but what separates it from the vision student is the training method as
+well as the camera. The controlled comparison is the table, not the
+animation.
 
 ---
 
