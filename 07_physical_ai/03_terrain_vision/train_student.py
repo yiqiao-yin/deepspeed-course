@@ -116,6 +116,14 @@ def main() -> None:
                     help="train the student WITHOUT the camera -- the "
                          "control arm for the lab's central claim. Same "
                          "teacher, same objective, same frames, no depth.")
+    ap.add_argument("--eval-kind", default=None,
+                    help="evaluate on ONE terrain instead of the published "
+                         "three. Used by the stepping-stone extension.")
+    ap.add_argument("--fovy", type=float, default=45.0,
+                    help="field of view the student was trained at. MUST "
+                         "match the dataset: evaluating a 100-degree student "
+                         "through a 45-degree camera would silently measure "
+                         "a distribution shift instead of the policy.")
     ap.add_argument("--auto", action="store_true",
                     help="produce the prerequisites if they are missing: "
                          "train a teacher, then render the dataset, then "
@@ -236,7 +244,8 @@ def run(a) -> None:
               f"{sum(p.numel() for p in net.parameters()):,} parameters")
         if net.use_depth:
             probe(torch, nn, net, dev, depth, terrain)
-        rolls = evaluate(torch, net, dev, a.episodes, depth)
+        rolls = evaluate(torch, net, dev, a.episodes, depth,
+                         kind=a.eval_kind, fovy=a.fovy)
         prev = json.loads((out / "summary.json").read_text())
         prev.update({"rollout": rolls, "eval_episodes": a.episodes})
         (out / "summary.json").write_text(json.dumps(prev, indent=2))
@@ -278,7 +287,8 @@ def run(a) -> None:
 
     if not a.no_depth:
         probe(torch, nn, net, dev, depth, terrain)
-    rolls = evaluate(torch, net, dev, a.episodes, depth)
+    rolls = evaluate(torch, net, dev, a.episodes, depth,
+                     kind=a.eval_kind, fovy=a.fovy)
     (out / "summary.json").write_text(json.dumps(
         {"device": dev, "frames": int(n), "epochs": a.epochs,
          "params": sum(p.numel() for p in net.parameters()),
@@ -321,7 +331,8 @@ def probe(torch, nn, net, dev, depth, terrain) -> None:
           f"learned to distinguish the terrains")
 
 
-def evaluate(torch, net, dev, episodes: int, depth_data=None) -> dict:
+def evaluate(torch, net, dev, episodes: int, depth_data=None,
+             kind: str | None = None, fovy: float = 45.0) -> dict:
     """
     Checks 1 and 3: per terrain, and under each camera ablation.
 
@@ -339,8 +350,11 @@ def evaluate(torch, net, dev, episodes: int, depth_data=None) -> dict:
     """
     import numpy as np
 
-    from terrain import KINDS
+    from terrain import KINDS, STONE_KINDS
     from vision_env import TerrainWorld
+
+    kinds_eval = [kind] if kind else list(KINDS)
+    obs_kinds = STONE_KINDS if kind == 'stones' else KINDS
 
     net.eval()
     blind = not net.use_depth
@@ -353,11 +367,11 @@ def evaluate(torch, net, dev, episodes: int, depth_data=None) -> dict:
     out = {}
     for mode in modes:
         out[mode] = {}
-        for k in KINDS:
+        for k in kinds_eval:
             ok = 0
             for i in range(episodes):
                 env = TerrainWorld(kind=k, privileged=False, depth=not blind,
-                                   seed=0)
+                                   seed=0, fovy=fovy, kinds=obs_kinds)
                 obs, _ = env.reset(seed=8000 + i)
                 while True:
                     if blind:
@@ -383,7 +397,7 @@ def evaluate(torch, net, dev, episodes: int, depth_data=None) -> dict:
     print()
     hdr = "".join(f"{m:>14}" for m in modes)
     print(f"  {'terrain':<8}{hdr}   (n={episodes} episodes each)")
-    for k in KINDS:
+    for k in kinds_eval:
         print(f"  {k:<8}" + "".join(f"{out[m][k]:>13.0%}" for m in modes))
     if "mean" in modes:
         drop = (np.mean(list(out["vision"].values()))

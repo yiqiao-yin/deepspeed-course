@@ -71,6 +71,14 @@ def main() -> None:
                     help="keep every Nth step; consecutive frames are nearly "
                          "identical and cost render time for no new signal")
     ap.add_argument("--res", type=int, default=64)
+    ap.add_argument("--fovy", type=float, default=45.0,
+                    help="camera field of view in degrees. The dataset has "
+                         "to be re-rendered per FOV -- the depth image is "
+                         "exactly what changes -- so this is the expensive "
+                         "axis of the sweep.")
+    ap.add_argument("--kinds", default=None,
+                    help="comma-separated terrains to collect from. "
+                         "Defaults to the published three.")
     ap.add_argument("--out", default="data/bc.npz")
     a, _ = ap.parse_known_args()
     collect(a)
@@ -80,8 +88,16 @@ def collect(a) -> None:
     import numpy as np
     import torch
 
-    from terrain import KINDS
+    from terrain import KINDS, STONE_KINDS
     from vision_env import TerrainWorld
+
+    # The terrain set the TEACHER was trained on decides the
+    # observation width, so it has to match or the policy will
+    # not load. `--kinds stones` collects only stones but still
+    # declares the four-terrain observation.
+    want = ([k.strip() for k in a.kinds.split(',')] if a.kinds
+            else list(KINDS))
+    obs_kinds = STONE_KINDS if 'stones' in want else KINDS
 
     if a.teacher is None:
         cands = sorted(p.name for p in (HERE / "runs").iterdir()
@@ -105,9 +121,10 @@ def collect(a) -> None:
     D, P, A, T = [], [], [], []
     t0 = time.time()
     for ep in range(a.episodes):
-        kind = KINDS[ep % len(KINDS)]          # balanced across terrains
+        kind = want[ep % len(want)]            # balanced across terrains
         env = TerrainWorld(kind=kind, privileged=True, depth=True,
-                           depth_res=a.res, seed=1000 + ep)
+                           depth_res=a.res, seed=1000 + ep,
+                           fovy=a.fovy, kinds=obs_kinds)
         obs, _ = env.reset(seed=1000 + ep)
         step = 0
         while True:
@@ -121,7 +138,7 @@ def collect(a) -> None:
                 # Only what a real robot has: the privileged tail is dropped.
                 P.append(obs[:15].copy())
                 A.append(clean.copy())        # label is the CLEAN action
-                T.append(KINDS.index(kind))
+                T.append(want.index(kind))
 
             obs, _, term, trunc, _ = env.step(act)
             step += 1
@@ -138,11 +155,11 @@ def collect(a) -> None:
         proprio=np.asarray(P, dtype=np.float32),
         action=np.asarray(A, dtype=np.float32),
         terrain=np.asarray(T, dtype=np.int64))
-    counts = np.bincount(np.asarray(T), minlength=len(KINDS))
+    counts = np.bincount(np.asarray(T), minlength=len(want))
     print()
     print(f"  wrote {out.relative_to(HERE)}  {len(D):,} frames  "
           f"{out.stat().st_size/1e6:.1f} MB  in {time.time()-t0:.0f}s")
-    print(f"  per terrain: " + "  ".join(f"{k} {c}" for k, c in zip(KINDS, counts)))
+    print(f"  per terrain: " + "  ".join(f"{k} {c}" for k, c in zip(want, counts)))
     print()
     print("  NOTE: the action label is the teacher's CLEAN action, while the")
     print("  action actually EXECUTED carried noise. That is deliberate --")
