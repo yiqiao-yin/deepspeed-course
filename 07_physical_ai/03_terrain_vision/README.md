@@ -338,6 +338,11 @@ Three seeds tie exactly, one favours each arm. There is no information
 advantage on stepping stones at this geometry, most likely because a
 0.22 m foot can partly bridge a 0.16–0.26 m gap.
 
+![crossing stepping stones](../../docusaurus-docs/static/img/physical/terrain-stones.gif)
+
+A trained policy crossing the sparse footholds. Nothing to feel between
+the stones, and it clears them anyway.
+
 ### Friction patches — the hazard a depth camera cannot see
 
 The ground stays perfectly flat. What changes is **grip**: patches of
@@ -383,24 +388,63 @@ second used a 220 N push that exceeds *both* friction limits and dragged
 the robot across three surfaces at once. All three failures would have
 produced a confident null.
 
-**Where it stands:** at a mild hazard both arms clear 100% — the task is
-too easy. At a severe one (1.6 m patches, μ=0.015) neither arm has
-converged at 600k steps, so that cell is *unmeasured* rather than null.
-Settling it needs roughly 1.5M steps per arm across several seeds.
+**Settled at 2M steps, and it is the fifth null.** The oracle learns the
+severe hazard completely — 0% until 0.5M, then 100% and flat for the
+last 1.2M steps — so the terrain is genuinely solvable *with* the
+information, which is what makes a blind failure interpretable. The
+blind arm then does it too:
 
-### What four attempts add up to
+| eighths of training | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| privileged | 0% | 0% | 57% | **100%** | 100% | 100% | 100% | 100% |
+| blind | 0% | 0% | 13% | 46% | 88% | 99% | 94% | **100%** |
+
+Same ceiling. The only difference is **how long it takes**: privileged
+reaches 100% around 0.75M steps, blind around 1.75M. Information bought
+**learning speed, not capability** — a 2.3× difference on one seed,
+which is a real thread and not yet an established result.
+
+![crossing ground with 18-25x less grip](../../docusaurus-docs/static/img/physical/terrain-patches.gif)
+
+Both arms, same terrain. This is what a measured null looks like: the
+policy that was told where the slippery ground is, and the one that was
+not, doing the same thing. The HUD's `surface` field is read from the
+live contact list rather than from x-position, so it cannot disagree
+with the physics — which is exactly how the patch managed to be inert
+and look correct for three attempts.
+
+### What five attempts add up to
 
 | design | outcome |
 |---|---|
 | a gap to leap (`hop`) | blind **won**, 3/3 seeds |
 | stepping stones, 3 difficulties | no consistent effect once converged |
 | friction patches, mild | both arms 100% |
-| friction patches, severe | unconverged — not yet an answer |
+| friction patches, severe | both arms 100%; privileged only **faster** |
+| stairs (part 1) | camera helps on ascent only, p ≈ 0.1 |
 
-Blind proprioceptive locomotion is far more capable than intuition
-suggests, and a 6-DOF biped with a locked torso and a dense
-forward-velocity reward is unusually robust. Finding the task where
-foresight is *required* is the open problem here, not a detail.
+**A 6-DOF biped with a locked torso and a dense forward-velocity reward
+is extraordinarily hard to blind.** Every hazard built here it
+eventually learned to handle by feel — including one with 18–25× less
+grip that it cannot possibly see coming.
+
+That is the finding, and it is worth stating as a conclusion rather
+than as a series of failures. It is also consistent with the
+literature: blind proprioceptive locomotion over continuous terrain is
+genuinely strong, and the published cases where exteroception is
+*necessary* involve either far more degrees of freedom or hazards that
+are unrecoverable in one step.
+
+The most likely culprit is the **reward**, not the terrain. Forward
+velocity plus an alive bonus pays for robustness; falling merely ends
+the episode, and nothing pays for anticipating. A reward that punishes
+the slip itself, or a task where a single misstep cannot be recovered,
+may well flip it — but that guess has now been wrong four times, so it
+is written here as a hypothesis and not as a plan.
+
+The one live thread is **sample efficiency**. "Information makes
+learning faster rather than better" is defensible and measurable, and
+it would need 3–5 seeds per arm to publish.
 
 The recurring methodological lesson is narrower and more useful:
 **never read the final number off a run whose curve is still moving.**

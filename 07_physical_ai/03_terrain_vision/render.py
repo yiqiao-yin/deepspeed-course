@@ -44,6 +44,8 @@ from pathlib import Path
 from pathlib import Path as pathlib_Path
 
 HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+from terrain import PATCH_KINDS, STONE_KINDS  # noqa: E402
 OUT = HERE.parent.parent / "docusaurus-docs" / "static" / "img" / "physical"
 BACKENDS = ("glfw", "egl", "osmesa")
 _FONTS: dict = {}
@@ -293,7 +295,8 @@ def best_blind() -> str:
 
 def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
             width: int, height: int, every: int, show_depth: bool,
-            needs_depth: bool, rise: float | None = None):
+            needs_depth: bool, rise: float | None = None,
+            kinds=None, extra=None):
     """
     One episode, returned as HUD'd frames.
 
@@ -307,10 +310,22 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
     from terrain import EVENT_X
     from vision_env import TerrainWorld
 
-    env = TerrainWorld(kind=kind, privileged=False,
+    env = TerrainWorld(kind=kind, privileged=(kinds is not None and extra),
                        depth=needs_depth or show_depth, seed=0,
-                       fixed_rise=rise)
+                       fixed_rise=rise, kinds=kinds)
     obs, _ = env.reset(seed=seed)
+
+    # Read the goal from the ENVIRONMENT rather than restating it. The
+    # bar first showed "progress to x = 2.5 m" on a patches clip whose
+    # field does not end until 6.3 m -- a caption that disagrees with
+    # the success criterion it is drawn next to.
+    from terrain import N_PATCHES, N_STONES, PATCH_LEN, PATCH_SPACING, STONE_TOP
+    if kind == "patches":
+        goal = EVENT_X + N_PATCHES * (PATCH_SPACING + PATCH_LEN)
+    elif kind == "stones":
+        goal = EVENT_X + N_STONES * (STONE_TOP + env.gap)
+    else:
+        goal = EVENT_X + 1.3
 
     r = mujoco.Renderer(env.model, height=height, width=width)
     cam = mujoco.MjvCamera()
@@ -343,14 +358,16 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
                 r.render(), title=title, subtitle=subtitle,
                 stats=[("terrain", kind if rise is None
                                    else f"{kind}  rise {rise:.2f} m"),
+                       *( [("surface", "SLIPPERY" if on_slip(env) else "grip")]
+                          if kind == "patches" else [] ),
                        ("distance", f"{info['x']:+.2f} m"),
                        ("torso height", f"{env.torso_height():.2f} m"),
                        ("return", f"{total:.0f}")],
                 status="CLEARED" if info["past_event"]
                        else ("WALKING" if alive else "FELL"),
                 status_ok=alive,
-                progress=(info["x"] + 1.0) / (EVENT_X + 1.3 + 1.0),
-                bar_label=f"progress to x = {EVENT_X + 1.3:.1f} m",
+                progress=(info["x"] + 1.0) / (goal + 1.0),
+                bar_label=f"progress to x = {goal:.1f} m",
                 depth=img if show_depth else None))
         if term or trunc:
             break
@@ -369,6 +386,71 @@ def episode(act, kind: str, *, seed: int, title: str, subtitle: str,
 # differ in the camera AND in how they were trained. `compare` now runs
 # the blind BEHAVIOUR-CLONED student, which differs from the vision
 # student in exactly one thing.
+
+
+def on_slip(env) -> bool:
+    """Is a foot touching a low-friction patch RIGHT NOW?
+
+    Read from the live contact list rather than from x-position, so the
+    HUD cannot disagree with the physics -- which is precisely how the
+    patch managed to be inert and look fine for three attempts.
+    """
+    import mujoco
+    for c in range(env.data.ncon):
+        for g in (env.data.contact[c].geom1, env.data.contact[c].geom2):
+            n = mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, g)
+            if n and n.startswith("slip"):
+                return True
+    return False
+
+
+def _teacher(run: str):
+    """A PPO policy, wrapped to the (obs, image) signature episode() uses."""
+    act, meta = load_ppo(run)
+    return (lambda obs, img: act(obs, img)), meta
+
+
+def clip_patches(a) -> None:
+    """
+    Crossing ground with 18-25x less grip -- and the null beside it.
+
+    Both arms converge to 100% here, so this pair is not a before/after.
+    It is what a measured NULL looks like: the policy that was told
+    where the slippery ground is, and the one that was not, doing the
+    same thing.
+    """
+    frames = card(a.width, a.height, "Ground with 18–25x less grip",
+                  "flat, so a depth camera cannot see it at all", 16)
+    for run, label, blurb in (
+            ("pp3_priv",  "TOLD where the ice is", "privileged — reaches 100% by 0.75M steps"),
+            ("pp3_blind", "NOT told",              "blind — reaches 100% by 1.75M steps")):
+        act, _ = _teacher(run)
+        meta = json.loads((HERE / "runs" / run / "summary.json").read_text())
+        frames += card(a.width, a.height, label, blurb, 12)
+        f, res = episode(act, "patches", seed=a.seed, title=label, subtitle=blurb,
+                         width=a.width, height=a.height, every=a.every,
+                         show_depth=False, needs_depth=False,
+                         kinds=PATCH_KINDS, extra=(meta["obs_dim"] == 19))
+        print(f"    {label:<24} x={res['x']:+.2f}  "
+              f"{'crossed' if res['past'] else 'did NOT cross'}")
+        frames += f
+    _save(frames, OUT / "terrain-patches.gif", a)
+
+
+def clip_stones(a) -> None:
+    """Sparse footholds -- the terrain built to need vision, that did not."""
+    act, _ = _teacher(a.stones_run)
+    meta = json.loads((HERE / "runs" / a.stones_run / "summary.json").read_text())
+    frames = card(a.width, a.height, "Stepping stones",
+                  "nothing to feel between them — and blind solves it anyway", 14)
+    f, res = episode(act, "stones", seed=a.seed, title="Stepping stones",
+                     subtitle="privileged and blind both converge here",
+                     width=a.width, height=a.height, every=a.every,
+                     show_depth=False, needs_depth=False,
+                     kinds=STONE_KINDS, extra=(meta["obs_dim"] == 21))
+    print(f"    stones x={res['x']:+.2f}  "
+          f"{'crossed' if res['past'] else 'did NOT cross'}")
+    _save(frames + f, OUT / "terrain-stones.gif", a)
 
 
 def _student(a, blind: bool):
@@ -493,7 +575,8 @@ def _save(frames, path, a) -> None:
           f"{path.stat().st_size / 1024:.0f} KB)")
 
 
-CLIPS = {"flat": clip_flat, "up": clip_up, "down": clip_down,
+CLIPS = {"patches": clip_patches, "stones": clip_stones,
+         "flat": clip_flat, "up": clip_up, "down": clip_down,
          "compare": clip_compare, "heldout": clip_heldout, "tour": clip_tour}
 
 
@@ -502,6 +585,8 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--clip", choices=sorted(CLIPS), default="tour")
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--stones-run", default="stf_privileged_s2",
+                    help="which trained stones policy to animate")
     ap.add_argument("--student", default="student_s2",
                     help="the vision arm to animate")
     ap.add_argument("--blind-student", default="student_blind",
