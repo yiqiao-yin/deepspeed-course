@@ -280,6 +280,177 @@ uv run render.py --all
 
 ---
 
+---
+
+## Part 2: what it takes to make vision *necessary*
+
+Part 1 found the camera worth a lot on ascent and nothing at all on
+flat ground or descent. The obvious next question is not "does vision
+help" but **what kind of task makes it indispensable** — and the
+honest answer, after four attempts, is that this robot is harder to
+blind than expected.
+
+Everything below is shipped and runnable. None of it produced a
+publishable positive result, which is the finding.
+
+### Stepping stones
+
+A staircase is **continuous**: the ground is always somewhere under the
+foot, so a blind policy can sweep, touch and react. That is why blind
+locomotion did so well in part 1, and it reproduces a known result
+rather than contradicting one.
+
+Sparse footholds should remove exactly that affordance — between the
+stones there is nothing to feel, and a foot placed into a void gets no
+second chance. It is the standard benchmark for exteroception being
+necessary (Agarwal et al., CoRL 2022; Miki et al., Science Robotics
+2022).
+
+```bash
+uv run stones_sweep.py --difficulty     # three difficulties, 3 seeds
+uv run stones_sweep.py --focus          # the middle cell, 5 seeds, 1.2M steps
+```
+
+A one-seed pilot at 400k steps looked decisive:
+
+| difficulty | privileged | blind |
+|---|---|---|
+| easy | 100% | 100% |
+| medium | **75%** | **25%** |
+| hard | 0% | 0% |
+
+An inverted-U: information pays only in the middle band. It did not
+survive contact with more seeds and longer runs.
+
+| | privileged | blind | gap |
+|---|---|---|---|
+| 3 seeds, 400k steps | 75% | 42% | +33 (p = 0.094) |
+| **5 seeds, 1.2M steps** | **78%** | **85%** | **−8** |
+
+**The effect shrank every time rigour went up, which is the signature
+of an effect that was never there.** The 400k runs had not converged —
+five of six were still climbing when training stopped, and one was
+falling — so their "final" numbers were snapshots taken at arbitrary
+points on a rising curve. At 1.2M the curves flatten and the gap
+disappears.
+
+Three seeds tie exactly, one favours each arm. There is no information
+advantage on stepping stones at this geometry, most likely because a
+0.22 m foot can partly bridge a 0.16–0.26 m gap.
+
+![crossing stepping stones](../../docusaurus-docs/static/img/physical/terrain-stones.gif)
+
+A trained policy crossing the sparse footholds. Nothing to feel between
+the stones, and it clears them anyway.
+
+### Friction patches — the hazard a depth camera cannot see
+
+The ground stays perfectly flat. What changes is **grip**: patches of
+low-friction surface, visually distinct and geometrically identical.
+Dust over rock, or ice.
+
+This is the one condition where feeling genuinely cannot substitute for
+looking — on a slippery patch the proprioceptive signal *is* the slip,
+which is already the failure. It also gives the experiment a negative
+control it never had before: **a depth camera should be worth no more
+than no camera at all**, because depth cannot see friction. If depth ≈
+blind and RGB wins, that is hard to explain as "more inputs train
+better".
+
+`vision_env.py` grows an RGB sensor for this (`sensor="rgb"`, 3×64×64).
+
+**The patch is physically real, and proving that took three attempts:**
+
+| push on the torso | grippy | slippery | ratio |
+|---|---|---|---|
+| 30 N | 0.0002 m | 0.0060 m | **25×** |
+| 60 N | 0.0009 m | 0.0194 m | **22×** |
+| 100 N | 0.0048 m | 0.0872 m | **18×** |
+
+:::danger MuJoCo takes the MAXIMUM of two contact frictions
+The first version of this terrain was completely inert. The patches
+were in the scene, correctly named in the contact list, visible in the
+render — and the robot slid exactly as far on them as on normal ground.
+
+MuJoCo combines contact friction as the **elementwise maximum** of the
+two geoms, and the foot carries μ=0.9 from the default class. So
+`max(0.9, 0.06) = 0.9` and the low-friction surface did nothing.
+`priority="1"` on the patch geoms makes its parameters win outright.
+
+This is [lab 1's decorative obstacle](./obstacle-hopper#the-bug-that-looked-exactly-like-success)
+in a new costume, and it was caught the same way: by pushing the robot
+and measuring, not by training a policy and believing the number.
+:::
+
+Two further probes were wrong before one was right — the first measured
+the torso rotating about the ankle rather than the feet sliding, and the
+second used a 220 N push that exceeds *both* friction limits and dragged
+the robot across three surfaces at once. All three failures would have
+produced a confident null.
+
+**Settled at 2M steps, and it is the fifth null.** The oracle learns the
+severe hazard completely — 0% until 0.5M, then 100% and flat for the
+last 1.2M steps — so the terrain is genuinely solvable *with* the
+information, which is what makes a blind failure interpretable. The
+blind arm then does it too:
+
+| eighths of training | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| privileged | 0% | 0% | 57% | **100%** | 100% | 100% | 100% | 100% |
+| blind | 0% | 0% | 13% | 46% | 88% | 99% | 94% | **100%** |
+
+Same ceiling. The only difference is **how long it takes**: privileged
+reaches 100% around 0.75M steps, blind around 1.75M. Information bought
+**learning speed, not capability** — a 2.3× difference on one seed,
+which is a real thread and not yet an established result.
+
+![crossing ground with 18-25x less grip](../../docusaurus-docs/static/img/physical/terrain-patches.gif)
+
+Both arms, same terrain. This is what a measured null looks like: the
+policy that was told where the slippery ground is, and the one that was
+not, doing the same thing. The HUD's `surface` field is read from the
+live contact list rather than from x-position, so it cannot disagree
+with the physics — which is exactly how the patch managed to be inert
+and look correct for three attempts.
+
+### What five attempts add up to
+
+| design | outcome |
+|---|---|
+| a gap to leap (`hop`) | blind **won**, 3/3 seeds |
+| stepping stones, 3 difficulties | no consistent effect once converged |
+| friction patches, mild | both arms 100% |
+| friction patches, severe | both arms 100%; privileged only **faster** |
+| stairs (part 1) | camera helps on ascent only, p ≈ 0.1 |
+
+**A 6-DOF biped with a locked torso and a dense forward-velocity reward
+is extraordinarily hard to blind.** Every hazard built here it
+eventually learned to handle by feel — including one with 18–25× less
+grip that it cannot possibly see coming.
+
+That is the finding, and it is worth stating as a conclusion rather
+than as a series of failures. It is also consistent with the
+literature: blind proprioceptive locomotion over continuous terrain is
+genuinely strong, and the published cases where exteroception is
+*necessary* involve either far more degrees of freedom or hazards that
+are unrecoverable in one step.
+
+The most likely culprit is the **reward**, not the terrain. Forward
+velocity plus an alive bonus pays for robustness; falling merely ends
+the episode, and nothing pays for anticipating. A reward that punishes
+the slip itself, or a task where a single misstep cannot be recovered,
+may well flip it — but that guess has now been wrong four times, so it
+is written here as a hypothesis and not as a plan.
+
+The one live thread is **sample efficiency**. "Information makes
+learning faster rather than better" is defensible and measurable, and
+it would need 3–5 seeds per arm to publish.
+
+The recurring methodological lesson is narrower and more useful:
+**never read the final number off a run whose curve is still moving.**
+It invalidated two results in this section before they were published,
+and both times the "finding" had the sign the hypothesis predicted.
+
 ## Why there is no `deepspeed` launcher
 
 This is the **ninth** `launcher="python"` exception in the course, and

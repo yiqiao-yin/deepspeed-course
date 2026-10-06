@@ -54,6 +54,40 @@ def build(kind: str, rise: float = 0.09, gap: float = 0.45) -> str:
         g.append(f'<geom name="run" type="box" pos="{E+3*PITCH+TREAD_GAP+R/2} 0 '
                  f'{(P-3*rise)/2}" size="{R/2} 0.8 {(P-3*rise)/2}" '
                  f'rgba="0.32 0.36 0.42 1"/>')
+    elif kind == "patches":
+        # Flat all the way. The run-out is split into alternating
+        # normal and low-friction slabs; only `friction` differs, and
+        # the first component of MuJoCo's friction triple is the
+        # sliding coefficient.
+        x = E
+        for i in range(N_PATCHES):
+            g.append(f'<geom name="grip{i}" type="box" '
+                     f'pos="{x + PATCH_SPACING/2} 0 {P/2}" '
+                     f'size="{PATCH_SPACING/2} 0.8 {P/2}" '
+                     f'rgba="0.32 0.36 0.42 1"/>')
+            x += PATCH_SPACING
+            g.append(f'<geom name="slip{i}" type="box" '
+                     f'pos="{x + PATCH_LEN/2} 0 {P/2}" '
+                     f'size="{PATCH_LEN/2} 0.8 {P/2}" '
+                     f'rgba="{PATCH_RGBA}" priority="1" '
+                     f'friction="{PATCH_FRICTION} 0.1 0.1"/>')
+            x += PATCH_LEN
+        g.append(f'<geom name="run" type="box" pos="{x+R/2} 0 {P/2}" '
+                 f'size="{R/2} 0.8 {P/2}" rgba="0.32 0.36 0.42 1"/>')
+    elif kind == "stones":
+        # Six platforms with voids between them. Positions are driven by
+        # `gap`, which is redrawn per episode, so the policy cannot
+        # memorise a stride -- it has to place each foot where a stone
+        # actually is.
+        x = E
+        for i in range(N_STONES):
+            cx = x + STONE_TOP / 2
+            g.append(f'<geom name="st{i}" type="box" pos="{cx} 0 {P/2}" '
+                     f'size="{STONE_TOP/2} 0.8 {P/2}" '
+                     f'rgba="0.32 0.36 0.42 1"/>')
+            x += STONE_TOP + gap
+        g.append(f'<geom name="run" type="box" pos="{x+R/2} 0 {P/2}" '
+                 f'size="{R/2} 0.8 {P/2}" rgba="0.32 0.36 0.42 1"/>')
     elif kind == "hop":
         g.append(f'<geom name="run" type="box" pos="{E+gap+R/2} 0 {P/2}" '
                  f'size="{R/2} 0.8 {P/2}" rgba="0.32 0.36 0.42 1"/>')
@@ -126,7 +160,7 @@ HEAD = """
 """
 
 
-def world(kind: str, rise=0.09, gap=0.45) -> str:
+def world(kind: str, rise=0.09, gap=0.45, fovy: float = 45.0) -> str:
     return f"""
 <mujoco model="t4">
   <compiler angle="degree" inertiafromgeom="true"/>
@@ -148,7 +182,8 @@ def world(kind: str, rise=0.09, gap=0.45) -> str:
       <geom name="torso_geom" type="capsule" fromto="0 0 0 0 0 0.35" size="0.06"/>
       <body name="head" pos="0 0 0.40">
         {HEAD}
-        <camera name="eye" pos="0.10 0 0.0" xyaxes="0 -1 0 0.64 0 0.77"/>
+        <camera name="eye" pos="0.10 0 0.0" xyaxes="0 -1 0 0.64 0 0.77"
+                fovy="{fovy}"/>
       </body>
       <body name="thighL" pos="0 -0.07 0">
         <joint name="hipL" type="hinge" axis="0 -1 0" range="-150 20"/>
@@ -193,7 +228,25 @@ def world(kind: str, rise=0.09, gap=0.45) -> str:
 TREAD = 0.22          # walkable depth of each plate
 TREAD_GAP = 0.18      # void between consecutive plates
 PITCH = TREAD + TREAD_GAP
-FOOT_LEN = 0.22       # the foot can ALMOST bridge a gap -- placement must be right
+FOOT_LEN = 0.22
+
+# Stepping stones -- PART 2 of this lab.
+#
+# The published three terrains are all CONTINUOUS: the ground is always
+# somewhere under the foot, so a blind policy can sweep, touch and
+# react. That is why blind locomotion did so well, and it reproduces a
+# known result rather than contradicting one.
+#
+# Sparse footholds remove exactly that affordance. Between the stones
+# there is nothing to feel, and a foot placed into a gap does not get a
+# second chance. This is the standard benchmark for the claim that
+# exteroception is NECESSARY rather than merely useful (Agarwal et al.,
+# CoRL 2022; Miki et al., Science Robotics 2022).
+import os as _os
+STONE_TOP = float(_os.environ.get("STONE_TOP", "0.36"))
+STONE_GAP_MIN = float(_os.environ.get("STONE_GAP_MIN", "0.16"))
+STONE_GAP_MAX = float(_os.environ.get("STONE_GAP_MAX", "0.26"))
+N_STONES = int(_os.environ.get("N_STONES", "6"))       # the foot can ALMOST bridge a gap -- placement must be right
 
 # The terrains the lab actually trains and measures on.
 #
@@ -220,6 +273,49 @@ FOOT_LEN = 0.22       # the foot can ALMOST bridge a gap -- placement must be ri
 # exclusion, because re-adding it is a one-word edit that would quietly
 # invalidate every number in the README.
 KINDS = ("flat", "up", "down")
+
+# PART 2's terrain set. Kept SEPARATE rather than appended to KINDS,
+# because the privileged observation is a one-hot over whichever set is
+# active -- growing KINDS would change `obs_dim` from 20 to 21 and
+# silently invalidate every published checkpoint. That exact mistake
+# (a constant encoding the length of another constant) already cost
+# three training runs in this lab; see TERRAIN_FEATS in vision_env.py.
+STONE_KINDS = ("flat", "up", "down", "stones")
+
+# PART 3 -- the Mars case, and the first terrain here whose hazard is
+# not geometric.
+#
+# The ground stays perfectly flat. What changes is FRICTION: patches of
+# low-grip surface, visually distinct and physically identical to look
+# at with a depth camera. Think dust over rock, or ice.
+#
+# This is the one condition where feeling genuinely cannot substitute
+# for looking. On stairs a leg can touch a tread and react; on a
+# slippery patch the proprioceptive signal IS the slip, which is
+# already the failure. And unlike every previous terrain here, the cue
+# is invisible to geometry -- which gives the experiment a negative
+# control it has never had: a DEPTH camera should be worth no more
+# than no camera at all, while an RGB one should see the patch coming.
+PATCH_KINDS = ("flat", "patches")
+PATCH_LEN = float(_os.environ.get("PATCH_LEN", "0.70"))
+PATCH_FRICTION = float(_os.environ.get("PATCH_FRICTION", "0.06"))
+PATCH_SPACING = float(_os.environ.get("PATCH_SPACING", "1.00"))
+N_PATCHES = int(_os.environ.get("N_PATCHES", "3"))
+# Deliberately close to the floor's own colour in luminance, so the
+# policy must use hue rather than brightness -- a grey-world shortcut
+# would make the RGB arm win for the wrong reason.
+PATCH_RGBA = "0.46 0.34 0.22 1"
+# `priority="1"` on the slippery geoms is LOAD-BEARING. MuJoCo combines
+# contact friction as the elementwise MAXIMUM of the two geoms, and the
+# foot carries 0.9 from the default class -- so max(0.9, 0.06) = 0.9 and
+# the patch did nothing at all. Feet reported standing on `slip0` with
+# mu=0.06 while sliding exactly as far as on grippy ground. Priority
+# makes the higher-priority geom's parameters win outright.
+#
+# This is lab 1's decorative obstacle again: a hazard that is present in
+# the scene, visible in the render, correctly named in the contact list,
+# and physically inert. Caught by pushing the robot and measuring the
+# slide, NOT by training a policy against it.
 
 
 def ground_height(kind: str, x: float, rise: float = 0.09,
@@ -251,6 +347,20 @@ def ground_height(kind: str, x: float, rise: float = 0.09,
             if x >= E + TREAD_GAP + i * PITCH:
                 return P + sign * (i + 1) * rise
         return P
+    if kind == "patches":
+        return P                      # flat everywhere; the hazard is grip
+    if kind == "stones":
+        # -3.0 marks a void. `fallen()` already handles that: over a
+        # void only the absolute floor test applies, so a robot that
+        # steps into one drops until it is genuinely below the world.
+        span = STONE_TOP + gap
+        for i in range(N_STONES):
+            lo = E + i * span
+            if lo <= x < lo + STONE_TOP:
+                return P
+            if lo + STONE_TOP <= x < lo + span:
+                return -3.0
+        return P                              # the run-out past the stones
     if kind == "hop":
         return -3.0 if x < E + gap else P     # the void, then the far side
     raise ValueError(kind)

@@ -34,7 +34,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from terrain import EVENT_X, KINDS, PLATEAU_Z, RUN, world
+from terrain import (EVENT_X, KINDS, N_PATCHES, N_STONES, PATCH_FRICTION,
+                     PATCH_LEN, PATCH_SPACING, PLATEAU_Z, RUN,
+                     STONE_GAP_MAX, STONE_GAP_MIN, STONE_TOP, world)
 
 # Terrain randomisation ranges. Deliberately narrow for a first pass: the
 # question is whether vision is needed at all, not whether the policy
@@ -63,7 +65,10 @@ class TerrainWorld:
                  max_steps: int = 600, frame_skip: int = 5,
                  seed: int | None = None,
                  fixed_rise: float | None = None,
-                 fixed_gap: float | None = None) -> None:
+                 fixed_gap: float | None = None,
+                 fovy: float = 45.0,
+                 kinds: tuple[str, ...] | None = None,
+                 sensor: str = "depth") -> None:
         import mujoco
 
         self._mj = mujoco
@@ -74,6 +79,22 @@ class TerrainWorld:
         self.max_steps = max_steps
         self.frame_skip = frame_skip
         self.fixed_rise, self.fixed_gap = fixed_rise, fixed_gap
+        # Field of view, in degrees. PART 2 sweeps this: if the camera
+        # is doing real work, a WIDER one should do more of it, and a
+        # dose-response curve is much harder to explain away than a
+        # single on/off comparison.
+        self.fovy = fovy
+        # Which terrains this world samples from, and therefore how
+        # wide the privileged one-hot is. Defaults to the published
+        # three so `obs_dim` stays 20 and existing checkpoints load.
+        self.kinds = tuple(kinds) if kinds else KINDS
+        # "depth" or "rgb". The friction-patch terrain is the first one
+        # here where this MATTERS rather than being a rendering detail:
+        # a slippery patch is perfectly flat, so depth cannot see it at
+        # all and acts as a negative control for "more inputs help".
+        assert sensor in ("depth", "rgb"), sensor
+        self.sensor = sensor
+        self._rgb_renderer = None
         self.rng = np.random.default_rng(seed)
 
         self.kind = kind or "flat"
@@ -81,7 +102,7 @@ class TerrainWorld:
         self.gap = fixed_gap or 0.40
         self._build()
 
-        self.obs_dim = PROPRIO + (TERRAIN_FEATS if privileged else 0)
+        self.obs_dim = PROPRIO + ((len(self.kinds) + 2) if privileged else 0)
         self.act_dim = 6
         self._renderer = None
         self.t = 0
@@ -98,13 +119,14 @@ class TerrainWorld:
         four genuinely different worlds.
         """
         self.model = self._mj.MjModel.from_xml_string(
-            world(self.kind, self.rise, self.gap))
+            world(self.kind, self.rise, self.gap, fovy=self.fovy))
         self.data = self._mj.MjData(self.model)
         self.dt = self.model.opt.timestep * self.frame_skip
         self._feet = [self._mj.mj_name2id(self.model,
                                           self._mj.mjtObj.mjOBJ_GEOM, n)
                       for n in ("footL_geom", "footR_geom")]
         self._renderer = None          # the model changed; drop the old one
+        self._rgb_renderer = None
         # The approach slab is identical in all four terrains, so the
         # resting height is too. Measuring it per reset cost 150 physics
         # steps every episode across 16 envs for an answer that never
@@ -133,9 +155,41 @@ class TerrainWorld:
     # -- observation --------------------------------------------------------
 
     def _terrain_feats(self) -> np.ndarray:
-        one_hot = np.zeros(len(KINDS))
-        one_hot[KINDS.index(self.kind)] = 1.0
+        """
+        The oracle's extra channel. Two numbers, whatever the terrain.
+
+        Keeping the WIDTH fixed across terrain sets is deliberate: the
+        one constant in this lab that encoded the length of another
+        constant went stale and killed three training runs silently.
+        On `patches` the two numbers are distance-to-the-next-slippery
+        -patch and its friction, which is exactly what a camera would
+        have to infer and what proprioception cannot know in advance.
+        """
+        one_hot = np.zeros(len(self.kinds))
+        one_hot[self.kinds.index(self.kind)] = 1.0
+        if self.kind == "patches":
+            return np.concatenate([one_hot,
+                                   [self.dist_to_patch()], [PATCH_FRICTION]])
         return np.concatenate([one_hot, [self.rise], [self.gap]])
+
+    def dist_to_patch(self) -> float:
+        """
+        Metres to the leading edge of the next slippery patch.
+
+        Negative while standing on one, and clipped to 3 m so the
+        number stays in a sane range before the running normaliser
+        sees it. This is the privileged signal, and the whole question
+        is whether a camera can replace it.
+        """
+        x = float(self.data.qpos[0])
+        span = PATCH_SPACING + PATCH_LEN
+        for i in range(N_PATCHES):
+            start = EVENT_X + i * span + PATCH_SPACING
+            if x < start:
+                return float(min(start - x, 3.0))
+            if x < start + PATCH_LEN:
+                return float(x - start - PATCH_LEN)      # on it: negative
+        return 3.0
 
     def _obs(self) -> np.ndarray:
         parts = [self.data.qpos[1:], np.clip(self.data.qvel, -10.0, 10.0)]
@@ -160,6 +214,26 @@ class TerrainWorld:
         self._renderer.update_scene(self.data, camera="eye")
         z = np.clip(self._renderer.render(), DEPTH_NEAR, DEPTH_FAR)
         return ((z - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)).astype(np.float32)
+
+    def rgb(self) -> np.ndarray:
+        """
+        Egocentric colour, 3xHxW in [0, 1].
+
+        Channels-first so it drops straight into a conv encoder beside
+        the depth path. MuJoCo renders colour by DEFAULT and depth only
+        when asked, so these are two separate Renderer objects -- the
+        same object cannot do both.
+        """
+        if self._rgb_renderer is None:
+            self._rgb_renderer = self._mj.Renderer(
+                self.model, height=self.depth_res, width=self.depth_res)
+        self._rgb_renderer.update_scene(self.data, camera="eye")
+        img = self._rgb_renderer.render().astype(np.float32) / 255.0
+        return np.transpose(img, (2, 0, 1))
+
+    def observe_image(self) -> np.ndarray:
+        """Whichever sensor this world was built with."""
+        return self.rgb() if self.sensor == "rgb" else self.depth()
 
     # -- state --------------------------------------------------------------
 
@@ -213,6 +287,18 @@ class TerrainWorld:
         return float(self.data.qpos[0])
 
     def past_event(self) -> bool:
+        if self.kind == "patches":
+            # Must cross EVERY patch. The first version used the generic
+            # x > EVENT_X + 1.3, which sits 1.3 m BEFORE the first
+            # slippery slab -- so both arms scored 100% without ever
+            # touching the hazard the lab is about.
+            field = N_PATCHES * (PATCH_SPACING + PATCH_LEN)
+            return self.progress() > EVENT_X + field
+        if self.kind == "stones":
+            # Clearing ONE stone is luck; the claim is about placing
+            # every foot. Require the far side of the last stone.
+            field = N_STONES * (STONE_TOP + self.gap)
+            return self.progress() > EVENT_X + field
         return self.progress() > EVENT_X + 1.3
 
     # -- the loop -----------------------------------------------------------
@@ -220,9 +306,11 @@ class TerrainWorld:
     def reset(self, seed: int | None = None) -> tuple[np.ndarray, dict]:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
-        self.kind = self.fixed_kind or str(self.rng.choice(KINDS))
+        self.kind = self.fixed_kind or str(self.rng.choice(self.kinds))
         self.rise = self.fixed_rise or float(self.rng.uniform(RISE_MIN, RISE_MAX))
-        self.gap = self.fixed_gap or float(self.rng.uniform(GAP_MIN, GAP_MAX))
+        lo, hi = ((STONE_GAP_MIN, STONE_GAP_MAX) if self.kind == "stones"
+                  else (GAP_MIN, GAP_MAX))
+        self.gap = self.fixed_gap or float(self.rng.uniform(lo, hi))
         self._build()
 
         self._mj.mj_resetData(self.model, self.data)

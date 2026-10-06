@@ -21,6 +21,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--total-steps", type=int, default=800_000)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--patches", action="store_true",
+                    help="PART 3: the friction-patch terrain, whose hazard "
+                         "is grip rather than geometry.")
+    ap.add_argument("--stones", action="store_true",
+                    help="PART 2: train on the four-terrain set that "
+                         "includes stepping stones. Separate from the "
+                         "published three-terrain runs, which it would "
+                         "otherwise invalidate (obs_dim 20 -> 21).")
     ap.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     ap.add_argument("--n-envs", type=int, default=16)
     ap.add_argument("--rollout", type=int, default=256)
@@ -33,7 +41,7 @@ def main() -> None:
     ap.add_argument("--no-privileged", action="store_true",
                     help="withhold the terrain descriptor: the BLIND control")
     ap.add_argument("--terrain", default=None,
-                    choices=("flat", "up", "down", "hop"),
+                    choices=("flat", "up", "down", "hop", "stones", "patches"),
                     help="train a SPECIALIST on one terrain. One policy "
                          "serving all four scored 62/0/100 on hollow "
                          "ascent across seeds -- too unreliable to distil "
@@ -48,14 +56,17 @@ def run(a) -> None:
     import numpy as np, torch
     from ppo import ActorCritic, RunningNorm, clipped_policy_loss, compute_gae, pick_device
     from vision_env import TerrainWorld, rollout, random_policy
-    from terrain import KINDS
+    from terrain import KINDS, PATCH_KINDS, STONE_KINDS
 
     dev = pick_device(a.device)
     torch.manual_seed(a.seed); np.random.seed(a.seed)
     out = HERE / "runs" / (a.name or f"teacher_s{a.seed}"); out.mkdir(parents=True, exist_ok=True)
 
     priv = not a.no_privileged
-    envs = [TerrainWorld(kind=a.terrain, privileged=priv, seed=a.seed + i)
+    kinds = (PATCH_KINDS if a.patches else
+             STONE_KINDS if a.stones else KINDS)
+    envs = [TerrainWorld(kind=a.terrain, privileged=priv, seed=a.seed + i,
+                         kinds=kinds)
             for i in range(a.n_envs)]
     od, ad = envs[0].obs_dim, envs[0].act_dim
     net = ActorCritic(od, ad).to(dev)
@@ -71,8 +82,8 @@ def run(a) -> None:
               f"{'   (DRY RUN)' if a.dry_run else ''}\n")
 
     rng = np.random.default_rng(a.seed)
-    base_kinds = [a.terrain] if a.terrain else list(KINDS)
-    base = [rollout(TerrainWorld(kind=k, seed=a.seed), random_policy(rng), seed=900+i)
+    base_kinds = [a.terrain] if a.terrain else list(kinds)
+    base = [rollout(TerrainWorld(kind=k, seed=a.seed, kinds=kinds), random_policy(rng), seed=900+i)
             for k in base_kinds for i in range(5)]
     base_ret = float(np.mean([b["return"] for b in base]))
     if not a.quiet:
@@ -114,11 +125,11 @@ def run(a) -> None:
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5); opt.step()
 
         if it % 3 == 0 or done >= a.total_steps:
-            ev = evaluate(net, norm, dev, a.seed, priv=priv, only=a.terrain)
+            ev = evaluate(net, norm, dev, a.seed, priv=priv, only=a.terrain, kinds=kinds)
             ev.update(step=done, seconds=round(time.time() - t0, 1))
             hist.append(ev)
             if not a.quiet:
-                per = "  ".join(f"{k}{ev['past_'+k]:4.0%}" for k in KINDS)
+                per = "  ".join(f"{k}{ev['past_'+k]:4.0%}" for k in kinds)
                 print(f"  {done:>8,}  return {ev['return']:7.1f}  "
                       f"past {ev['past_all']:5.0%}   {per}   {ev['seconds']:5.0f}s")
 
@@ -134,7 +145,7 @@ def run(a) -> None:
     torch.save({"model": net.state_dict(), "norm": norm.state_dict()}, out / "policy.pt")
     if not a.quiet:
         print(f"\n  BASELINE {base_ret:7.1f}   TRAINED {f['return']:7.1f}")
-        print(f"  past the event: " + "  ".join(f"{k} {f['past_'+k]:.0%}" for k in KINDS))
+        print(f"  past the event: " + "  ".join(f"{k} {f['past_'+k]:.0%}" for k in kinds))
         # Say so when the run was CAPPED. A dry run stops at 8k steps and
         # scores at or below the random baseline, because 8k steps is
         # roughly 1/200th of what the task needs -- that is the expected
@@ -152,10 +163,11 @@ def run(a) -> None:
             print("      uv run train_teacher.py --name v3_priv_s0")
 
 
-def evaluate(net, norm, dev, seed, per_kind=8, priv=True, only=None) -> dict:
+def evaluate(net, norm, dev, seed, per_kind=8, priv=True, only=None,
+             kinds=None) -> dict:
     import numpy as np, torch
     from vision_env import TerrainWorld, rollout
-    from terrain import KINDS
+    from terrain import KINDS, PATCH_KINDS, STONE_KINDS
 
     def pol(o):
         with torch.no_grad():
@@ -163,13 +175,14 @@ def evaluate(net, norm, dev, seed, per_kind=8, priv=True, only=None) -> dict:
             return net.distribution(t).mean.squeeze(0).cpu().numpy()
 
     out, allr = {}, []
-    for k in ([only] if only else KINDS):
-        env = TerrainWorld(kind=k, seed=seed, privileged=priv)
+    kinds = kinds or KINDS
+    for k in ([only] if only else kinds):
+        env = TerrainWorld(kind=k, seed=seed, privileged=priv, kinds=kinds)
         rs = [rollout(env, pol, seed=7000 + i) for i in range(per_kind)]
         out[f"past_{k}"] = round(sum(r["past_event"] for r in rs) / len(rs), 3)
         out[f"maxx_{k}"] = round(float(np.mean([r["max_x"] for r in rs])), 3)
         allr += rs
-    for k in KINDS:                       # keep the schema stable
+    for k in kinds:                       # keep the schema stable
         out.setdefault(f"past_{k}", 0.0)
         out.setdefault(f"maxx_{k}", 0.0)
     out["return"] = round(float(np.mean([r["return"] for r in allr])), 2)
