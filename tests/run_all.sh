@@ -55,6 +55,7 @@ TESTS=(
     tests/test_obstacle_hopper.py
     tests/test_biped_stairs.py
     tests/test_terrain_vision.py
+    tests/test_terrain_navigation.py
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py

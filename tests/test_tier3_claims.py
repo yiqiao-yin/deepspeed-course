@@ -78,6 +78,7 @@ TIER3 = {
     "07_physical_ai/01_obstacle_hopper": "compares a height-blind policy against a seeing one",
     "07_physical_ai/02_biped_stairs": "compares four morphologies on one staircase",
     "07_physical_ai/03_terrain_vision": "claims a depth camera beats proprioception",
+    "07_physical_ai/04_terrain_navigation": "claims terrain information beats blind navigation",
 }
 
 BASELINE = re.compile(r"\*\*Baseline:\*\*\s*\S", re.I)

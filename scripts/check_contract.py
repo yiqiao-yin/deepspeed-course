@@ -48,6 +48,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Documented exceptions, with the reason. An exception with no reason is a bug.
 NO_DEEPSPEED = {
+    "07_physical_ai/04_terrain_navigation":
+        "a 12k-parameter PPO policy over MuJoCo height fields; the "
+        "bottleneck is physics on the CPU, not arithmetic",
     "07_physical_ai/03_terrain_vision":
         "a 193k-parameter CNN student has nothing for ZeRO to shard. "
         "Note this is the one exception where a GPU DOES help -- 13.6x, "
