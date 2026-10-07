@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 56 pages with
+The documentation site is the primary way to read this material: 57 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -149,7 +149,7 @@ repository therefore ships **logic tests** that exercise the code paths without 
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 44 suites, no GPU and no downloads
+./tests/run_all.sh                  # 45 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -251,7 +251,8 @@ deepspeed-course/
 └── 07_physical_ai/        # Acting in a simulated world: physics, not tokens
     ├── 01_obstacle_hopper/      # MuJoCo + PPO from scratch. Why ONE seed proves nothing
     ├── 02_biped_stairs/         # A 2x2 of morphologies. The switches INTERACT
-    └── 03_terrain_vision/       # A depth camera. You cannot FEEL for a descent
+    ├── 03_terrain_vision/       # A depth camera. You cannot FEEL for a descent
+    └── 04_terrain_navigation/   # A 20x20 arena. Climb it, or walk around it
 ```
 
 **Every example folder has the same six files** (the contract in

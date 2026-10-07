@@ -115,6 +115,7 @@ const sidebars = {
               'tutorials/physical/obstacle-hopper',
               'tutorials/physical/biped-stairs',
               'tutorials/physical/terrain-vision',
+              'tutorials/physical/terrain-navigation',
             ],
           },
       ],

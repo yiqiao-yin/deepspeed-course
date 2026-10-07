@@ -268,6 +268,20 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/04_terrain_navigation
+    title: "Terrain Navigation: climb or go around"
+    summary: "A 20x20 m arena, ridges of two kinds, and a robot that must tell them apart."
+    est_minutes: 18
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is a height field, the policy is 12k params.
+      - { label: "The arena and its oracle (CPU)", cmd: "uv run world.py --check 200" }
+      - { label: "The robot (CPU)", cmd: "uv run robot.py" }
+      - { label: "Random baseline (CPU)", cmd: "uv run nav_env.py" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_nav.py --dry-run" }
+      - { label: "Locomotion gate (~10 min)", cmd: "uv run train_nav.py --flat --total-steps 800000 --name gate_flat" }
+      - { label: "Train a navigator (~20 min)", cmd: "uv run train_nav.py --mode privileged --goal-range 7 --name nav_priv_s0", primary: true }
+
   - id: 07_physical_ai/03_terrain_vision
     title: "Terrain Vision: looking before you step"
     summary: "You cannot feel for a descent. The first lab here where the robot needs an eye."

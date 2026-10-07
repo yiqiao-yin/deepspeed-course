@@ -206,6 +206,19 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/04_terrain_navigation": dict(min_vram=16, gpus=1, disk=20,
+                                    script="train_nav.py",
+                                    launcher="python",
+                                    args="--mode privileged --goal-range 7 "
+                                         "--total-steps 1500000",
+                                    note="TENTH launcher=python exception. A "
+                                         "12k-parameter PPO policy over MuJoCo "
+                                         "height fields -- nothing for ZeRO to "
+                                         "shard, and the bottleneck is physics "
+                                         "on the CPU, as in labs 1-3. Run "
+                                         "`--flat` first: it is the locomotion "
+                                         "gate, and it failed twice before the "
+                                         "position-actuator fix."),
     "07_physical_ai/03_terrain_vision": dict(min_vram=16, gpus=1, disk=20,
                                     script="train_student.py",
                                     launcher="python",
