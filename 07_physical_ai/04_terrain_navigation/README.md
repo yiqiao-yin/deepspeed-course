@@ -16,14 +16,14 @@ that.
 
 **Baseline:** the blind policy — proprioception and the goal bearing,
 same algorithm, same 1.5M steps, nine seeds across three sweeps:
-**8.1%** arrival, 44.6% path efficiency.
+**8.1%** arrival (88.4% path efficiency, which privileged does not beat).
 **Budget:** 1.5M environment steps per run × 3 seeds per arm × 3
 independent sweeps, goal range 7 m; scored on **120 evaluation episodes
 per checkpoint** on identical maps.
 **Falsifier:** if a policy handed the ground profile ahead does not beat
 the blind one on arrival, terrain information is not what this task
-needs. It does, on 7 of 9 seeds (Wilcoxon p = 0.022) — and on path
-efficiency on 4 of 5 comparable pairs.
+needs. It does, on 7 of 9 seeds (Wilcoxon p = 0.022). A second claim about
+path efficiency did NOT survive measurement and is withdrawn below.
 
 ![One arena](../../docusaurus-docs/static/img/physical/nav-world.png)
 
@@ -53,30 +53,29 @@ across nine seeds the blind arm produced 0%, 1% and 1%, while the
 privileged arm's worst is 4% — it appears to remove the floor, not
 only raise the mean.
 
-### The route is the stronger signal
+### The route efficiency claim, withdrawn
 
-On maps **both** arms solve:
+This README previously reported privileged policies walking much
+shorter paths — 54.8% vs 43.8% (3/3 pairs) from two sweeps, then 51.2%
+vs 44.6% (4 of 5) after a third. **Both were a measurement bug.** The episode continues after reaching B, so the odometer counted
+the robot milling around the goal for ~1300 further steps: one episode
+walked 7.4 m to B against a 7.2 m route — 97% — then another 7.2 m,
+and was published as 49%.
 
-![Path efficiency](../../docusaurus-docs/static/img/physical/nav-efficiency.png)
+Frozen at arrival:
 
 | seed pair | maps | blind | privileged |
 |---|---|---|---|
-| sweep 2, s0 | 2 | 52.1% | 60.8% |
-| sweep 2, s1 | 7 | 45.5% | 53.2% |
-| sweep 3, s1 | 9 | 33.7% | **50.3%** |
-| sweep 4, s4 | 4 | 46.9% | **40.5%** |
-| sweep 4, s5 | 6 | 44.9% | 51.4% |
-| **mean** | | **44.6%** | **51.2%** |
+| sweep 2, s0 | 2 | 96.4% | 81.4% |
+| sweep 2, s1 | 6 | 83.5% | 79.9% |
+| sweep 3, s1 | 9 | 88.1% | **89.9%** |
+| sweep 4, s4 | 4 | 91.2% | 84.0% |
+| sweep 4, s5 | 5 | 82.7% | **84.1%** |
+| **mean** | | **88.4%** | **83.8%** |
 
-Better on **4 of 5 pairs**, +6.6 points. Only pairs where both arms
-solved at least two of the same maps appear. A paired continuous measure on
-identical maps with identical outcomes — much less quantisation noise
-than binary arrival. The information buys **better routes**, not just
-more of them.
-
-![blind vs privileged](../../docusaurus-docs/static/img/physical/nav-compare.gif)
-
-Same map, both arrive: blind walks **25.5 m**, privileged **17.6 m**.
+Both arms are far better than reported — ~85% of optimal, not ~48% —
+and the direction reverses. **No route-efficiency advantage; the claim
+is withdrawn.** The arrival result is binary and unaffected.
 
 ---
 

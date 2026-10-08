@@ -287,6 +287,7 @@ class NavWorld:
         self.t = 0
         self.travelled = 0.0
         self._arrived = False
+        self._travelled_at_arrival = None
         self._prev_d = self.to_goal()
         return self._obs(), {"seed": m.seed, "route": self.route_len}
 
@@ -346,6 +347,20 @@ class NavWorld:
         # there.
         if self.arrived() and not self._arrived:
             self._arrived = True
+            # Freeze the odometer AT ARRIVAL.
+            #
+            # The episode deliberately continues after reaching B (see
+            # above), so `travelled` keeps accumulating while the robot
+            # mills around the goal for the remaining ~1300 steps. On
+            # one measured episode it walked 7.4 m to B against a 7.2 m
+            # optimal route -- 97% efficient -- and then another 7.2 m
+            # afterwards, so the published efficiency read 49%.
+            #
+            # Every efficiency number in this lab was therefore about
+            # half what it should have been. The task is "get to B",
+            # and the distance that answers it is the distance walked
+            # BY the time it got there.
+            self._travelled_at_arrival = self.travelled
             reward += 100.0
         self.t += 1
         fell = self.fallen()
@@ -354,6 +369,8 @@ class NavWorld:
                 "x": float(self.pos()[0]), "y": float(self.pos()[1]),
                 "to_goal": d, "arrived": self._arrived, "fell": fell,
                 "travelled": self.travelled, "route": self.route_len,
+                "travelled_to_goal": (self._travelled_at_arrival
+                                      if self._arrived else None),
             }
 
 
