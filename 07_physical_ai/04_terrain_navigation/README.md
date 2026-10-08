@@ -15,15 +15,15 @@ two-legged robot climbing 0.04–0.10 m treads reliably and failing above
 that.
 
 **Baseline:** the blind policy — proprioception and the goal bearing,
-same algorithm, same 1.5M steps, six seeds across two sweeps: **7.8%**
-arrival, 43.8% path efficiency.
-**Budget:** 1.5M environment steps per run × 3 seeds per arm × 2
+same algorithm, same 1.5M steps, nine seeds across three sweeps:
+**8.1%** arrival, 44.6% path efficiency.
+**Budget:** 1.5M environment steps per run × 3 seeds per arm × 3
 independent sweeps, goal range 7 m; scored on **120 evaluation episodes
 per checkpoint** on identical maps.
 **Falsifier:** if a policy handed the ground profile ahead does not beat
 the blind one on arrival, terrain information is not what this task
-needs. It does, on 5 of 6 seeds (sign test p = 0.016) — and on path
-efficiency on 3/3 pairs.
+needs. It does, on 7 of 9 seeds (Wilcoxon p = 0.022) — and on path
+efficiency on 4 of 5 comparable pairs.
 
 ![One arena](../../docusaurus-docs/static/img/physical/nav-world.png)
 
@@ -38,13 +38,20 @@ on identical maps:
 
 | | arrival | per seed |
 |---|---|---|
-| blind | 7.8% | 8, 15, 0, 4, 19, 1 % |
-| **privileged** | **11.7%** | 16, 16, 4, 6, 18, 11 % |
+| blind | 8.1% | 8, 15, 0, 4, 19, 1, 1, 12, 14 % |
+| **privileged** | **12.1%** | 16, 16, 4, 6, 18, 11, 12, 14, 13 % |
 
-Ahead on **5 of 6 seeds**, mean **+3.9 points**. Sign test p = 0.016;
-Wilcoxon 0.063; paired t 0.089. Pooled Fisher p = 0.016 is an **upper
-bound** — episodes within a seed share a policy and are not
-independent.
+Ahead on **7 of 9 seeds**, mean **+4.0 points**. Wilcoxon **p = 0.022**,
+paired t **0.017** — both strengthened from the six-seed version. The
+sign test went the other way (0.016 → 0.090) because it counts only
+wins and the two new losses were tiny while the wins were larger;
+Wilcoxon uses the magnitudes and is the headline. Pooled Fisher is an
+**upper bound** — episodes within a seed share a policy.
+
+The effect size barely moved: **+3.9 at six seeds, +4.0 at nine**. And
+across nine seeds the blind arm produced 0%, 1% and 1%, while the
+privileged arm's worst is 4% — it appears to remove the floor, not
+only raise the mean.
 
 ### The route is the stronger signal
 
@@ -57,9 +64,12 @@ On maps **both** arms solve:
 | sweep 2, s0 | 2 | 52.1% | 60.8% |
 | sweep 2, s1 | 7 | 45.5% | 53.2% |
 | sweep 3, s1 | 9 | 33.7% | **50.3%** |
-| **mean** | | **43.8%** | **54.8%** |
+| sweep 4, s4 | 4 | 46.9% | **40.5%** |
+| sweep 4, s5 | 6 | 44.9% | 51.4% |
+| **mean** | | **44.6%** | **51.2%** |
 
-Better on 3/3 pairs, **+11.0 points**. A paired continuous measure on
+Better on **4 of 5 pairs**, +6.6 points. Only pairs where both arms
+solved at least two of the same maps appear. A paired continuous measure on
 identical maps with identical outcomes — much less quantisation noise
 than binary arrival. The information buys **better routes**, not just
 more of them.
