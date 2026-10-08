@@ -35,20 +35,37 @@ identical maps:
 
 | | arrival | per seed |
 |---|---|---|
-| blind — proprioception + goal bearing | 7.8% | 8, 15, 0, 4, 19, 1 % |
-| **privileged** — plus the ground ahead | **11.7%** | 16, 16, 4, 6, 18, 11 % |
+| blind — proprioception + goal bearing | 8.1% | 8, 15, 0, 4, 19, 1, 1, 12, 14 % |
+| **privileged** — plus the ground ahead | **12.1%** | 16, 16, 4, 6, 18, 11, 12, 14, 13 % |
 
-Privileged ahead on **5 of 6 seeds**, mean **+3.9 points**.
+Privileged ahead on **7 of 9 seeds**, mean **+4.0 points**.
 
-| test | p |
-|---|---|
-| sign test | **0.016** |
-| Wilcoxon signed-rank | 0.063 |
-| paired t | 0.089 |
-| pooled Fisher *(upper bound)* | 0.016 |
+| test | 6 seeds | **9 seeds** |
+|---|---|---|
+| Wilcoxon signed-rank | 0.063 | **0.022** |
+| paired t | 0.089 | **0.017** |
+| sign test | 0.016 | 0.090 |
+| pooled Fisher *(upper bound)* | 0.016 | 0.003 |
+
+The two tests that use effect **magnitude** both strengthened and are
+now below 0.05. The sign test weakened, and the reason is worth
+knowing: it counts only wins and losses, and the two new losses were
+tiny (−1 and −5 points) while the wins were larger. A sign test throws
+away exactly the information that distinguishes those. **Wilcoxon is
+the headline here.**
 
 Pooling is an upper bound — episodes within a seed share a policy, so
-they are not independent. The sign test is the honest headline.
+they are not independent.
+
+**The effect size barely moved: +3.9 points at six seeds, +4.0 at
+nine.** Three more seeds shifted the estimate by a tenth of a point.
+
+### It also removes the catastrophic runs
+
+Across nine seeds the blind arm produced **0%, 1% and 1%** — three
+near-total failures. The privileged arm's worst seed is **4%**. The
+information does not only raise the mean; on this evidence it removes
+the floor.
 
 ### The stronger signal is the route, not the arrival
 
@@ -62,9 +79,14 @@ much shorter path:
 | sweep 2, s0 | 2 | 52.1% | 60.8% |
 | sweep 2, s1 | 7 | 45.5% | 53.2% |
 | sweep 3, s1 | 9 | 33.7% | **50.3%** |
-| **mean** | | **43.8%** | **54.8%** |
+| sweep 4, s4 | 4 | 46.9% | **40.5%** |
+| sweep 4, s5 | 6 | 44.9% | 51.4% |
+| **mean** | | **44.6%** | **51.2%** |
 
-Better on **3/3 pairs**, +11.0 points. This is a paired, *continuous*
+Better on **4 of 5 pairs**, +6.6 points. Only pairs where *both* arms
+solved at least two of the same maps appear — four of the nine seed
+pairs never overlapped enough to compare, which is itself a
+consequence of a 12% arrival rate. This is a paired, *continuous*
 measure on identical maps with identical outcomes — far less
 quantisation noise than binary arrival, and it says the information
 buys **better routes**, not merely more of them.
@@ -247,7 +269,29 @@ went. Both are drawn as **scene geometry**, not painted onto the frame —
 see the note below.
 
 ![A second map](/img/physical/nav-route-b.gif)
+
+### From an angle
+
+Overhead reads the route; it flattens the terrain. These show the
+relief the robot is actually dealing with — and they only work because
+the route and track are **scene geometry**, so they project correctly
+at any camera angle.
+
+![Isometric](/img/physical/nav-iso.gif)
+
+![Chase](/img/physical/nav-chase.gif)
+
+![Over the shoulder](/img/physical/nav-shoulder.gif)
+
+![Orbit](/img/physical/nav-orbit.gif)
+
 ![Ground level](/img/physical/nav-ground.gif)
+
+The HUD on these carries a **terrain compass** — the same three probes
+the privileged policy receives, with each reading red when the rise
+exceeds the 0.12 m climbable threshold. On the blind arm the panel is
+greyed and marked *not observed*, because a HUD that looked identical
+for both arms would quietly imply they see the same thing.
 
 ![A failure](/img/physical/nav-fail.gif)
 

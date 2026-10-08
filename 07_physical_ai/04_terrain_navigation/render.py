@@ -123,8 +123,31 @@ def load_policy(run: str):
     return act, meta["mode"]
 
 
+# Camera presets. `overhead` is orthographic so the arena reads as a
+# map; the rest are perspective, because relief is what they exist to
+# show and an orthographic 3/4 view flattens exactly that.
+#
+# All of them draw the route and track correctly, which is only true
+# because those are scene GEOMETRY rather than pixels painted on. The
+# hand projection this replaced was valid for one camera and one angle;
+# every view below would have needed its own version of it, and each
+# would have been wrong in its own way.
+VIEWS = {
+    "overhead": dict(ortho=True,  elev=-90.0, azim=90.0,  dist=21.0,
+                     track=False, label="overhead, orthographic"),
+    "iso":      dict(ortho=False, elev=-42.0, azim=125.0, dist=27.0,
+                     track=False, label="isometric"),
+    "chase":    dict(ortho=False, elev=-16.0, azim=None,  dist=5.5,
+                     track=True,  label="chase"),
+    "shoulder": dict(ortho=False, elev=-24.0, azim=None,  dist=3.2,
+                     track=True,  label="over the shoulder"),
+    "orbit":    dict(ortho=False, elev=-34.0, azim="spin", dist=26.0,
+                     track=False, label="orbit"),
+}
+
+
 def episode(run: str, seed: int, width: int, height: int, every: int,
-            overhead: bool = True):
+            overhead: bool = True, view: str = "overhead"):
     """One episode, filmed, with the route and the track drawn on."""
     import mujoco
     import numpy as np
@@ -146,36 +169,38 @@ def episode(run: str, seed: int, width: int, height: int, every: int,
         obs, _, term, trunc, info = env.step(act(obs))
         track.append((info["x"], info["y"]))
         if len(track) % every == 0 or term:
-            if overhead:
-                # ORTHOGRAPHIC, straight down. The overlay projects world
-                # metres to pixels with a linear map, and under a
-                # PERSPECTIVE camera that map is simply wrong -- every
-                # route line, track and obstacle outline lands slightly
-                # off the terrain it describes, which looks like a
-                # rendering quirk and is actually the figure disagreeing
-                # with the data. Orthographic makes the linear map exact.
-                cam.orthographic = 1
-                cam.lookat[:] = [0, 0, 0]
-                cam.distance = ORTHO_SPAN
-                cam.elevation, cam.azimuth = -90.0, 90.0
+            V = VIEWS[view]
+            cam.orthographic = 1 if V["ortho"] else 0
+            cam.distance = V["dist"]
+            cam.elevation = V["elev"]
+            if V["track"]:
+                cam.lookat[:] = [info["x"], info["y"],
+                                 env._h_at(info["x"], info["y"]) + 0.9]
+                # Behind the robot, looking the way it faces -- which is
+                # the whole point of a chase view and needs the live yaw
+                # rather than a fixed angle.
+                cam.azimuth = np.degrees(env.yaw()) + 180.0
             else:
-                cam.lookat[:] = [info["x"], info["y"], 1.0]
-                cam.distance, cam.elevation, cam.azimuth = 5.0, -14, 120
+                cam.lookat[:] = [0, 0, 0]
+                cam.azimuth = (V["azim"] if V["azim"] != "spin"
+                               else (len(track) * 0.35) % 360.0)
             r.update_scene(env.data, cam)
-            if overhead:
-                # The oracle's route, then where the robot actually went,
-                # then the goal -- all as scene geometry.
-                for x, y in route[::6]:
-                    add_marker(r.scene, (x, y, env._h_at(x, y) + 0.12),
-                               (0.10, 0.95, 0.45, 1.0), 0.11)
-                for x, y in track[::4]:
-                    add_marker(r.scene, (x, y, env._h_at(x, y) + 0.30),
-                               (1.0, 0.42, 0.10, 1.0), 0.14)
-                sx, sy = env.map.start
-                add_marker(r.scene, (sx, sy, env._h_at(sx, sy) + 0.5),
-                           (0.25, 0.60, 1.0, 1.0), 0.32)
+            # Markers scale with camera distance. A sphere sized for a
+            # 21 m overhead shot is the size of the robot on a 5.5 m
+            # chase cam, and swallows the thing it is annotating.
+            k = V["dist"] / 21.0
+            for x, y in route[::6]:
+                add_marker(r.scene, (x, y, env._h_at(x, y) + 0.12),
+                           (0.10, 0.95, 0.45, 1.0), 0.11 * k)
+            for x, y in track[::4]:
+                add_marker(r.scene, (x, y, env._h_at(x, y) + 0.30 * k),
+                           (1.0, 0.42, 0.10, 1.0), 0.14 * k)
+            sx, sy = env.map.start
+            add_marker(r.scene, (sx, sy, env._h_at(sx, sy) + 0.5),
+                       (0.25, 0.60, 1.0, 1.0), 0.32 * k)
             frames.append(overlay(r.render(), env, info, route, track,
-                                  mode=mode, overhead=overhead))
+                                  mode=mode, overhead=overhead, env_=env,
+                                  view=view))
         if term or trunc:
             break
     return frames, {"arrived": info["arrived"], "fell": info["fell"],
@@ -228,7 +253,8 @@ def add_marker(scene, pos, rgba, size=0.14):
     scene.ngeom += 1
 
 
-def overlay(frame, env, info, route, track, *, mode, overhead):
+def overlay(frame, env, info, route, track, *, mode, overhead,
+            env_=None, view='overhead'):
     import numpy as np
     from PIL import Image, ImageDraw
 
@@ -237,12 +263,27 @@ def overlay(frame, env, info, route, track, *, mode, overhead):
     W, H = img.size
 
     eff = (info["route"] / info["travelled"]) if info["travelled"] > 0.1 else 0
+    import numpy as _np
+
+    # Heading, and how far off the goal bearing it is. A navigating
+    # robot can be walking beautifully in the wrong direction, and the
+    # distance-to-goal row alone does not show that.
+    gx, gy = env.map.goal
+    bearing = _np.arctan2(gy - env.pos()[1], gx - env.pos()[0])
+    off = _np.degrees((bearing - env.yaw() + _np.pi) % (2 * _np.pi) - _np.pi)
+    speed = float(_np.hypot(env.data.qvel[0], env.data.qvel[1]))
+
     stats = [("mode", mode),
+             ("view", VIEWS[view]["label"]),
+             ("step", f"{env.t} / {env.max_steps}"),
              ("to goal", f"{info['to_goal']:.1f} m"),
+             ("heading error", f"{off:+.0f}\u00b0"),
+             ("speed", f"{speed:.2f} m/s"),
              ("walked", f"{info['travelled']:.1f} m"),
              ("best route", f"{info['route']:.1f} m"),
-             ("efficiency", f"{min(eff,1):.0%}")]
-    pw, ph = 228, 30 + 20 * len(stats)
+             ("efficiency", f"{min(eff,1):.0%}"),
+             ("clearance", f"{env.clearance():.2f} m")]
+    pw, ph = 244, 30 + 20 * len(stats)
     d.rounded_rectangle([12, 12, 12 + pw, 12 + ph], 8, fill=PANEL,
                         outline=EDGE)
     y = 24
@@ -252,17 +293,40 @@ def overlay(frame, env, info, route, track, *, mode, overhead):
                anchor="ra")
         y += 20
 
-    if overhead:
-        legend = (((26, 242, 115), "oracle's shortest route"),
-                  ((255, 107, 26), "where the robot went"),
-                  ((64, 153, 255), "start"))
-        lh = 19 * len(legend) + 12
-        d.rounded_rectangle([12, H - lh - 12, 232, H - 12], 8, fill=PANEL,
-                            outline=EDGE)
-        for i, (col, lab) in enumerate(legend):
-            yy = H - lh - 2 + i * 19
-            d.line([(24, yy + 6), (50, yy + 6)], fill=col, width=3)
-            d.text((58, yy), lab, font=_font(11), fill=MUTED)
+    # WHAT THE ROBOT KNOWS about the ground around it: the same three
+    # probes the privileged policy receives, drawn as a little compass.
+    # On the blind arm this panel is shown greyed, because the whole
+    # point is that it does NOT have these numbers -- a HUD that looked
+    # identical for both arms would quietly imply they see the same
+    # thing.
+    from world import STEP_MAX
+    feats = env.terrain_feats() if env.mode == "privileged" else None
+    bx, by, bw = 12, 12 + ph + 10, 244
+    d.rounded_rectangle([bx, by, bx + bw, by + 96], 8, fill=PANEL,
+                        outline=EDGE)
+    d.text((bx + 14, by + 8),
+           "ground ahead" if feats is not None else "ground ahead — NOT OBSERVED",
+           font=_font(10, True), fill=INK if feats is not None else MUTED)
+    for i, (lab, lobe) in enumerate((("left", 1), ("ahead", 0), ("right", 2))):
+        cx = bx + 46 + i * 76
+        if feats is None:
+            d.rounded_rectangle([cx - 30, by + 30, cx + 30, by + 58], 5,
+                                outline=(70, 86, 104, 255))
+            d.text((cx, by + 44), "?", font=_font(13, True),
+                   fill=(90, 106, 124), anchor="mm")
+        else:
+            rise, blocked = float(feats[lobe * 2]), bool(feats[lobe * 2 + 1])
+            col = BAD if blocked else GOOD
+            d.rounded_rectangle([cx - 30, by + 30, cx + 30, by + 58], 5,
+                                fill=col + (55,), outline=col + (255,))
+            d.text((cx, by + 44), f"{rise:.2f} m", font=_font(11, True),
+                   fill=col, anchor="mm")
+        d.text((cx, by + 68), lab, font=_font(10), fill=MUTED, anchor="mm")
+    if feats is not None:
+        # Below the row, not beside the title -- at 244 px wide the two
+        # labels collided.
+        d.text((bx + bw / 2, by + 80), f"red when the rise exceeds "
+               f"{STEP_MAX:.2f} m", font=_font(9), fill=MUTED, anchor="mm")
 
     chip = ("ARRIVED" if info["arrived"] else
             ("FELL" if info["fell"] else "WALKING"))
@@ -346,8 +410,38 @@ def clip_fail(a) -> None:
     _save(f, OUT / "nav-fail.gif", a)
 
 
+def _angled(a, view: str, out: str) -> None:
+    f, res = episode(a.run, a.seed, a.width, a.height, a.every,
+                     overhead=(view == "overhead"), view=view)
+    print(f"    {VIEWS[view]['label']:<22} walked {res['travelled']:5.1f} m  "
+          f"{'ARRIVED' if res['arrived'] else 'did not arrive'}")
+    _save(f, OUT / out, a)
+
+
+def clip_iso(a) -> None:
+    """A 3/4 view: relief AND the route, which neither other view gives."""
+    _angled(a, "iso", "nav-iso.gif")
+
+
+def clip_chase(a) -> None:
+    """Behind the robot, turning with it."""
+    _angled(a, "chase", "nav-chase.gif")
+
+
+def clip_shoulder(a) -> None:
+    """Close in, where the ridges are at eye level."""
+    _angled(a, "shoulder", "nav-shoulder.gif")
+
+
+def clip_orbit(a) -> None:
+    """A slow orbit: the arena as a three-dimensional place."""
+    _angled(a, "orbit", "nav-orbit.gif")
+
+
 CLIPS = {"route": clip_route, "ground": clip_ground,
-         "compare": clip_compare, "fail": clip_fail}
+         "compare": clip_compare, "fail": clip_fail,
+         "iso": clip_iso, "chase": clip_chase,
+         "shoulder": clip_shoulder, "orbit": clip_orbit}
 
 
 def main() -> int:
