@@ -67,34 +67,48 @@ near-total failures. The privileged arm's worst seed is **4%**. The
 information does not only raise the mean; on this evidence it removes
 the floor.
 
-### The stronger signal is the route, not the arrival
+### The route efficiency claim, withdrawn
 
-On maps **both** arms solve, the one that can see the ground walks a
-much shorter path:
+Earlier versions of this page reported that privileged policies walk
+much shorter paths, and called it the stronger of the two signals:
+54.8% against 43.8% (3 of 3 pairs) from two sweeps, then 51.2% against
+44.6% (4 of 5) once a third sweep landed.
 
-![Path efficiency](/img/physical/nav-efficiency.png)
+**It was a measurement bug, and the corrected numbers reverse it.**
+
+The episode deliberately continues after the robot reaches B. The
+odometer kept running, so every "distance walked" included the robot
+milling around the goal for the remaining ~1300 steps. On one measured
+episode it walked 7.4 m to B against a 7.2 m optimal route — 97%
+efficient — and then another 7.2 m afterwards, so the published figure
+read 49%.
+
+With the odometer frozen at arrival:
 
 | seed pair | maps both solved | blind | privileged |
 |---|---|---|---|
-| sweep 2, s0 | 2 | 52.1% | 60.8% |
-| sweep 2, s1 | 7 | 45.5% | 53.2% |
-| sweep 3, s1 | 9 | 33.7% | **50.3%** |
-| sweep 4, s4 | 4 | 46.9% | **40.5%** |
-| sweep 4, s5 | 6 | 44.9% | 51.4% |
-| **mean** | | **44.6%** | **51.2%** |
+| sweep 2, s0 | 2 | 96.4% | 81.4% |
+| sweep 2, s1 | 6 | 83.5% | 79.9% |
+| sweep 3, s1 | 9 | 88.1% | **89.9%** |
+| sweep 4, s4 | 4 | 91.2% | 84.0% |
+| sweep 4, s5 | 5 | 82.7% | **84.1%** |
+| **mean** | | **88.4%** | **83.8%** |
 
-Better on **4 of 5 pairs**, +6.6 points. Only pairs where *both* arms
-solved at least two of the same maps appear — four of the nine seed
-pairs never overlapped enough to compare, which is itself a
-consequence of a 12% arrival rate. This is a paired, *continuous*
-measure on identical maps with identical outcomes — far less
-quantisation noise than binary arrival, and it says the information
-buys **better routes**, not merely more of them.
+Two things changed. Both arms are far better than reported — **~85%
+of optimal, not ~48%** — and the direction flips: blind is nominally
+*more* efficient, on 3 of 5 pairs. There is no route-efficiency
+advantage here, and the claim is withdrawn rather than restated.
 
-![Blind against privileged on one map](/img/physical/nav-compare.gif)
+**The arrival result is unaffected.** Arrival is binary and does not
+depend on distance walked.
 
-Same map, same goal, both arrive. The blind robot walks **25.5 m**; the
-one that can see the ground walks **17.6 m**.
+:::tip This was caught by watching the animation
+A reader asked why the orange track reaches the flag while the robot
+is somewhere else. That is the bug, visible: the robot arrives, the
+clip keeps running, and the odometer keeps counting. A figure that
+disagrees with the thing it describes is worth more than a figure that
+merely looks plausible.
+:::
 
 ## How it is put together
 

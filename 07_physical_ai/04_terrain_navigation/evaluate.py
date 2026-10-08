@@ -87,8 +87,12 @@ def score(run: str, episodes: int, goal_range: float | None) -> dict:
         arrived += bool(info["arrived"])
         fell += bool(info["fell"])
         lefts.append(info["to_goal"])
-        if info["arrived"] and info["travelled"] > 0.1:
-            effs.append(min(info["route"] / info["travelled"], 1.0))
+        # `travelled_to_goal`, not `travelled`: the episode continues
+        # after arrival, and counting the post-arrival wandering
+        # halved every efficiency number this lab published.
+        tg = info.get("travelled_to_goal")
+        if info["arrived"] and tg and tg > 0.1:
+            effs.append(min(info["route"] / tg, 1.0))
     lo, hi = wilson(arrived, episodes)
     return {"run": run, "mode": meta["mode"], "n": episodes,
             "arrived_k": arrived, "arrived": arrived / episodes,
