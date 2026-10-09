@@ -25,6 +25,7 @@ OUT = HERE.parent.parent / "docusaurus-docs" / "static" / "img" / "physical"
 DEEP, PANEL = "#08182a", "#0e1b26"
 FG, MUTED, GRID = "#e9f0f6", "#8ea3b5", "#1d2f3e"
 BLIND, PRIV, ORACLE = "#e26e6e", "#63a3d0", "#5cc48d"
+PADDED = "#c9a227"        # the width control
 
 sys.path.insert(0, str(HERE))
 
@@ -50,14 +51,33 @@ def legend(ax):
         t.set_color(FG)
 
 
-def evaluations() -> list[dict]:
-    """Both sweeps, from evaluate.py. Six seeds per arm."""
+# Every figure reads nav5_* and nothing else.
+#
+# The nav_, nav2_, nav3_ and nav4_ runs were all trained in a BROKEN
+# COORDINATE FRAME: `rootx`/`rooty` are slide joints and the torso body
+# was declared at pos="(start)", so reset() writing the start into qpos
+# spawned the robot at TWICE its start coordinates -- frequently off the
+# height field entirely. Their arrival rates, their terrain probes and
+# their published comparison are all measurements of a different world.
+# They stay on disk as the record of what was withdrawn; they must never
+# re-enter a figure.
+SWEEP = "nav5_"
+
+
+def evaluations(mode: str | None = None) -> list[dict]:
+    """The nine corrected-frame seeds per arm, from evaluate.py."""
     rows = []
-    for f in ("evaluation.json", "evaluation3.json"):
+    for f in ("evaluation5.json", "evaluation_padded.json"):
         p = RUNS / f
         if p.exists():
             rows += json.loads(p.read_text())
-    return rows
+    # de-duplicate: a run scored in both files keeps the later row
+    seen = {}
+    for r in rows:
+        if r["run"].startswith(SWEEP):
+            seen[r["run"]] = r
+    out = sorted(seen.values(), key=lambda r: r["run"])
+    return [r for r in out if mode is None or r["mode"] == mode]
 
 
 def fig_arrival(plt) -> None:
@@ -70,11 +90,10 @@ def fig_arrival(plt) -> None:
     """
     import numpy as np
 
-    rows = evaluations()
-    b = [r["arrived"] for r in rows if r["mode"] == "blind"]
-    p = [r["arrived"] for r in rows if r["mode"] == "privileged"]
+    b = np.array([r["arrived"] for r in evaluations("blind")])
+    p = np.array([r["arrived"] for r in evaluations("privileged")])
     n = min(len(b), len(p))
-    b, p = np.array(b[:n]), np.array(p[:n])
+    b, p = b[:n], p[:n]
 
     fig, ax = plt.subplots(figsize=(8.4, 4.4))
     fig.patch.set_facecolor(DEEP)
@@ -86,12 +105,13 @@ def fig_arrival(plt) -> None:
         ax.annotate(f"{pp-bb:+.1%}", (i, max(bb, pp) + 0.008),
                     ha="center", color=PRIV if pp > bb else BLIND, fontsize=9)
     ax.set_xticks(xs)
-    ax.set_xticklabels([f"s{i%3}\n{'sweep 2' if i<3 else 'sweep 3'}"
-                        for i in range(n)], fontsize=8)
+    ax.set_xticklabels([f"s{i}" for i in range(n)], fontsize=9)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    ax.axhline(0.10, color="#8ea3b5", ls=":", lw=1.2,
+               label="10% — below this the run did not learn the task")
     style(ax, f"Arrival, 120 episodes per bar — privileged ahead on "
-              f"{int((p>b).sum())} of {n} seeds", "",
-          "episodes reaching B")
+              f"{int((p>b).sum())} of {n} seeds, and COLLAPSED on "
+              f"{int((p<0.10).sum())}", "", "episodes reaching B")
     legend(ax)
     fig.tight_layout()
     fig.savefig(OUT / "nav-arrival.png", dpi=150, facecolor=DEEP)
@@ -100,35 +120,121 @@ def fig_arrival(plt) -> None:
 
 
 def fig_efficiency(plt) -> None:
-    """Path efficiency on maps BOTH arms solved — a paired, continuous measure."""
+    """
+    Path efficiency, paired by seed, from the CORRECTED denominator.
+
+    This figure has been wrong twice and the reasons are different, so
+    both are worth stating. First the odometer kept running after the
+    robot reached B, so a policy that walked a 97%-optimal route and
+    then milled around the goal for 1300 steps was published at 49%.
+    Then the denominator itself: `solve()` is a 4-connected search that
+    cannot move diagonally, so it overstated the optimum by up to
+    sqrt(2) and three episodes scored over 100% -- which `min(..., 1.0)`
+    quietly rewrote to exactly 100%.
+
+    What is plotted is `geodesic / distance walked to B`, with no clamp.
+    A bar over 1.0 would mean the denominator is wrong again.
+    """
     import numpy as np
 
-    f = RUNS / "efficiency.json"
-    if not f.exists():
-        print("  (no runs/efficiency.json — skipping)")
+    b = evaluations("blind")
+    p = evaluations("privileged")
+    n = min(len(b), len(p))
+    # Only seeds where BOTH arms actually arrived often enough for a
+    # route to average. An efficiency computed over one lucky episode is
+    # not a measurement, and the collapsed privileged seeds contribute
+    # exactly that.
+    keep = [i for i in range(n)
+            if b[i]["arrived"] >= 0.10 and p[i]["arrived"] >= 0.10]
+    if not keep:
+        print("  (no seed pair where both arms arrived — skipping)")
         return
-    d = json.loads(f.read_text())
-    labels = [r["pair"] for r in d]
-    b = np.array([r["blind"] for r in d])
-    p = np.array([r["privileged"] for r in d])
+    be = np.array([b[i]["efficiency"] for i in keep])
+    pe = np.array([p[i]["efficiency"] for i in keep])
 
     fig, ax = plt.subplots(figsize=(7.6, 4.2))
     fig.patch.set_facecolor(DEEP)
-    xs = np.arange(len(d))
-    ax.bar(xs - 0.2, b, 0.4, color=BLIND, edgecolor=GRID, label="blind")
-    ax.bar(xs + 0.2, p, 0.4, color=PRIV, edgecolor=GRID, label="privileged")
+    xs = np.arange(len(keep))
+    ax.bar(xs - 0.2, be, 0.4, color=BLIND, edgecolor=GRID, label="blind")
+    ax.bar(xs + 0.2, pe, 0.4, color=PRIV, edgecolor=GRID, label="privileged")
     ax.axhline(1.0, color=ORACLE, ls="--", lw=1.4,
-               label="oracle's route (efficiency 1.0)")
-    ax.set_xticks(xs); ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylim(0, 1.08)
+               label="the geodesic (efficiency 1.0)")
+    ax.set_xticks(xs)
+    ax.set_xticklabels([f"s{i}" for i in keep], fontsize=9)
+    ax.set_ylim(0, 1.15)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    style(ax, "Path efficiency on maps BOTH arms solved", "",
-          "oracle route / distance walked")
+    style(ax, f"Path efficiency on the {len(keep)} seed pairs where both "
+              f"arms arrived", "", "geodesic / distance walked to B")
     legend(ax)
     fig.tight_layout()
     fig.savefig(OUT / "nav-efficiency.png", dpi=150, facecolor=DEEP)
     plt.close(fig)
     print("  nav-efficiency.png")
+
+
+def fig_control(plt) -> None:
+    """
+    The finding, and the control that scopes it.
+
+    The privileged arm is bimodal: it matches blind when it trains and
+    sits on the floor when it does not. Two explanations fit equally
+    well -- six extra DIMENSIONS destabilise PPO at this scale, or those
+    particular FEATURES are harmful -- and they are told apart by
+    widening the blind observation with six constant zeros. Same input
+    width, zero information.
+    """
+    import numpy as np
+
+    arms = [("blind", BLIND, evaluations("blind")),
+            ("privileged\n(+6 terrain features)", PRIV,
+             evaluations("privileged")),
+            ("padded control\n(+6 constant zeros)", PADDED,
+             evaluations("padded"))]
+    arms = [(lab, col, rows) for lab, col, rows in arms if rows]
+    if len(arms) < 3:
+        print("  (padded control not scored yet — skipping nav-control.png)")
+        return
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(10.4, 4.4),
+                                  gridspec_kw={"width_ratios": [1.5, 1]})
+    fig.patch.set_facecolor(DEEP)
+
+    # Left: every seed as a dot, so bimodality is visible rather than
+    # averaged away. A mean over a bimodal arm describes no run in it.
+    for k, (lab, col, rows) in enumerate(arms):
+        v = np.array([r["arrived"] for r in rows])
+        jit = np.linspace(-0.13, 0.13, len(v))
+        ax.scatter(np.full(len(v), k) + jit, v, s=74, color=col,
+                   edgecolor=GRID, zorder=3, linewidth=0.8)
+        ax.plot([k - 0.26, k + 0.26], [v.mean()] * 2, color=FG, lw=2.0,
+                zorder=4)
+    ax.axhspan(0, 0.10, color="#3a1620", zorder=0)
+    ax.annotate("did not learn the task", (-0.42, 0.045), ha="left",
+                va="center", color="#c98a8a", fontsize=9, zorder=5)
+    ax.set_xticks(range(len(arms)))
+    ax.set_xticklabels([a[0] for a in arms], fontsize=9)
+    ax.set_xlim(-0.5, len(arms) - 0.5)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    style(ax, "Every seed, 120 episodes each (bar = mean)", "",
+          "episodes reaching B")
+
+    # Right: the thing the arms actually differ in.
+    for k, (lab, col, rows) in enumerate(arms):
+        v = np.array([r["arrived"] for r in rows])
+        frac = float((v < 0.10).mean())
+        ax2.bar(k, frac, 0.56, color=col, edgecolor=GRID)
+        ax2.annotate(f"{int((v < 0.10).sum())}/{len(v)}",
+                     (k, frac + 0.025), ha="center", color=FG, fontsize=10)
+    ax2.set_xticks(range(len(arms)))
+    ax2.set_xticklabels([a[0].split("\n")[0] for a in arms], fontsize=9)
+    ax2.set_ylim(0, 1.0)
+    ax2.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    style(ax2, "Seeds that collapsed", "", "fraction under 10%")
+
+    fig.tight_layout()
+    fig.savefig(OUT / "nav-control.png", dpi=150, facecolor=DEEP)
+    plt.close(fig)
+    print("  nav-control.png")
 
 
 def fig_world(plt) -> None:
@@ -184,9 +290,11 @@ def fig_curves(plt) -> None:
     fig, ax = plt.subplots(figsize=(8.6, 4.4))
     fig.patch.set_facecolor(DEEP)
     seen = set()
-    for f in sorted(RUNS.glob("nav[23]_*_s*/curve.csv")):
-        mode = "blind" if "blind" in f.parent.name else "privileged"
-        col = BLIND if mode == "blind" else PRIV
+    for f in sorted(RUNS.glob(f"{SWEEP}*_s*/curve.csv")):
+        nm = f.parent.name
+        mode = ("blind" if "blind" in nm
+                else "padded" if "padded" in nm else "privileged")
+        col = {"blind": BLIND, "privileged": PRIV, "padded": PADDED}[mode]
         rows = list(csv.DictReader(f.open()))
         ax.plot([float(r["step"])/1e6 for r in rows],
                 [float(r["arrived"]) for r in rows],
@@ -194,7 +302,8 @@ def fig_curves(plt) -> None:
                 label=mode if mode not in seen else None)
         seen.add(mode)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    style(ax, "Training curves — every run peaks mid-training, then sags",
+    style(ax, "Training curves — the privileged arm is BIMODAL: half its "
+              "seeds track blind, half never leave the floor",
           "million environment steps", "arrival (12-episode eval)")
     legend(ax)
     fig.tight_layout()
@@ -220,6 +329,7 @@ def main() -> int:
     fig_world(plt)
     fig_arrival(plt)
     fig_efficiency(plt)
+    fig_control(plt)
     fig_curves(plt)
     return 0
 

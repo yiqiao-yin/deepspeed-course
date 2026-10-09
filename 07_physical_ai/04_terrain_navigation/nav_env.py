@@ -44,7 +44,8 @@ from pathlib import Path
 import numpy as np
 
 from robot import hfield_png, model_xml
-from world import ARENA, CELL, N, STEP_MAX, generate, solve, straight_line
+from world import (ARENA, CELL, N, STEP_MAX, generate, geodesic, solve,
+                   straight_line)
 
 # PROPRIO is DERIVED from the compiled model, never typed. It is
 # len(qpos[2:]) + len(qvel), and lab 3 shipped the same quantity as a
@@ -93,7 +94,17 @@ class NavWorld:
                  goal_range: float | None = None) -> None:
         import mujoco
 
-        assert mode in ("blind", "privileged", "depth"), mode
+        # "padded" is a CONTROL, not an arm of the experiment: the blind
+        # observation widened to the privileged width with six constant
+        # zeros. Zero information, identical dimensionality.
+        #
+        # It exists because the privileged arm turned out BIMODAL -- half
+        # its seeds reach the same ceiling as blind, half fail almost
+        # entirely, while blind never fails. Two explanations fit that
+        # equally well: the six extra DIMENSIONS destabilise PPO at this
+        # scale, or those particular FEATURES are harmful. Padding
+        # separates them, and nothing else does.
+        assert mode in ("blind", "privileged", "depth", "padded"), mode
         self._mj = mujoco
         self.mode = mode
         self.flat = flat
@@ -121,7 +132,7 @@ class NavWorld:
         # can actually reach, so the action never commands the impossible.
         self._span = np.minimum(self._centre - lo, hi - self._centre) * 0.9
         self.proprio = int(self.model.nq - 2) + int(self.model.nv)
-        extra = (PRIV_FEATS if mode == "privileged" else 0)
+        extra = (PRIV_FEATS if mode in ("privileged", "padded") else 0)
         self.obs_dim = self.proprio + GOAL_FEATS + extra
         # Assert rather than trust: the observation actually produced
         # must match what was advertised, every time the model builds.
@@ -142,9 +153,27 @@ class NavWorld:
         self.dt = self.model.opt.timestep * self.frame_skip
         self._renderer = None
         _, self.route_len = solve(m)
+        # The 4-connected BFS length is NOT the shortest distance -- it
+        # staircases diagonals and overstates the optimum by up to
+        # sqrt(2). Efficiency is scored against `geodesic`; `route_len`
+        # stays because it is what the renderer draws and what the goal
+        # placement walked along.
+        #
+        # Computed LAZILY. It is a scoring quantity, nothing in the
+        # reward reads it, and a Dijkstra at every one of a training
+        # run's thousands of resets would be paid for a number only
+        # `evaluate.py` ever looks at.
+        self._geodesic_len: float | None = None
         self.straight = straight_line(m)
 
     # -- observation --------------------------------------------------------
+
+    @property
+    def geodesic_len(self) -> float:
+        """Shortest traversable distance A->B, computed once per map."""
+        if self._geodesic_len is None:
+            self._geodesic_len = geodesic(self.map)
+        return self._geodesic_len
 
     def pos(self) -> np.ndarray:
         return np.array([self.data.qpos[0], self.data.qpos[1]])
@@ -231,6 +260,8 @@ class NavWorld:
                  self._goal_feats()]
         if self.mode == "privileged":
             parts.append(self.terrain_feats())
+        elif self.mode == "padded":
+            parts.append(np.zeros(PRIV_FEATS))
         return np.concatenate(parts).astype(np.float64)
 
     # -- state --------------------------------------------------------------
@@ -383,7 +414,8 @@ def rollout(env: NavWorld, policy, seed: int = 0) -> dict:
         steps += 1
         if term or trunc:
             break
-    eff = (info["route"] / info["travelled"]) if info["travelled"] > 0.1 else 0.0
+    eff = ((env.geodesic_len / info["travelled"])
+           if info["travelled"] > 0.1 else 0.0)
     return {"return": total, "steps": steps, "arrived": info["arrived"],
             "fell": info["fell"], "to_goal": info["to_goal"],
             "travelled": info["travelled"], "efficiency": min(eff, 1.0)}

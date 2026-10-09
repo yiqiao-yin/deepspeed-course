@@ -115,7 +115,19 @@ def model_xml(hfield_file: str, start: tuple[float, float],
             pos="0 0.28 1.55" material="flag" contype="0" conaffinity="0"/>
     </body>
 
-    <body name="torso" pos="{sx} {sy} {START_Z}">
+    <!-- The torso is declared at the ORIGIN, not at the start point.
+         `rootx`/`rooty` are SLIDE joints, so a body declared at
+         pos="(sx, sy)" ends up at (sx, sy) + qpos -- and reset() also
+         writes the start into qpos, which placed the robot at TWICE
+         its start coordinates. Every distance, every terrain lookup
+         and the arrival test were then computed in a frame shifted by
+         the start offset: to_goal() read 10.44 m where the true
+         distance was 14.78 m, and the privileged observation sampled
+         ground the robot was not standing on.
+
+         Declared at the origin, qpos[0:2] IS the world position and
+         the two agree by construction. -->
+    <body name="torso" pos="0 0 {START_Z}">
       <joint name="rootx"   type="slide" axis="1 0 0" limited="false"
              armature="0" damping="0"/>
       <joint name="rooty"   type="slide" axis="0 1 0" limited="false"

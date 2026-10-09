@@ -92,7 +92,17 @@ def score(run: str, episodes: int, goal_range: float | None) -> dict:
         # halved every efficiency number this lab published.
         tg = info.get("travelled_to_goal")
         if info["arrived"] and tg and tg > 0.1:
-            effs.append(min(info["route"] / tg, 1.0))
+            # `geodesic`, not `route`, and NO min(..., 1.0).
+            #
+            # The clamp was hiding a broken denominator. `route` comes
+            # from a 4-connected BFS that cannot move diagonally, so it
+            # overstates the optimum by up to sqrt(2); efficiencies of
+            # 133%, 136% and 144% were being silently rewritten to
+            # "exactly 100%". An impossible number is EVIDENCE, and
+            # clamping it threw the evidence away. If anything here
+            # exceeds 1.0 again, the denominator is wrong again, and it
+            # should be visible.
+            effs.append(env.geodesic_len / tg)
     lo, hi = wilson(arrived, episodes)
     return {"run": run, "mode": meta["mode"], "n": episodes,
             "arrived_k": arrived, "arrived": arrived / episodes,

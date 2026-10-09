@@ -14,105 +14,202 @@ The threshold comes from [lab 2](../02_biped_stairs), which measured a
 two-legged robot climbing 0.04–0.10 m treads reliably and failing above
 that.
 
-**Baseline:** the blind policy — proprioception and the goal bearing,
-same algorithm, same 1.5M steps, nine seeds across three sweeps:
-**8.1%** arrival (88.4% path efficiency, which privileged does not beat).
-**Budget:** 1.5M environment steps per run × 3 seeds per arm × 3
-independent sweeps, goal range 7 m; scored on **120 evaluation episodes
-per checkpoint** on identical maps.
-**Falsifier:** if a policy handed the ground profile ahead does not beat
-the blind one on arrival, terrain information is not what this task
-needs. It does, on 7 of 9 seeds (Wilcoxon p = 0.022). A second claim about
-path efficiency did NOT survive measurement and is withdrawn below.
+**Baseline:** the blind policy — proprioception and the goal bearing
+only, 21 observation dimensions, same algorithm and same 1.5M steps:
+**41.1% arrival** (444/1080 episodes), and **0 of 9 seeds failed to
+learn**.
+**Budget:** 1.5M environment steps per run × 9 seeds × 3 arms = 27
+runs, goal range 7 m; every published number scored on **120 evaluation
+episodes per checkpoint** on identical maps.
+**Falsifier:** if handing the policy the ground profile ahead does not
+beat blind on arrival, terrain information is not what this task needs.
+**It did not.** Privileged pooled *below* blind, and the honest reading
+of why is a third arm the first version of this lab never ran.
 
 ![One arena](../../docusaurus-docs/static/img/physical/nav-world.png)
 
 ---
 
-## The result
+## Everything this lab published before was measured in a broken frame
 
-Two independent sweeps, three seeds each, 120 episodes per checkpoint
-on identical maps:
+PRs #81, #82 and #83 reported that the privileged policy beat the blind
+one on **7 of 9 seeds, Wilcoxon p = 0.022**. That result is
+**withdrawn**. It was an artifact of a coordinate bug, and the
+correction reverses its direction.
 
-![Arrival per seed](../../docusaurus-docs/static/img/physical/nav-arrival.png)
+`rootx` and `rooty` are **slide** joints, and the torso body was
+declared at `pos="(start_x, start_y)"` in the XML while `reset()` also
+wrote the start into `qpos`. A slide joint displaces from where the body
+is declared, so the robot spawned at **twice its start coordinates** —
+frequently off the height field altogether. Every distance, every
+terrain probe and the arrival test ran in a frame shifted by the start
+offset: `to_goal()` read 10.44 m where the true distance was 14.78 m.
 
-| | arrival | per seed |
-|---|---|---|
-| blind | 8.1% | 8, 15, 0, 4, 19, 1, 1, 12, 14 % |
-| **privileged** | **12.1%** | 16, 16, 4, 6, 18, 11, 12, 14, 13 % |
+Eighteen property checks passed throughout, because **not one of them
+compared the lab's own idea of position against MuJoCo's**. The thing
+that caught it was a reader looking at an animation and asking why the
+orange track reached the flag while the robot stood in the middle.
 
-Ahead on **7 of 9 seeds**, mean **+4.0 points**. Wilcoxon **p = 0.022**,
-paired t **0.017** — both strengthened from the six-seed version. The
-sign test went the other way (0.016 → 0.090) because it counts only
-wins and the two new losses were tiny while the wins were larger;
-Wilcoxon uses the magnitudes and is the headline. Pooled Fisher is an
-**upper bound** — episodes within a seed share a policy.
+```python
+# tests/test_terrain_navigation.py — the check that was missing
+worst = max(worst, float(np.linalg.norm(
+    env.pos() - env.data.xpos[tid][:2])))
+check("pos() matches MuJoCo's own torso position", worst < 1e-6)
+```
 
-The effect size barely moved: **+3.9 at six seeds, +4.0 at nine**. And
-across nine seeds the blind arm produced 0%, 1% and 1%, while the
-privileged arm's worst is 4% — it appears to remove the floor, not
-only raise the mean.
-
-### The route efficiency claim, withdrawn
-
-This README previously reported privileged policies walking much
-shorter paths — 54.8% vs 43.8% (3/3 pairs) from two sweeps, then 51.2%
-vs 44.6% (4 of 5) after a third. **Both were a measurement bug.** The episode continues after reaching B, so the odometer counted
-the robot milling around the goal for ~1300 further steps: one episode
-walked 7.4 m to B against a 7.2 m route — 97% — then another 7.2 m,
-and was published as 49%.
-
-Frozen at arrival:
-
-| seed pair | maps | blind | privileged |
-|---|---|---|---|
-| sweep 2, s0 | 2 | 96.4% | 81.4% |
-| sweep 2, s1 | 6 | 83.5% | 79.9% |
-| sweep 3, s1 | 9 | 88.1% | **89.9%** |
-| sweep 4, s4 | 4 | 91.2% | 84.0% |
-| sweep 4, s5 | 5 | 82.7% | **84.1%** |
-| **mean** | | **88.4%** | **83.8%** |
-
-Both arms are far better than reported — ~85% of optimal, not ~48% —
-and the direction reverses. **No route-efficiency advantage; the claim
-is withdrawn.** The arrival result is binary and unaffected.
+Both arrival rates are roughly **five times higher** in the corrected
+frame, because a robot that starts on the map can actually walk across
+it. Every animation and every figure here was regenerated; nothing from
+the old frame survives on these pages.
 
 ---
 
-## Four bugs that would each have produced a wrong conclusion
+## The result: information helps, width hurts, and they were confounded
 
-**1. The privileged arm was broken by its own observation.** An 11 × 11
-raw height patch meant a 142-dimensional input to a 2 × 64 MLP, and all
-three seeds sat at *exactly* 0% arrival for the whole run. Three
-identical zeros are impossible by chance; that is the only reason it was
-caught. Six summary features train fine.
+Three arms, nine seeds each, 120 episodes per checkpoint on identical
+maps:
 
-**2. Arriving ENDED the episode, making success the worst outcome.**
+![Arrival per seed](../../docusaurus-docs/static/img/physical/nav-arrival.png)
+
+| arm | obs dims | pooled arrival | range | **collapsed** (<10%) | mean of seeds that trained |
+|---|---|---|---|---|---|
+| blind | 21 | **41.1%** | 32–56% | **0 / 9** | 41.1% |
+| privileged (+6 terrain features) | 27 | 27.3% | 0–52% | **4 / 9** | **47.3%** |
+| padded control (+6 constant zeros) | 27 | 31.3% | 0–53% | **2 / 9** | 39.2% |
+
+Paired blind vs privileged: ahead on **3 of 9 seeds**, mean **−13.8
+points**, Wilcoxon exact **p = 0.250**, sign test 0.508. There is no
+arrival advantage.
+
+But the per-seed numbers are not noise around a mean — they are
+**bimodal, and only in one arm**. The privileged arm either reaches
+44–52% or sits at 0–5%. Nothing in between, and blind never does it.
+
+![The control](../../docusaurus-docs/static/img/physical/nav-control.png)
+
+### The control the original lab never ran
+
+Two explanations fit that bimodality equally well, and **blind vs
+privileged cannot tell them apart** because it changes information and
+dimensionality at the same time:
+
+- the six extra **dimensions** destabilise PPO at this scale, or
+- those particular **features** are harmful.
+
+So: widen the blind observation to 27 with **six constant zeros**. Same
+width, zero information.
+
+**Six constant zeros collapsed 2 of 9 seeds.** Blind collapsed none.
+Pure observation width destabilises this policy on its own, carrying no
+information at all.
+
+| comparison | Fisher exact |
+|---|---|
+| blind 0/9 vs privileged 4/9 | p = 0.082 |
+| blind 0/9 vs **padded 2/9** | p = 0.471 |
+| padded 2/9 vs privileged 4/9 | p = 0.620 |
+
+The control lands **between** the two arms and is not separable from
+either. So the defensible claim is narrow:
+
+> Adding six inputs to a 12k-parameter policy costs reliability even
+> when those inputs carry nothing. The terrain features look useful
+> *conditional on the run surviving* — privileged is the best arm at
+> 47.3% among seeds that trained — but this experiment cannot
+> attribute the extra collapses to the features rather than to the
+> width.
+
+**And it is not powered to.** Separating a 22% collapse rate from a 44%
+one at 80% power needs roughly **70 seeds per arm**; separating 0% from
+22% needs about 40. This has nine. The blind-vs-privileged collapse gap
+is a **trend, not a result**, and is reported as one.
+
+### Path efficiency
+
+Scored only on seeds that trained, as `geodesic / distance walked to B`:
+
+| arm | efficiency | fell |
+|---|---|---|
+| blind | 82.6% (69–91%) | 28.1% |
+| privileged | 77.6% (66–85%) | 16.1% |
+| padded | 84.3% (72–91%) | 24.1% |
+
+![Path efficiency](../../docusaurus-docs/static/img/physical/nav-efficiency.png)
+
+No efficiency advantage either. Privileged falls least, which is the
+one axis where the terrain channel shows an unambiguous benefit.
+
+---
+
+## Six bugs that would each have produced a wrong conclusion
+
+The coordinate frame above is the first. The other five all shipped
+green on a passing test suite.
+
+**2. Path efficiency was scored against an optimum that was not
+optimal.** `solve()` is a **4-connected** BFS — it cannot move
+diagonally, so it staircases, and a straight diagonal of length *L*
+comes back as *L*·√2. Measured across 59 maps it overstates the shortest
+distance by **mean 1.199×, max 1.424×** against a √2 = 1.414 ceiling.
+
+**3. And a clamp destroyed the evidence that it was wrong.**
+`evaluate.py` wrapped the ratio in `min(..., 1.0)`. Three episodes
+scored 133%, 136% and 144% — a policy beating the optimum, which cannot
+happen — and every one was silently rewritten to *exactly 100%*. **An
+impossible measurement is evidence.** Clamping it converted the one
+signal that the denominator was broken into a plausible number.
+
+The fix is scoped: a separate 8-connected Dijkstra (`world.geodesic`)
+used **only** as the metric's denominator. `solve()` is untouched,
+because it also places the goal — changing it would have redefined the
+task and invalidated all 27 runs.
+
+**4. The renderer filmed a different task than the numbers describe.**
+`summary.json` never recorded `goal_range`, so nothing downstream could
+recover it, and `render.py` built `NavWorld(mode=..., flat=False,
+seed=0)` with no range at all — filming goals at the map's own endpoints
+while every published figure was measured at 7 m. The clips showed the
+robot stranded 14 m out beside a table reporting 42% arrival. **A figure
+and a number that disagree are not a rendering quirk.**
+
+**5. The HUD contradicted the page.** It divided by *total* distance
+walked — which keeps counting for ~1300 steps after the robot reaches B
+— and against the inflated 4-connected route. Both are now the
+published definition, frozen at arrival.
+
+**6. An asset on the page was generated by nothing.**
+`nav-route-b.gif` had been rendered once by hand and orphaned. When the
+whole lab was re-rendered after the frame fix, that one file **silently
+survived from the broken world**, sitting on the page beside eight
+corrected clips. An orphan cannot be regenerated, so it cannot be
+corrected. There is now a check that every `nav-*` image the pages show
+is produced by a shipped command.
+
+### Earlier failures, kept because they recur
+
+**The privileged arm was once broken by its own observation.** An
+11 × 11 raw height patch meant 142 inputs to a 2 × 64 MLP, and all three
+seeds sat at *exactly* 0% for the whole run. Three identical zeros are
+impossible by chance; that is the only reason it was caught. Six summary
+features train fine — and the current bimodality finding is the same
+lesson at a smaller scale.
+
+**Arriving ENDED the episode, making success the worst outcome.**
 Standing still for 2000 steps earned 3000; arriving at step ~700 earned
-1170. Success forfeited ~1300 steps of alive bonus, so loitering was
-worth 2.5× more — and the policy correctly learned not to arrive.
-[Lab 1](../01_obstacle_hopper) documents the mirror of this.
+1170. The policy correctly learned not to arrive.
 
-**3. Torque control meant the body could not stand.** It needs a
-specific sustained pattern (hip 0.6 / knee 1.0) that exploration almost
-never finds; a 1M-step run on flat ground reached 0%. Position
-actuators make a zero action hold the standing pose.
+**Torque control meant the body could not stand** — a 1M-step run on
+flat ground reached 0%. Position actuators make a zero action hold the
+standing pose.
 
-**4. The fall detector sat inside the healthy oscillation band.** A
-standing robot troughs at 0.49 and settles at 0.77; the threshold was
-0.55, so episodes ended on a *healthy* robot's startup wobble. Now 0.40
-— below the wobble, far above a real collapse at 0.19.
+**The fall detector sat inside the healthy oscillation band** at 0.55,
+so episodes ended on a standing robot's startup wobble. Now 0.40 —
+below the wobble, far above a real collapse at 0.19.
 
-### And the measurement itself was too coarse
-
-The in-training evaluation uses 12 episodes, which quantises to 8.3%.
-It reported these two arms as **exactly 8.3% vs 8.3%**. Re-scoring the
-same checkpoints on 120 episodes gave **7.8% vs 11.7%** — the effect was
-there all along. Everything published comes from `evaluate.py`.
-
-The *peak* of the training curve is equally unusable: it is the maximum
-of ~60 noisy 12-episode evaluations, and every blind run peaks at
-exactly 25% (3/12). Selecting on it would manufacture an advantage.
+**The in-training evaluation is too coarse to publish.** Twelve episodes
+quantises to 8.3%, and every blind run peaks at exactly 25% (3/12).
+Selecting on the peak of a noisy curve is selecting the maximum of
+noise. Everything published comes from `evaluate.py` at 120 episodes.
 
 ---
 
@@ -129,7 +226,7 @@ in it:
 | **long ridges, 12–17 m** | median **+3.40 m** on a ~15 m route |
 
 Length is the lever: a ridge that nearly spans the arena cannot be
-skirted cheaply. Ends stay open so 94% of maps keep *both* routes
+skirted cheaply. Ends stay open so 90% of maps keep *both* routes
 available — a choice, not a forced climb.
 
 `tests/test_terrain_navigation.py` pins the **property** rather than the
@@ -138,7 +235,8 @@ parameters, so an edit to the lengths is caught by its consequence.
 ## The robot
 
 `rootx`, `rooty`, **`rootyaw`**, `rootz` plus six leg joints; position
-actuators centred on a measured standing pose.
+actuators centred on a measured standing pose. The torso is declared at
+the **origin** — see the frame bug above.
 
 **Torso pitch and roll stay locked** — inherited from lab 1's
 measurement (freeing it gives the bipedal-balance problem) and lab 2's
@@ -158,12 +256,17 @@ uv run robot.py                 # the body on a map
 uv run nav_env.py               # random baseline
 
 uv run train_nav.py --flat --name gate_flat     # LOCOMOTION GATE, first
-for s in 0 1 2; do
-  uv run train_nav.py --mode blind      --seed $s --goal-range 7 --name nav_blind_s$s
-  uv run train_nav.py --mode privileged --seed $s --goal-range 7 --name nav_priv_s$s
+
+# three arms, nine seeds. blind and privileged are the experiment;
+# padded is the control that makes the comparison interpretable.
+for s in 0 1 2 3 4 5 6 7 8; do
+  for m in blind privileged padded; do
+    uv run train_nav.py --mode $m --seed $s --goal-range 7 \
+        --name nav5_${m}_s$s
+  done
 done
 
-uv run evaluate.py --episodes 120               # the published numbers
+uv run evaluate.py --prefix nav5_ --episodes 120   # the published numbers
 uv run make_figures.py && uv run render.py --all
 ```
 
@@ -173,7 +276,7 @@ the position-actuator and start-pose fixes — which is the whole reason
 it runs first.
 
 ```bash
-uv run ../../tests/test_terrain_navigation.py   # 18 checks, no GPU, no OpenGL
+uv run ../../tests/test_terrain_navigation.py   # 31 checks, no GPU, no OpenGL
 ```
 
 ### CoreWeave (SLURM)
@@ -205,14 +308,16 @@ Note `--wait-seconds` defaults to 1800, which is shorter than a full
 |---|---|
 | GPU | 1 × 16 GB, optional — the policy is 12k parameters and CPU is faster |
 | Disk | ~20 GB (torch + MuJoCo); no downloads, the world is generated |
-| Wall clock | ~20 min a run; ~2 h for a full six-run sweep |
+| Wall clock | ~25 min a run; ~11 h for the full 27-run sweep |
 
 ## What this lab does not claim
 
-- **The task is not solved.** ~12% arrival, ~55% efficiency when it
-  arrives. The claim is that information *helps*, on a task that stays
-  hard.
-- **Every run peaks mid-training and sags.** 1.5M steps is short here.
+- **The task is not solved.** The best arm reaches B in about four
+  episodes in ten.
+- **No arrival advantage for terrain information**, and the collapse
+  difference between the arms is a trend (p = 0.082), not a result.
+- **The width/feature question is open.** It needs ~70 seeds per arm;
+  this has nine, and says so rather than picking the flattering reading.
 - **This is a privileged channel, not a camera.** A depth arm would need
   distillation, as in [lab 3](../03_terrain_vision).
-- **One seed of six goes the other way**, and it stays in the table.
+- **Every run peaks mid-training and sags.** 1.5M steps is short here.

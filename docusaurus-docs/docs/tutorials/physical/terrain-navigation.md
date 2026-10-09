@@ -25,82 +25,125 @@ The threshold is not arbitrary: [lab 2](./biped-stairs) measured a
 two-legged robot climbing 0.04–0.10 m treads reliably and failing above
 that, so the boundary sits where that lab's evidence puts it.
 
-## The result
+## Everything this page said before was measured in a broken frame
 
-**Terrain information helps, and it replicated.** Two independent
-sweeps, three seeds each, 120 evaluation episodes per checkpoint on
-identical maps:
+This page previously reported that the privileged policy beat the
+blind one on **7 of 9 seeds, Wilcoxon p = 0.022**. That result is
+**withdrawn**, and the correction reverses its direction.
+
+`rootx` and `rooty` are **slide** joints. The torso body was declared
+in the XML at `pos="(start_x, start_y)"` while `reset()` *also* wrote
+the start into `qpos` — and a slide joint displaces from wherever the
+body is declared. So the robot spawned at **twice its start
+coordinates**, frequently off the height field altogether.
+
+$$
+p_{\text{world}} \;=\; \underbrace{(s_x, s_y)}_{\text{XML body pos}}
+\;+\; \underbrace{(s_x, s_y)}_{\texttt{reset() writes qpos}}
+\;=\; 2\,(s_x, s_y)
+$$
+
+Every distance, every terrain probe and the arrival test then ran in a
+frame shifted by the start offset: `to_goal()` read 10.44 m where the
+true distance was 14.78 m. **Eighteen property checks passed
+throughout**, because not one of them compared the lab's own idea of
+position against MuJoCo's.
+
+Both arrival rates are about **five times higher** in the corrected
+frame, because a robot that starts on the map can actually cross it.
+Every figure and every animation below was regenerated.
+
+## The result: information helps, width hurts, and they were confounded
+
+Three arms, **nine seeds each**, 120 evaluation episodes per checkpoint
+on identical maps.
 
 ![Arrival per seed](/img/physical/nav-arrival.png)
 
-| | arrival | per seed |
+| arm | obs dims | pooled arrival | range | **collapsed** (&lt;10%) | mean of seeds that trained |
+|---|---|---|---|---|---|
+| blind — proprioception + goal bearing | 21 | **41.1%** | 32–56% | **0 / 9** | 41.1% |
+| **privileged** — plus the ground ahead | 27 | 27.3% | 0–52% | **4 / 9** | **47.3%** |
+| **padded control** — plus six zeros | 27 | 31.3% | 0–53% | **2 / 9** | 39.2% |
+
+Paired blind against privileged: ahead on **3 of 9 seeds**, mean
+**−13.8 points**, Wilcoxon exact **p = 0.250**, sign test 0.508. There
+is no arrival advantage.
+
+But look at the per-seed numbers rather than the means. They are not
+scattered around a centre — they are **bimodal, and only in one arm**.
+The privileged policy either reaches 44–52% or sits at 0–5%, with
+nothing in between. The blind policy never does it.
+
+:::warning A mean over a bimodal arm describes no run in it
+"Privileged averages 27.3%" is true and useless. No privileged seed
+scored anywhere near 27%. Four scored under 5% and five scored over
+44%. Reporting the mean alone would have hidden the only interesting
+thing in the data.
+:::
+
+### The control this lab should have run first
+
+Two explanations fit that bimodality equally well, and **blind against
+privileged cannot separate them**, because it changes the information
+and the dimensionality at the same time:
+
+- the six extra **dimensions** destabilise PPO at this scale, or
+- those particular **features** are harmful.
+
+One experiment tells them apart. Widen the blind observation to 27 with
+**six constant zeros** — identical width, zero information:
+
+$$
+o_{\text{padded}} \;=\; \big[\, o_{\text{blind}} \;,\; \underbrace{0,0,0,0,0,0}_{\text{carries nothing}} \,\big]
+\in \mathbb{R}^{27}
+$$
+
+![The control](/img/physical/nav-control.png)
+
+**Six constant zeros collapsed 2 of 9 seeds.** Blind collapsed none.
+Observation width destabilises this policy on its own, carrying no
+information whatsoever.
+
+| comparison | Fisher exact |
+|---|---|
+| blind 0/9 vs privileged 4/9 | p = 0.082 |
+| blind 0/9 vs **padded 2/9** | p = 0.471 |
+| padded 2/9 vs privileged 4/9 | p = 0.620 |
+
+The control lands **between** the two arms and is not statistically
+separable from either. So the claim this lab can defend is narrow, and
+stated narrowly:
+
+> Adding six inputs to a 12k-parameter policy costs reliability **even
+> when those inputs carry nothing**. The terrain features do look
+> useful *conditional on the run surviving* — privileged is the best
+> arm at 47.3% among seeds that trained, in the tightest band of the
+> three — but this experiment cannot attribute the extra collapses to
+> the features rather than to the width.
+
+:::danger The study is not powered to finish this argument
+Separating a 22% collapse rate from a 44% one at 80% power needs about
+**70 seeds per arm**. Separating 0% from 22% needs about 40. This has
+**nine**. The blind-against-privileged collapse gap is a **trend**
+(p = 0.082), not a result, and the width-versus-features question is
+left open rather than resolved in whichever direction reads better.
+:::
+
+### Path efficiency
+
+Scored only on seeds that trained, as `geodesic / distance walked to B`:
+
+| arm | efficiency | fell |
 |---|---|---|
-| blind — proprioception + goal bearing | 8.1% | 8, 15, 0, 4, 19, 1, 1, 12, 14 % |
-| **privileged** — plus the ground ahead | **12.1%** | 16, 16, 4, 6, 18, 11, 12, 14, 13 % |
+| blind | 82.6% (69–91%) | 28.1% |
+| privileged | 77.6% (66–85%) | 16.1% |
+| padded | 84.3% (72–91%) | 24.1% |
 
-Privileged ahead on **7 of 9 seeds**, mean **+4.0 points**.
+![Path efficiency](/img/physical/nav-efficiency.png)
 
-| test | 6 seeds | **9 seeds** |
-|---|---|---|
-| Wilcoxon signed-rank | 0.063 | **0.022** |
-| paired t | 0.089 | **0.017** |
-| sign test | 0.016 | 0.090 |
-| pooled Fisher *(upper bound)* | 0.016 | 0.003 |
-
-The two tests that use effect **magnitude** both strengthened and are
-now below 0.05. The sign test weakened, and the reason is worth
-knowing: it counts only wins and losses, and the two new losses were
-tiny (−1 and −5 points) while the wins were larger. A sign test throws
-away exactly the information that distinguishes those. **Wilcoxon is
-the headline here.**
-
-Pooling is an upper bound — episodes within a seed share a policy, so
-they are not independent.
-
-**The effect size barely moved: +3.9 points at six seeds, +4.0 at
-nine.** Three more seeds shifted the estimate by a tenth of a point.
-
-### It also removes the catastrophic runs
-
-Across nine seeds the blind arm produced **0%, 1% and 1%** — three
-near-total failures. The privileged arm's worst seed is **4%**. The
-information does not only raise the mean; on this evidence it removes
-the floor.
-
-### The route efficiency claim, withdrawn
-
-Earlier versions of this page reported that privileged policies walk
-much shorter paths, and called it the stronger of the two signals:
-54.8% against 43.8% (3 of 3 pairs) from two sweeps, then 51.2% against
-44.6% (4 of 5) once a third sweep landed.
-
-**It was a measurement bug, and the corrected numbers reverse it.**
-
-The episode deliberately continues after the robot reaches B. The
-odometer kept running, so every "distance walked" included the robot
-milling around the goal for the remaining ~1300 steps. On one measured
-episode it walked 7.4 m to B against a 7.2 m optimal route — 97%
-efficient — and then another 7.2 m afterwards, so the published figure
-read 49%.
-
-With the odometer frozen at arrival:
-
-| seed pair | maps both solved | blind | privileged |
-|---|---|---|---|
-| sweep 2, s0 | 2 | 96.4% | 81.4% |
-| sweep 2, s1 | 6 | 83.5% | 79.9% |
-| sweep 3, s1 | 9 | 88.1% | **89.9%** |
-| sweep 4, s4 | 4 | 91.2% | 84.0% |
-| sweep 4, s5 | 5 | 82.7% | **84.1%** |
-| **mean** | | **88.4%** | **83.8%** |
-
-Two things changed. Both arms are far better than reported — **~85%
-of optimal, not ~48%** — and the direction flips: blind is nominally
-*more* efficient, on 3 of 5 pairs. There is no route-efficiency
-advantage here, and the claim is withdrawn rather than restated.
-
-**The arrival result is unaffected.** Arrival is binary and does not
-depend on distance walked.
+No efficiency advantage either. Privileged falls least — the one axis
+on which the terrain channel shows an unambiguous benefit.
 
 :::tip This was caught by watching the animation
 A reader asked why the orange track reaches the flag while the robot
@@ -148,10 +191,19 @@ flowchart LR
   class O bright
 ```
 
-The oracle does two jobs, and both matter. It **certifies** each map is
-solvable — an unsolvable arena scores every policy at zero and reads as
-a hard task rather than a broken one, which this repository has shipped
-twice. And its route length is the **denominator** for efficiency.
+The oracle **certifies** each map is solvable — an unsolvable arena
+scores every policy at zero and reads as a hard task rather than a
+broken one, which this repository has shipped twice. It also walks B
+back along its own route to set the goal range.
+
+It is **not** the denominator for efficiency, and the reason is a bug
+worth keeping. That search is 4-connected, so it cannot move
+diagonally: it staircases, and a straight diagonal of length $L$ comes
+back as $L\sqrt{2}$. Across 59 maps it overstates the true shortest
+distance by **mean 1.199×, max 1.424×** against a $\sqrt{2} = 1.414$
+ceiling. Efficiency is scored against a separate 8-connected Dijkstra
+instead, and `solve()` is left alone precisely because changing it
+would move the goals and redefine the task.
 
 ### What the robot observes
 
@@ -309,8 +361,11 @@ for both arms would quietly imply they see the same thing.
 
 ![A failure](/img/physical/nav-fail.gif)
 
-**This is the common case.** Arrival is ~12% even for the best arm, so a
-reel of successes would misrepresent the lab eightfold.
+**This is the common case.** The best arm reaches B in about four
+episodes in ten, so a reel of successes would misrepresent the lab.
+This clip is a policy that walks competently into the wrong side of a
+ridge and times out 4.1 m short — not one that falls over, which would
+teach nothing about navigation.
 
 :::warning The overlay was wrong by 21%, and it looked like bad art
 The route and track were first *painted* onto the finished frame, which
@@ -330,9 +385,14 @@ yellow, which is exactly the distinction the figure exists to make.
 
 ![Training curves](/img/physical/nav-curves.png)
 
-- **The task is not solved.** Arrival is ~12%, efficiency ~55% when it
-  does arrive. The result is that information *helps*, measured on a
-  task that remains hard.
+- **The task is not solved.** The best arm reaches B in about four
+  episodes in ten.
+- **There is no arrival advantage for terrain information**, and the
+  collapse difference between the arms is a trend (p = 0.082), not a
+  result.
+- **The width-versus-features question is open.** Settling it needs
+  roughly 70 seeds per arm; this has nine, and says so rather than
+  picking whichever reading sounds better.
 - **Every run peaks mid-training and sags.** 1.5M steps is short here,
   and there may be late instability. The final checkpoint is what is
   scored; the *peak* is not, because the peak of ~60 noisy 12-episode
@@ -340,19 +400,40 @@ yellow, which is exactly the distinction the figure exists to make.
   advantage.
 - **This is a privileged channel, not a camera.** A depth arm would need
   distillation, as in [lab 3](./terrain-vision).
-- **One seed of six goes the other way**, and it stays in the table.
+- **Four privileged seeds of nine failed outright**, and all four stay
+  in the table.
 
-## The measurement lesson
+## The measurement lessons
 
-The in-training evaluation uses 12 episodes. It reported these same two
-arms as **exactly 8.3% versus 8.3%** — because 12 episodes quantises to
-8.3%, the same size as the effect, and the three seeds came back as
-literally 0, 1 and 2 episodes.
+**The ruler was coarser than the effect.** The in-training evaluation
+uses 12 episodes, which quantises to 8.3% — so it once reported two
+arms as *exactly* 8.3% versus 8.3%. Everything published here comes
+from `evaluate.py` at 120 episodes, never from the training log. The
+*peak* of a training curve is equally unusable: it is the maximum of
+~60 noisy 12-episode evaluations, and selecting on it manufactures an
+advantage out of noise.
 
-Re-scoring the identical checkpoints on 120 episodes gave **7.8% versus
-11.7%**. The effect was there the whole time; the ruler was too coarse
-to see it. Everything published here comes from `evaluate.py`, never
-from the training log.
+**An impossible number is evidence — do not clamp it.** Efficiency was
+computed as `route / distance`, and three episodes came back at 133%,
+136% and 144%: a policy beating the optimum, which cannot happen. The
+code wrapped the ratio in `min(..., 1.0)`, so every one of them was
+silently rewritten to *exactly 100%*. The clamp did not just hide the
+symptom; it destroyed the only signal that the denominator was wrong.
+The √2 bug above survived behind it.
+
+**A figure and a number that disagree are not a rendering quirk.** The
+runs never recorded `goal_range`, so the renderer rebuilt the world
+without one and filmed goals at the map's own endpoints — a harder
+task than any policy here was trained on. The clips showed the robot
+stranded 14 m out beside a table reporting 42% arrival. Each run now
+records the task it was trained on, and the renderer reads it.
+
+**An asset nothing generates cannot be corrected.** One animation on
+this page had been rendered once by hand and orphaned. When the lab was
+re-rendered after the frame fix, that file **silently survived from the
+broken world**, sitting here beside eight corrected clips and
+indistinguishable from them. There is now a check that every image
+these pages show is produced by a shipped command.
 
 ## Running it
 
@@ -365,12 +446,16 @@ uv run robot.py                     # the body, dropped on a map
 uv run nav_env.py                   # random baseline
 
 uv run train_nav.py --flat --name gate_flat   # the LOCOMOTION GATE, first
-for s in 0 1 2; do
-  uv run train_nav.py --mode blind      --seed $s --goal-range 7 --name nav_blind_s$s
-  uv run train_nav.py --mode privileged --seed $s --goal-range 7 --name nav_priv_s$s
+
+# three arms, nine seeds. blind and privileged are the experiment;
+# padded is the control that makes the comparison interpretable at all.
+for s in 0 1 2 3 4 5 6 7 8; do
+  for m in blind privileged padded; do
+    uv run train_nav.py --mode $m --seed $s --goal-range 7 --name nav5_${m}_s$s
+  done
 done
 
-uv run evaluate.py --episodes 120   # the numbers that get published
+uv run evaluate.py --prefix nav5_ --episodes 120   # the published numbers
 uv run make_figures.py && uv run render.py --all
 ```
 
