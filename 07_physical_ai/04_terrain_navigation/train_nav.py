@@ -50,7 +50,7 @@ def main() -> None:
     ap.add_argument("--total-steps", type=int, default=1_500_000)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--mode", default="blind",
-                    choices=("blind", "privileged", "depth"))
+                    choices=("blind", "privileged", "depth", "padded"))
     ap.add_argument("--flat", action="store_true",
                     help="no terrain at all — the locomotion gate")
     ap.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
@@ -99,7 +99,7 @@ def evaluate(net, norm, dev, mode, flat, episodes, seed,
         fell += bool(info["fell"])
         lefts.append(info["to_goal"])
         if info["arrived"] and info["travelled"] > 0.1:
-            effs.append(min(info["route"] / info["travelled"], 1.0))
+            effs.append(env.geodesic_len / max(info["travelled"], 1e-6))
     return {"arrived": arrived / episodes, "fell": fell / episodes,
             "to_goal": float(np.mean(lefts)),
             "efficiency": float(np.mean(effs)) if effs else 0.0}
@@ -198,7 +198,16 @@ def run(a) -> None:
 
     f = hist[-1]
     (out / "summary.json").write_text(json.dumps(
+        # `goal_range` is part of the TASK, not a training detail, and
+        # a run that does not record it cannot be scored or filmed
+        # afterwards. It was omitted, so `render.py` built its
+        # environment without one and every animation filmed goals at
+        # the map's own endpoints -- a harder task than any policy here
+        # was trained on, which is why the clips showed the robot
+        # stranded 14 m out while the evaluator reported 42% arrival.
+        # The figure and the number were describing different worlds.
         {"mode": a.mode, "flat": a.flat, "seed": a.seed, "device": dev,
+         "goal_range": a.goal_range,
          "obs_dim": od, "params": net.n_params(),
          "total_steps": a.total_steps, "baseline_return": round(base_ret, 2),
          "wall_seconds": round(time.time() - t0, 1), "final": f}, indent=2))

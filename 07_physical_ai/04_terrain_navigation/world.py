@@ -38,6 +38,7 @@ of the world that can drift from the first.
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -275,6 +276,70 @@ def solve(m: Map) -> tuple[list[tuple[int, int]] | None, float]:
         cur = prev[cur]
     path.reverse()
     return path, len(path) * CELL
+
+
+def geodesic(m: Map) -> float:
+    """
+    The shortest traversable DISTANCE from A to B. The denominator for
+    path efficiency, and deliberately not `solve()`.
+
+    `solve()` is a 4-connected breadth-first search. It is the right
+    tool for its two jobs -- certifying a map is solvable, and walking B
+    back along a route to set the goal range -- and it must not change,
+    because the goal placement it produces defines the task that every
+    trained policy was trained on.
+
+    But a 4-connected path CANNOT move diagonally. It staircases, so a
+    straight diagonal of length L comes back as L * sqrt(2). Using that
+    as the optimum inflates the denominator by up to 41%, and the
+    efficiencies this lab computed went over 100% because of it -- 133%,
+    136%, 144% on seeds 20016, 20011, 20047, against a sqrt(2) ceiling
+    of 141%. A policy cannot beat the optimum; the optimum was wrong.
+
+    Worse, `evaluate.py` wrapped the ratio in `min(..., 1.0)`, which
+    turned every one of those into "exactly 100%" -- the clamp converted
+    a broken denominator into a plausible number and hid the evidence.
+    That is the failure mode this repository keeps re-learning: the
+    quantity looked fine precisely where it was most wrong.
+
+    So: Dijkstra, eight neighbours, sqrt(2) for the diagonals. A
+    diagonal move is only legal when BOTH orthogonal cells beside it are
+    traversable, otherwise a route could squeeze through the corner
+    where two walls touch -- a gap of zero width that a robot with a
+    body cannot use.
+    """
+    import heapq
+
+    ok = traversable(m.heights)
+    to_ij = lambda p: (int((p[1] + ARENA / 2) / CELL),
+                       int((p[0] + ARENA / 2) / CELL))
+    s, g = to_ij(m.start), to_ij(m.goal)
+    if not ok[s] or not ok[g]:
+        return 0.0
+
+    R2 = math.sqrt(2.0)
+    dist = {s: 0.0}
+    pq = [(0.0, s)]
+    while pq:
+        d, cur = heapq.heappop(pq)
+        if cur == g:
+            return d * CELL
+        if d > dist.get(cur, math.inf):
+            continue
+        j, i = cur
+        for dj, di in ((0, 1), (0, -1), (1, 0), (-1, 0),
+                       (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            nj, ni = j + dj, i + di
+            if not (0 <= nj < N and 0 <= ni < N) or not ok[nj, ni]:
+                continue
+            if dj and di and not (ok[j, ni] and ok[nj, i]):
+                continue                      # no corner-squeezing
+            w = R2 if (dj and di) else 1.0
+            nd = d + w
+            if nd < dist.get((nj, ni), math.inf):
+                dist[(nj, ni)] = nd
+                heapq.heappush(pq, (nd, (nj, ni)))
+    return 0.0
 
 
 def straight_line(m: Map) -> float:
