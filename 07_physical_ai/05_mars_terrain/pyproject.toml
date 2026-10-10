@@ -1,21 +1,37 @@
 [project]
 name = "mars-terrain"
 version = "0.1.0"
-description = "Lab 5 part 1 — a Mars-like surface, generated and measured. No robot."
+description = "Lab 5 — a Mars-like surface (part 1) and a PPO navigator on it (part 2)."
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26",
     "mujoco>=3.2",
     "pillow>=10.0",
+    # Part 2 trains a policy on the surface Part 1 builds, so torch
+    # arrives here. Still no `deepspeed`: the policy is ~12k
+    # parameters and the bottleneck is MuJoCo physics on the CPU, so
+    # there is nothing for ZeRO to shard. Same reasoning as labs 1-4.
+    # Pinned to match every other lab in this course. The suite
+    # checks each lock against a single set of versions, because a
+    # test run against torch 2.14 while learners get 2.11 validates a
+    # world nobody is in -- it passes while the labs are broken.
+    "torch==2.11.0",
 ]
-
-# No torch, no deepspeed, and that is the point of Part 1: this lab
-# builds and measures TERRAIN. Nothing here trains, so a dependency on
-# a training stack would be weight a reader carries for nothing. Part 2
-# adds the robot and the learning deps with it.
 
 [project.optional-dependencies]
 figures = ["matplotlib>=3.8"]
 
 [tool.uv]
 package = false
+
+# A custom torch index pins its companions too. With `explicit = true`
+# only the packages named here come from it; a mismatched pair fails
+# with `operator torchvision::nms does not exist`, which reads like a
+# torch bug and is not one.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

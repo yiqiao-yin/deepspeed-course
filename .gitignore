@@ -42,3 +42,13 @@ runpod/results/
 # git history. (Contrast `05_video_speech/data/`, which is real recorded
 # media and IS committed: it cannot be regenerated.)
 07_physical_ai/*/data/*.npz
+
+# Lab 5's task pool: 120 pre-solved Mars tasks, ~50 MB of numpy arrays.
+# A build artifact, not a source: regenerate with
+#     uv run mars_env.py --build-pool
+# It is cached so training does not pay ~10 s of Dijkstra per episode
+# reset, which once cost 98.6% of the wall clock.
+07_physical_ai/05_mars_terrain/task_pool.pkl
+07_physical_ai/05_mars_terrain/runs_log_*.txt
+07_physical_ai/05_mars_terrain/pool.log
+07_physical_ai/05_mars_terrain/runs_render*.log

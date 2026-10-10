@@ -2,11 +2,11 @@
 sidebar_position: 5
 ---
 
-# Mars Terrain (Part 1)
+# Mars Terrain
 
 ## Abstract
 
-This lab builds a Martian surface and then tries to catch it lying.
+**Part 1 — the ground.** This half builds a Martian surface and then tries to catch it lying.
 There is **no robot in it** — no policy, no reward, no success rate.
 That is deliberate: the previous lab published a result that turned
 out to be wrong, and the faults were in its world, its renderer and
@@ -14,6 +14,15 @@ its measurement rather than in anything the robot learned. So terrain
 gets its own lab, built first and measured on its own terms. What
 follows is a generator at two scales, six animations, seven properties
 that can fail, and three bugs found by checking rather than looking.
+
+**Part 2 — the robot.** Trains a PPO navigator on that surface. It
+**does not work yet**, and the measured reason is the useful part: the
+two-legged robot inherited from labs 1–4 has its torso pitch and roll
+locked, which is fine on flat ground with obstacles standing on it and
+fatal on ground that is uneven everywhere. Freeing those joints gets
+100% arrival on flat and still 0% on Mars. The boundary is sharp
+enough to state: **this robot handles 0° of mean ground slope and
+fails by 1.9°.**
 
 ![The 60 m rover patch, at eye level](/img/physical/mars-rover-ground.gif)
 
@@ -224,6 +233,232 @@ representation.
   dust reddens transmitted light and surface imagery shows it that
   way; rendering a blue sky over red ground is the single most common
   way a "Mars" picture announces that nobody checked.
+
+## Part 2 — Putting a robot on it
+
+Part 1 built ground and measured it. Part 2 trains a PPO policy to
+cross it, the same experiment as
+[lab 4](./terrain-navigation): a random start **A**, a random goal
+**B**, and arms that differ only in whether the robot is told what the
+terrain ahead looks like.
+
+**It does not work yet, and the reason is the most interesting thing
+on this page.** What follows is the setup, then the measurements, then
+the wall we hit.
+
+### The task
+
+A pair of points is drawn from a pool of 120 pre-solved maps. Both are
+**standable** (defined below), the oracle's route between them is
+16–30 m long, and that route is at least **15% longer than the
+straight line** — so the path has to bend around something.
+
+That last filter is not cosmetic. Lab 4 capped goal distance by
+walking B backwards along the oracle's route; we tried it here and
+measured the consequence:
+
+| goal placement | median detour |
+|---|---|
+| truncate the route (lab 4's method) | **1.00–1.07×** |
+| select naturally-bent pairs | **1.58×** |
+
+Truncation lands B on the straight run before the first obstacle. The
+route is the right *length* and contains no *decision*. Selecting on
+both properties is what keeps the task a navigation problem.
+
+### What the robot observes
+
+$$
+o \;=\; \big[\underbrace{q_{2:},\; \dot{q}}_{\text{proprioception}},\;
+\underbrace{d,\; \sin\beta,\; \cos\beta}_{\text{goal, robot frame}},\;
+\underbrace{(\rho_k, c_k)_{k \in \{\text{ahead, left, right}\}}}_{\text{terrain, privileged only}}\big]
+$$
+
+The goal is given as range $d$ and the sine and cosine of **relative**
+bearing $\beta$, never as world coordinates — a world-frame goal
+invites memorising positions in a fixed arena, and a relative one is
+the same problem wherever you put it.
+
+The privileged channel is six numbers: for each of three directions,
+the worst rise $\rho_k$ within 3 m, and a bit $c_k$ for whether the
+gait can clear it. Rises are measured **relative to the ground the
+robot stands on**, because the decision is about the step it must
+clear, not about altitude.
+
+Three arms, differing only here:
+
+| arm | dims | what it gets |
+|---|---|---|
+| blind | 25 | proprioception + goal |
+| privileged | 31 | + the six terrain features |
+| padded | 31 | + six constant **zeros** |
+
+The padded arm is the control lab 4 needed and lacked: blind vs
+privileged changes information *and* dimensionality together, so
+without it you cannot attribute a difference to either.
+
+### The reward
+
+$$
+r_t \;=\; \underbrace{10\,(d_{t-1} - d_t)}_{\text{progress toward B}}
+\;+\; \underbrace{1.5}_{\text{alive}}
+\;-\; \underbrace{10^{-3}\lVert a_t \rVert^2}_{\text{control}}
+\;+\; \underbrace{100 \cdot \mathbb{1}[\text{first arrival}]}_{\text{paid once}}
+$$
+
+Three of those four terms exist because of a specific failure:
+
+- **Progress, not forward velocity.** Running north at full speed when
+  the goal is east is worth nothing. Paying for velocity produces a
+  robot that sprints in a straight line and ignores B.
+- **Alive at 1.5, not 0.5.** Too small and the policy learns to fall
+  over immediately, because falling ends the episode and ends the
+  accumulating control cost.
+- **The arrival bonus is paid once, and arriving does NOT end the
+  episode.** Terminating on success made success the worst outcome:
+  standing still for 2000 steps earned 3000, while arriving at step
+  ~700 earned 1170. The policy correctly learned not to arrive.
+
+### The robot has two more joints than lab 4's
+
+```mermaid
+flowchart LR
+  subgraph L4["LABS 1-4 — torso locked"]
+    direction TB
+    A1["rootx, rooty, rootz"]
+    A2["rootyaw"]
+    A3["6 leg joints"]
+  end
+  subgraph L5["LAB 5 — torso free"]
+    direction TB
+    B1["rootx, rooty, rootz"]
+    B2["rootyaw"]
+    B3["rootpitch, rootroll"]
+    B4["6 leg joints"]
+  end
+  L4 -->|"flat ground with<br/>discrete obstacles"| OK1["walks"]
+  L5 -->|"continuously uneven<br/>ground, 10.4 deg mean"| OK2["must balance"]
+
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+
+  class L4,L5 deep
+  class A1,A2,A3,B1,B2,B4 base
+  class B3 bright
+  class OK1,OK2 steel
+```
+
+Labs 1–4 locked torso pitch and roll deliberately — freeing them gives
+you the bipedal-balance problem on top of whatever the lab is about,
+and with two legs it cost return and bought no climbing. **That
+reasoning depended on their ground being flat with obstacles standing
+on it**, and Mars is not like that.
+
+### Measurement 1: the locked torso has a slope ceiling
+
+The lab-4 robot, walking with a trained gait, on the same route, with
+only the terrain relief scaled:
+
+| mean ground slope | distance walked |
+|---|---|
+| 0.0° | 9.8 m |
+| 0.7° | 11.6 m |
+| 1.3° | 5.3 m |
+| **2.6°** | **0.64 m** |
+| 4.3° | 0.43 m |
+| 10.4° (Mars as generated) | 0.31 m |
+
+It stops dead somewhere between 1.3° and 2.6°, long before anything
+Mars would call a hill. Removing all 140 boulders changes nothing
+(0.36 m either way); flattening the height field restores it
+completely (8.89 m). **The obstacle is not the obstacles — it is the
+continuous unevenness between them.**
+
+So the two joints come back. Part 2 is balance *and* navigation by
+necessity, not by ambition.
+
+### Measurement 2: freed, it walks — on flat
+
+![Walking on flat ground](/img/physical/mars-walk-flat.gif)
+
+With pitch and roll free, trained on flat ground: **100% arrival**,
+mean distance remaining 0.1 m.
+
+![The same run, from above](/img/physical/mars-walk-iso.gif)
+
+### Measurement 3: it cannot do Mars
+
+![The same policy on the real surface](/img/physical/mars-walk-rough.gif)
+
+The policy above, dropped on the surface it was built for, walks
+**8.6 m of a 29.7 m route** and times out. Three training strategies,
+all of them stuck:
+
+| strategy | steps | arrival | fall rate | distance left |
+|---|---|---|---|---|
+| cold start on Mars | 900k | **0%** | 75% → **83%** (rising) | 17 → 13.6 m, then flat |
+| warm start, flat → Mars | 246k | **0%** | 83% | 15.0 m |
+| warm start, graded ladder | 450k per rung | **0%** | — | see below |
+
+And the ladder in detail — each rung warm-started from the one below
+it, so the policy never faces more than one step up in difficulty at a
+time:
+
+| rung | relief | mean slope | arrival | fell | distance left |
+|---|---|---|---|---|---|
+| start | flat | 0.0° | **100%** | — | 0.1 m |
+| 1 | ×0.15 | **1.9°** | **0%** | 75% | 15.3 m |
+| 2 | ×0.30 | 3.8° | **0%** | 83% | 12.8 m |
+| 3 | ×0.50 | 6.3° | **0%** | 83% | 12.9 m |
+| 4 | ×0.75 | 8.0° | **0%** | 83% | 12.8 m |
+| 5 | ×1.00 | **10.4°** | **0%** | 83% | 13.5 m |
+
+The flat line through rungs 2–4 is itself informative: once the policy
+is falling 83% of the time it stops collecting the transitions it
+would need to improve, and additional terrain difficulty changes
+nothing because it never gets far enough to meet it.
+
+The third row is the sharp one. A policy that arrives **100% of the
+time** on a plane, warm-started onto ground with a mean slope of
+**1.9 degrees**, still reaches 0% after 450k steps.
+
+:::danger What this lab has not achieved
+There is no working Mars navigator on this page, and no blind-versus-
+privileged comparison, because there is no policy good enough to
+compare. Running the three arms anyway would have produced a table of
+zeros and a p-value, and that table would have measured our
+locomotion failure while appearing to measure terrain information.
+
+The honest boundary is: **this robot handles 0° and fails by 1.9°**,
+freed torso and curriculum included, at the budgets tried.
+:::
+
+### Why it is hard, and what we would try next
+
+A planar biped on flat ground solves a 1-D balance problem. On ground
+tilted in two directions at once it has to place both feet on surfaces
+with different normals while turning toward a goal it cannot see. The
+12k-parameter policy that was ample for lab 4 is being asked for a
+qualitatively different skill.
+
+What we would try, in order of cheapness:
+
+1. **A finer curriculum.** The ramp here jumped flat → 1.9°. Starting
+   at 0.3° with more rungs may keep the policy inside its competence.
+2. **A bigger policy.** 12k parameters was sized for a task without a
+   balance component.
+3. **More steps.** 450k per rung is short for a skill this
+   qualitatively new; lab 4 used 1.5M for a much easier problem.
+4. **Reward shaping for posture** — an explicit upright term, which
+   none of the reward above contains.
+
+Each is a real experiment and none is a certainty. The reason they are
+listed rather than run is that each is hours of compute, and this page
+is more useful stating a measured boundary than claiming a result it
+does not have.
 
 ## Running It
 

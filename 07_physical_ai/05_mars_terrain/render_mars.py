@@ -174,12 +174,21 @@ def _frames(surface, cam_fn, n_frames: int, w: int, h: int,
     for i in range(n_frames):
         t = i / max(n_frames - 1, 1)
         if sun_fn is not None:
-            # The sun is baked into the model, so a moving sun means
-            # rebuilding it. Slow, and worth it for one clip.
+            # MUTATE the light direction on the existing model.
+            #
+            # The first version rebuilt the model AND the Renderer for
+            # every frame, on the theory that the sun is baked into the
+            # XML. It is, but rebuilding the GL context per frame gave
+            # inconsistent shadow buffers: frame brightness jumped
+            # 104, 110, 139, 43 with a mean frame-to-frame delta of
+            # 71.7 out of 255. The clip strobed instead of dawning.
+            # `model.light_dir` is writable, so one model and one
+            # renderer suffice -- and it is ~30x faster besides.
             az, el = sun_fn(t)
-            model = build(surface, tmp, az, el)
-            data = mujoco.MjData(model)
-            r = mujoco.Renderer(model, height=h, width=w)
+            ar, er = math.radians(az), math.radians(el)
+            model.light_dir[0] = [math.cos(er) * math.cos(ar),
+                                  math.cos(er) * math.sin(ar),
+                                  -math.sin(er)]
         cam_fn(cam, t, surface)
         mujoco.mj_forward(model, data)
         r.update_scene(data, cam)
