@@ -194,7 +194,30 @@ def run(a) -> None:
             if not a.quiet:
                 print(f"  {done:>9,}  arrived {ev['arrived']:5.0%}  "
                       f"fell {ev['fell']:5.0%}  left {ev['to_goal']:5.1f} m  "
-                      f"eff {ev['efficiency']:4.0%}  {ev['seconds']:5.0f}s")
+                      f"eff {ev['efficiency']:4.0%}  {ev['seconds']:5.0f}s",
+                      flush=True)
+
+            # CHECKPOINT AS WE GO, not only at the end.
+            #
+            # A run used to write `policy.pt` once, after the final
+            # step. Six large-world runs were killed at 94% of their
+            # budget when the session holding them ended, and all of
+            # it -- four and a half hours of training that had already
+            # reached 42% arrival -- was unrecoverable, because nothing
+            # had been written yet. The logs survived and the weights
+            # did not, which is exactly backwards.
+            #
+            # `summary.json` is still written only on completion, so it
+            # stays the marker of a FINISHED run and nothing downstream
+            # mistakes a partial checkpoint for a result.
+            torch.save({"model": net.state_dict(),
+                        "norm": norm.state_dict()}, out / "policy.pt")
+            (out / "progress.json").write_text(json.dumps(
+                {"step": done, "total": a.total_steps, "latest": ev,
+                 "mode": a.mode, "seed": a.seed,
+                 "goal_range": a.goal_range,
+                 "world": __import__("world").PRESET,
+                 "complete": False}, indent=2))
 
     f = hist[-1]
     (out / "summary.json").write_text(json.dumps(
@@ -208,6 +231,12 @@ def run(a) -> None:
         # The figure and the number were describing different worlds.
         {"mode": a.mode, "flat": a.flat, "seed": a.seed, "device": dev,
          "goal_range": a.goal_range,
+         # Which WORLD this policy was trained in. Same reasoning as
+         # goal_range: a run that does not record its task cannot be
+         # scored or filmed afterwards without guessing.
+         "world": __import__("world").PRESET,
+         "arena_m": __import__("world").ARENA,
+         "max_steps": __import__("nav_env").MAX_STEPS,
          "obs_dim": od, "params": net.n_params(),
          "total_steps": a.total_steps, "baseline_return": round(base_ret, 2),
          "wall_seconds": round(time.time() - t0, 1), "final": f}, indent=2))

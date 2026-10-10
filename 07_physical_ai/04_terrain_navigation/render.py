@@ -97,6 +97,40 @@ def _font(size: int, bold: bool = False):
     return _FONTS[key]
 
 
+def adopt_world(run: str) -> str:
+    """
+    Select the WORLD the run was trained in, before `world` is imported.
+
+    `world.PRESET` is read from the environment at import time and
+    `ARENA`/`N` are imported by value all over this lab, so the choice
+    has to be made before the first import and cannot be changed after.
+
+    Doing this automatically, rather than leaving it to whoever types
+    the command, is the direct lesson of the `goal_range` bug: the
+    renderer built its environment without the training task's
+    parameters and filmed goals the policy had never been trained to
+    reach, while the published table said something else entirely. The
+    run records its world; nothing downstream should have to be told.
+    """
+    import json
+    import os
+    from pathlib import Path
+
+    f = Path(__file__).parent / "runs" / run / "summary.json"
+    want = "standard"
+    if f.exists():
+        want = json.loads(f.read_text()).get("world", "standard")
+    have = os.environ.get("NAV_WORLD")
+    if have and have != want:
+        raise SystemExit(
+            f"\n  {run} was trained in the '{want}' world but "
+            f"NAV_WORLD={have} is set.\n"
+            f"  Refusing to score or film a policy in a world it never "
+            f"saw -- unset NAV_WORLD and let the run choose.\n")
+    os.environ["NAV_WORLD"] = want
+    return want
+
+
 def load_policy(run: str):
     """A trained navigator, with the observation mode it was trained in."""
     import torch
@@ -132,22 +166,36 @@ def load_policy(run: str):
 # hand projection this replaced was valid for one camera and one angle;
 # every view below would have needed its own version of it, and each
 # would have been wrong in its own way.
+# WORLD-RELATIVE distances for the wide shots.
+#
+# These were absolute metres tuned for a 20 m arena. In the 40 m world
+# an overhead span of 21 m frames a quarter of the map and crops the
+# route out of its own clip -- the camera silently showing a different
+# place than the one the robot is crossing. The tracking shots
+# (`chase`, `shoulder`) stay absolute because they frame the ROBOT,
+# whose size does not change with the arena.
+# Stored as a FRACTION of the arena and resolved at use time, not at
+# import time. `VIEWS` is built when this module loads, which happens
+# before `main()` calls `adopt_world()` -- so reading `world.ARENA`
+# here would bake in the default 20 m arena and film the big world
+# through the small world's camera.
 VIEWS = {
-    "overhead": dict(ortho=True,  elev=-90.0, azim=90.0,  dist=21.0,
+    "overhead": dict(ortho=True,  elev=-90.0, azim=90.0,  dist_frac=1.05,
                      track=False, label="overhead, orthographic"),
-    "iso":      dict(ortho=False, elev=-42.0, azim=125.0, dist=27.0,
+    "iso":      dict(ortho=False, elev=-42.0, azim=125.0, dist_frac=1.35,
                      track=False, label="isometric"),
     "chase":    dict(ortho=False, elev=-16.0, azim=None,  dist=5.5,
                      track=True,  label="chase"),
     "shoulder": dict(ortho=False, elev=-24.0, azim=None,  dist=3.2,
                      track=True,  label="over the shoulder"),
-    "orbit":    dict(ortho=False, elev=-34.0, azim="spin", dist=26.0,
+    "orbit":    dict(ortho=False, elev=-34.0, azim="spin", dist_frac=1.30,
                      track=False, label="orbit"),
 }
 
 
 def episode(run: str, seed: int, width: int, height: int, every: int,
-            overhead: bool = True, view: str = "overhead"):
+            overhead: bool = True, view: str = "overhead",
+            stop_after: int | None = None):
     """One episode, filmed, with the route and the track drawn on."""
     import mujoco
     import numpy as np
@@ -170,13 +218,32 @@ def episode(run: str, seed: int, width: int, height: int, every: int,
     r = mujoco.Renderer(env.model, height=height, width=width)
     cam = mujoco.MjvCamera()
     frames, track = [], []
+    # Stop filming shortly after the robot gets there.
+    #
+    # The episode deliberately CONTINUES after arrival -- ending it
+    # there once made success the worst outcome, since the policy
+    # forfeited the remaining alive bonus and correctly learned not to
+    # arrive. That is right for training and wrong for a clip: in the
+    # 40 m world the robot reaches B at step 1512 of 6000 and then
+    # jitters at the flag for 4,500 steps, so three quarters of the
+    # animation is a stationary robot and "walked 70.4 m" is mostly
+    # milling. Truncating the FILM changes nothing about the episode
+    # or any number measured from it.
+    after = None
     while True:
         obs, _, term, trunc, info = env.step(act(obs))
         track.append((info["x"], info["y"]))
+        if info["arrived"] and after is None:
+            after = 0
+        elif after is not None:
+            after += 1
+            if stop_after is not None and after >= stop_after:
+                term = True
         if len(track) % every == 0 or term:
             V = VIEWS[view]
+            dist = view_dist(view)
             cam.orthographic = 1 if V["ortho"] else 0
-            cam.distance = V["dist"]
+            cam.distance = dist
             cam.elevation = V["elev"]
             if V["track"]:
                 cam.lookat[:] = [info["x"], info["y"],
@@ -193,7 +260,7 @@ def episode(run: str, seed: int, width: int, height: int, every: int,
             # Markers scale with camera distance. A sphere sized for a
             # 21 m overhead shot is the size of the robot on a 5.5 m
             # chase cam, and swallows the thing it is annotating.
-            k = V["dist"] / 21.0
+            k = dist / 21.0
             for x, y in route[::6]:
                 add_marker(r.scene, (x, y, env._h_at(x, y) + 0.12),
                            (0.10, 0.95, 0.45, 1.0), 0.11 * k)
@@ -219,7 +286,12 @@ def episode(run: str, seed: int, width: int, height: int, every: int,
                     "to_goal": info["to_goal"], "mode": mode}
 
 
-ORTHO_SPAN = 21.0
+def view_dist(view: str) -> float:
+    """Camera distance in metres: absolute for tracking shots, arena-relative for wide ones."""
+    from world import ARENA
+
+    V = VIEWS[view]
+    return V["dist"] if "dist" in V else ARENA * V["dist_frac"]
 
 
 def add_marker(scene, pos, rgba, size=0.14):
@@ -377,7 +449,21 @@ def card(W, H, title, body, n=12):
 
 
 def _save(frames, path, a):
+    """
+    Write the GIF, tagging the filename with the world it came from.
+
+    Without this every big-world clip would land on the small world's
+    filename and silently replace it: `nav-iso.gif` rendered at 40 m
+    would overwrite the 20 m one the page already shows, and the page
+    would keep its caption. Two different experiments cannot share an
+    output path.
+    """
     from PIL import Image
+
+    from world import PRESET
+
+    if PRESET != "standard":
+        path = path.with_name(f"{path.stem}-{PRESET}{path.suffix}")
     path.parent.mkdir(parents=True, exist_ok=True)
     pil = [Image.fromarray(f).convert("P", palette=Image.ADAPTIVE,
                                       colors=a.colors,
@@ -391,7 +477,8 @@ def _save(frames, path, a):
 
 def clip_route(a) -> None:
     """Overhead: the oracle's route, and the one the robot actually took."""
-    f, res = episode(a.run, a.seed, a.width, a.height, a.every, overhead=True)
+    f, res = episode(a.run, a.seed, a.width, a.height, a.every,
+                     overhead=True, stop_after=a.stop_after)
     print(f"    {res['mode']:<11} walked {res['travelled']:.1f} m vs route "
           f"{res['route']:.1f} m  {'ARRIVED' if res['arrived'] else 'did not'}")
     _save(f, OUT / "nav-route.gif", a)
@@ -410,7 +497,7 @@ def clip_route_b(a) -> None:
     documents, or it rots exactly this way.
     """
     f, res = episode(a.run, a.seed_b, a.width, a.height, a.every,
-                     overhead=True)
+                     overhead=True, stop_after=a.stop_after)
     print(f"    second map  walked {res['travelled']:.1f} m vs route "
           f"{res['route']:.1f} m  {'ARRIVED' if res['arrived'] else 'did not'}")
     _save(f, OUT / "nav-route-b.gif", a)
@@ -456,7 +543,8 @@ def clip_fail(a) -> None:
 
 def _angled(a, view: str, out: str) -> None:
     f, res = episode(a.run, a.seed, a.width, a.height, a.every,
-                     overhead=(view == "overhead"), view=view)
+                     overhead=(view == "overhead"), view=view,
+                     stop_after=a.stop_after)
     print(f"    {VIEWS[view]['label']:<22} walked {res['travelled']:5.1f} m  "
           f"{'ARRIVED' if res['arrived'] else 'did not arrive'}")
     _save(f, OUT / out, a)
@@ -515,6 +603,9 @@ def main() -> int:
     # 20053: a second arriving episode on a different map (route 1.49x
     # the straight line, 74% efficient). One map is an anecdote.
     ap.add_argument("--seed-b", type=int, default=20053)
+    ap.add_argument("--stop-after", type=int, default=None,
+                    help="stop FILMING this many steps after arrival; the "
+                         "episode itself is unchanged")
     ap.add_argument("--fail-seed", type=int, default=20005,
                     help="an episode the policy does NOT solve")
     ap.add_argument("--width", type=int, default=760)
@@ -524,6 +615,8 @@ def main() -> int:
     ap.add_argument("--colors", type=int, default=64)
     a, _ = ap.parse_known_args()
 
+    # Before anything imports `world`.
+    adopt_world(a.run)
     os.environ["MUJOCO_GL"] = pick_backend()
     print(f"  writing to {OUT}")
     for name in (sorted(CLIPS) if a.all else [a.clip]):

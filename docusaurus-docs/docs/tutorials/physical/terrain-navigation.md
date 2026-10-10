@@ -381,6 +381,63 @@ emission at 0.85 washed a green marker and an orange one into the same
 yellow, which is exactly the distinction the figure exists to make.
 :::
 
+## Scaling it up: a 40 m world
+
+Everything above is a 20 x 20 m arena with 14 ridges and goals 7 m
+away. The obvious question is whether any of it survives a bigger
+world, so here is the same experiment at **four times the area**:
+
+| | standard | large |
+|---|---|---|
+| arena | 20 x 20 m | **40 x 40 m** |
+| ridges | 14 | **42** |
+| A to B | 7 m | **20 m** |
+| episode | 20 s | **60 s** |
+| cost of refusing to climb | mean +5.94 m | mean **+13.80 m** |
+
+![The 40 m world, isometric](/img/physical/nav-iso-large.gif)
+
+![The 40 m world, overhead](/img/physical/nav-route-large.gif)
+
+The robot walks **26.9 m against a 21.6 m shortest path — 95%
+efficient** — across an arena three times the width of the one it was
+originally built for.
+
+### What this scale-up shows, and what it does not
+
+**It works:** the task is learnable at 4x the area. Pooled arrival is
+25.0% blind and 30.0% privileged over 60 episodes per checkpoint, and
+path efficiency is **89–95%**, noticeably tighter than the small
+world's 83%. Nothing about the method broke when the box got bigger.
+
+**It proves nothing about the arms.** Three seeds per arm, intervals
+that overlap heavily, and the ordering is the *opposite* of the
+nine-seed result above. That is what three seeds buy you. It is
+reported here as evidence the task scales, not as a comparison.
+
+**The routing story is weaker than it looks.** Capping the goal at
+20 m pulls B back along the oracle's route onto a straight segment, so
+the detour ratio in these clips is only **1.08** — the robot covers
+real distance but is not forced into the dramatic go-around the small
+world's clips show. The uncapped big world has a 1.36 detour ratio,
+but filming that would mean showing a policy a task it was never
+trained on, which is the exact mistake documented above. The honest
+clip is the one the policy was actually trained for.
+
+:::tip A policy that beats the oracle is telling you the oracle is wrong
+Three of nineteen arriving episodes scored **over 100% efficiency** —
+one walked 19.8 m where the "shortest path" was 21.6 m. That is not a
+measurement bug this time. `traversable()` blocks a cell when the rise
+to any neighbour exceeds 0.12 m, but a physical body can clip the
+corner of a ridge the grid forbids, so the oracle is a **conservative
+lower bound** on what the robot can do.
+
+Which is exactly why the `min(..., 1.0)` clamp had to go. Last time
+an impossible number meant a broken denominator; this time it means a
+real capability the planner cannot express. Both are worth knowing and
+the clamp would have erased both.
+:::
+
 ## What this lab does not claim
 
 ![Training curves](/img/physical/nav-curves.png)
