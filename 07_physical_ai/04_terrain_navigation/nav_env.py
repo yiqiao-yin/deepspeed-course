@@ -44,8 +44,8 @@ from pathlib import Path
 import numpy as np
 
 from robot import hfield_png, model_xml
-from world import (ARENA, CELL, N, STEP_MAX, generate, geodesic, solve,
-                   straight_line)
+from world import (ARENA, CELL, N, PRESET, STEP_MAX, generate, geodesic,
+                   solve, straight_line)
 
 # PROPRIO is DERIVED from the compiled model, never typed. It is
 # len(qpos[2:]) + len(qvel), and lab 3 shipped the same quantity as a
@@ -84,12 +84,22 @@ START_BEND = 0.3
 START_DZ = -0.294
 DEPTH_NEAR, DEPTH_FAR = 0.5, 6.0
 
+# Episode length, in env steps of 0.01 s.
+#
+# This is part of the TASK, not a tuning knob: at ~0.9 m/s a 2000-step
+# episode buys 18 m of walking, which is ample for a 7 m goal in the
+# 20 m arena and nowhere near enough for a 28 m route in the 40 m one.
+# Leave it at 2000 for the big world and every policy fails on the
+# clock rather than on the terrain -- a timeout that looks exactly like
+# an inability to navigate.
+MAX_STEPS = 6000 if PRESET == "large" else 2000
+
 
 class NavWorld:
     """Gymnasium-shaped. `reset` / `step`, no Gymnasium dependency."""
 
     def __init__(self, *, mode: str = "blind", flat: bool = False,
-                 depth_res: int = 64, max_steps: int = 2000,
+                 depth_res: int = 64, max_steps: int | None = None,
                  frame_skip: int = 5, seed: int | None = None,
                  goal_range: float | None = None) -> None:
         import mujoco
@@ -109,7 +119,7 @@ class NavWorld:
         self.mode = mode
         self.flat = flat
         self.depth_res = depth_res
-        self.max_steps = max_steps
+        self.max_steps = MAX_STEPS if max_steps is None else max_steps
         self.frame_skip = frame_skip
         # Curriculum. `goal_range` caps how far B may be placed; None
         # means the map's own endpoints. A 15 m goal inside a 12 s

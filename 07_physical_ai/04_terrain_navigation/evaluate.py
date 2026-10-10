@@ -47,6 +47,51 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return max(0.0, c - h), min(1.0, c + h)
 
 
+def world_of(run: str) -> str:
+    """Which world a run was trained in. Pure read, no side effect."""
+    import json
+    from pathlib import Path
+
+    f = Path(__file__).parent / "runs" / run / "summary.json"
+    if not f.exists():
+        return "standard"
+    return json.loads(f.read_text()).get("world", "standard")
+
+
+def adopt_world(run: str) -> str:
+    """
+    Select the WORLD the run was trained in, before `world` is imported.
+
+    `world.PRESET` is read from the environment at import time and
+    `ARENA`/`N` are imported by value all over this lab, so the choice
+    has to be made before the first import and cannot be changed after.
+
+    Doing this automatically, rather than leaving it to whoever types
+    the command, is the direct lesson of the `goal_range` bug: the
+    renderer built its environment without the training task's
+    parameters and filmed goals the policy had never been trained to
+    reach, while the published table said something else entirely. The
+    run records its world; nothing downstream should have to be told.
+    """
+    import json
+    import os
+    from pathlib import Path
+
+    f = Path(__file__).parent / "runs" / run / "summary.json"
+    want = "standard"
+    if f.exists():
+        want = json.loads(f.read_text()).get("world", "standard")
+    have = os.environ.get("NAV_WORLD")
+    if have and have != want:
+        raise SystemExit(
+            f"\n  {run} was trained in the '{want}' world but "
+            f"NAV_WORLD={have} is set.\n"
+            f"  Refusing to score or film a policy in a world it never "
+            f"saw -- unset NAV_WORLD and let the run choose.\n")
+    os.environ["NAV_WORLD"] = want
+    return want
+
+
 def load(run: str):
     import torch
 
@@ -127,6 +172,21 @@ def main() -> int:
 
     runs = sorted(Path(p).parent.name
                   for p in glob.glob(str(RUNS / f"{a.prefix}*/policy.pt")))
+    if runs:
+        # All runs in one invocation must share a world: the module-level
+        # ARENA cannot change between them inside a single process.
+        # READ every run first, then adopt once -- adopting as we go
+        # would make the second run collide with the first and report
+        # it as "you set NAV_WORLD", blaming the caller for the tool's
+        # own side effect.
+        worlds = {world_of(r) for r in runs}
+        if len(worlds) == 1:
+            adopt_world(runs[0])
+        if len(worlds) > 1:
+            raise SystemExit(
+                f"\n  {a.prefix}* spans more than one world ({sorted(worlds)}).\n"
+                f"  Score them in separate invocations -- the arena size is a\n"
+                f"  module-level constant and cannot differ within a process.\n")
     if not runs:
         print(f"  no checkpoints matching {a.prefix}*", file=sys.stderr)
         return 1

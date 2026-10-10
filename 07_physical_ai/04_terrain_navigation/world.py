@@ -39,12 +39,34 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
 
+# TWO WORLDS, and the big one is opt-in.
+#
+# `NAV_WORLD=large` quadruples the area and roughly triples the walk.
+# It is selected by environment variable rather than by editing these
+# constants because `ARENA`, `CELL` and `N` are imported BY VALUE all
+# over this lab -- rebinding them later would leave half the modules
+# holding the old numbers, which is the same class of mistake as the
+# stale `PROPRIO` literal that killed three runs in lab 3.
+#
+# Every geometry constant below is scaled WITH the arena, and that is
+# the whole difficulty. Ridge length is what makes "can I climb this?"
+# a question worth asking: a 15 m ridge nearly spans a 20 m arena and
+# cannot be skirted cheaply, but the same ridge in a 40 m arena is a
+# pebble you walk around for free. Scale the box and keep the ridges,
+# and the lab still runs, still looks right, and no longer contains a
+# decision. `--check` measures that property rather than trusting it.
+PRESET = os.environ.get("NAV_WORLD", "standard")
+if PRESET not in ("standard", "large"):
+    raise SystemExit(f"NAV_WORLD must be 'standard' or 'large', got {PRESET!r}")
+_LARGE = PRESET == "large"
+
 # Metres. The arena is square and the robot starts somewhere in it.
-ARENA = 20.0
+ARENA = 40.0 if _LARGE else 20.0
 # Height-field resolution. 0.1 m per cell: fine enough that a 0.12 m step
 # is several cells wide, coarse enough that the array stays small.
 CELL = 0.10
@@ -68,6 +90,16 @@ MAX_H = 1.2                                 # hfield elevations scale to this
 # but nothing in this lab can read it.
 STEP_RGBA = "0.33 0.49 0.38 1"              # climbable
 WALL_RGBA = "0.46 0.26 0.26 1"              # not climbable
+
+# Obstacle budget and geometry, both scaled with the arena. Counts go
+# with AREA (4x the box, 3x the ridges -- deliberately short of 4x, so
+# the big world is more open per square metre and a route exists);
+# lengths go with the SIDE.
+N_STEPS, N_WALLS = (24, 18) if _LARGE else (8, 6)
+STEP_LEN = (24.0, 34.0) if _LARGE else (12.0, 17.0)
+WALL_LEN = (12.0, 20.0) if _LARGE else (6.0, 10.0)
+# How far apart A and B must be. The point of the big world.
+MIN_SEP = 22.0 if _LARGE else 9.0
 
 
 @dataclass
@@ -113,7 +145,8 @@ def _spine(cx: float, cy: float, length: float, angle: float,
     return np.stack([cx + t * np.cos(angle), cy + t * np.sin(angle)], axis=1)
 
 
-def generate(seed: int, n_steps: int = 8, n_walls: int = 6) -> Map:
+def generate(seed: int, n_steps: int | None = None,
+             n_walls: int | None = None) -> Map:
     """
     One random arena: long climbable ridges, long impassable ones.
 
@@ -134,6 +167,8 @@ def generate(seed: int, n_steps: int = 8, n_walls: int = 6) -> Map:
     -- on 94% of maps both routes exist, which keeps it a choice rather
     than a forced climb.
     """
+    n_steps = N_STEPS if n_steps is None else n_steps
+    n_walls = N_WALLS if n_walls is None else n_walls
     rng = np.random.default_rng(seed)
     h = np.zeros((N, N), dtype=np.float32)
     ys, xs = np.mgrid[0:N, 0:N]
@@ -172,10 +207,10 @@ def generate(seed: int, n_steps: int = 8, n_walls: int = 6) -> Map:
 
     for _ in range(n_steps):
         place("step", float(rng.uniform(0.06, STEP_MAX)),
-              float(rng.uniform(12.0, 17.0)), float(rng.uniform(1.0, 1.8)))
+              float(rng.uniform(*STEP_LEN)), float(rng.uniform(1.0, 1.8)))
     for _ in range(n_walls):
         place("wall", float(rng.uniform(WALL_MIN, 0.9)),
-              float(rng.uniform(6.0, 10.0)), float(rng.uniform(0.8, 1.4)))
+              float(rng.uniform(*WALL_LEN)), float(rng.uniform(0.8, 1.4)))
 
     for o in obstacles:
         # Rotate the sample grid into the ridge's own frame.
@@ -212,7 +247,7 @@ def _endpoints(rng, h: np.ndarray) -> tuple[tuple, tuple]:
     a = flat_point()
     for _ in range(200):
         b = flat_point()
-        if (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 > 9.0 ** 2:
+        if (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 > MIN_SEP ** 2:
             return a, b
     return a, b
 

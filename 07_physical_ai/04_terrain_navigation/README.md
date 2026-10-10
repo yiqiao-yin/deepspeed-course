@@ -310,6 +310,61 @@ Note `--wait-seconds` defaults to 1800, which is shorter than a full
 | Disk | ~20 GB (torch + MuJoCo); no downloads, the world is generated |
 | Wall clock | ~25 min a run; ~11 h for the full 27-run sweep |
 
+## Scaling it up: a 40 m world
+
+`NAV_WORLD=large` quadruples the area. The preset is opt-in so the
+27 runs above are untouched, and every geometry constant scales with
+the arena rather than only the box:
+
+| | standard | large |
+|---|---|---|
+| arena | 20 × 20 m | **40 × 40 m** |
+| ridges | 14 | **42** |
+| ridge length | 12–17 m / 6–10 m | 24–34 m / 12–20 m |
+| A → B | 7 m | **20 m** |
+| episode | 2000 steps, 20 s | **6000 steps, 60 s** |
+| cost of refusing to climb | mean +5.94 m | mean **+13.80 m** |
+
+![The 40 m world](../../docusaurus-docs/static/img/physical/nav-iso-large.gif)
+
+```bash
+NAV_WORLD=large uv run train_nav.py --mode blind --seed 0 \
+    --goal-range 20 --total-steps 2500000 --name big_blind_s0
+NAV_WORLD=large uv run evaluate.py --prefix big_ --episodes 60 --goal-range 20
+# render.py and evaluate.py adopt the world from the run's own summary
+uv run render.py --clip iso --run big_privileged_s2 --seed 20021 --stop-after 300
+```
+
+**Scaling the box without scaling the ridges would delete the task.**
+A 15 m ridge nearly spans a 20 m arena and cannot be skirted cheaply;
+the same ridge in a 40 m arena is a pebble. The lab would still run,
+still train and still render, with no decision left in it — which is
+how this repository shipped round mounds and short ridges. The
+property is asserted at both scales.
+
+### What it shows, and what it does not
+
+| | |
+|---|---|
+| **works** | learnable at 4× the area: 25.0% blind / 30.0% privileged pooled, path efficiency **89–95%** (tighter than the small world's 83%) |
+| **proves nothing** | three seeds per arm, overlapping intervals, and the ordering is the *opposite* of the nine-seed result. Reported as scale-up evidence, not a comparison |
+| **weaker than it looks** | capping the goal at 20 m pulls B onto a straight segment, so the clips' detour ratio is only **1.08**. The uncapped world has 1.36, but filming that would show the policy a task it never trained on |
+
+**A policy that beats the oracle means the oracle is wrong.** Three of
+nineteen arriving episodes scored over 100% efficiency — one walked
+19.8 m where the "shortest path" was 21.6 m. `traversable()` blocks a
+cell when the rise to any neighbour exceeds 0.12 m, but a body can clip
+the corner of a ridge the grid forbids, so the oracle is a
+**conservative lower bound**. Last time an impossible efficiency meant
+a broken denominator; this time it means a real capability the planner
+cannot express. The `min(..., 1.0)` clamp would have erased both.
+
+**Clips are truncated 300 steps after arrival** (`--stop-after`). The
+episode still runs its full 6000 steps — ending it at arrival once made
+success the worst outcome — but the robot reaches B at step 1512 and
+jitters at the flag for the remaining 4,500, so three quarters of an
+untruncated clip is a stationary robot.
+
 ## What this lab does not claim
 
 - **The task is not solved.** The best arm reaches B in about four
