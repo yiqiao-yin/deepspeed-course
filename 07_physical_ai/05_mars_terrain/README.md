@@ -1,9 +1,11 @@
-# Mars Terrain — Part 1: the ground, before the robot
+# Mars Terrain
 
 ## Abstract
 
-A procedurally generated Martian surface, built to be *measured*
-rather than admired. Lab 4 shipped a published result that was wrong
+Two halves. **Part 1** builds a procedurally generated Martian
+surface, to be *measured* rather than admired. **Part 2** trains a PPO
+navigator on it, and does not yet succeed — the measured reason is the
+useful part. Lab 4 shipped a published result that was wrong
 because of bugs in its world, its renderer and its metric — not in any
 policy — so Lab 5 separates the two problems. **Part 1 contains no
 robot:** no PPO, no reward, no arrival rate. It generates terrain at
@@ -145,6 +147,79 @@ exactly like *this terrain contains no decision* and actually meant
 failure value**: it is in range, and it points at the wrong culprit. It
 now returns `NaN` and reports its usable-sample count.
 
+## Part 2 — a PPO navigator, and the wall it hits
+
+Same experiment as [lab 4](../04_terrain_navigation): random A to
+random B, three arms differing only in what the robot is told about
+the terrain ahead (blind 25 dims / privileged 31 / padded 31 with six
+constant zeros as the width control).
+
+**Reward**
+
+```
+r = 10*(d_prev - d)        progress toward B, not forward velocity
+  + 1.5                    alive  (0.5 teaches it to fall over at once)
+  - 1e-3*||a||^2           control
+  + 100 on FIRST arrival   paid once; arriving does NOT end the episode
+```
+
+**The task** draws from 120 pre-solved maps whose route is 16-30 m and
+at least 15% longer than the straight line. Lab 4's method of capping
+goal distance -- walking B back along the route -- was tried and
+measured at a **1.00-1.07x** detour: the right length, no decision in
+it. Selecting naturally-bent pairs gives **1.58x**.
+
+### The robot needed two more joints, and it was not enough
+
+Labs 1-4 lock torso pitch and roll. That is correct for flat ground
+with discrete obstacles on it, and fatal on ground uneven everywhere.
+Measured, same gait, only the relief scaled:
+
+| mean slope | 0.0° | 0.7° | 1.3° | 2.6° | 4.3° | 10.4° |
+|---|---|---|---|---|---|---|
+| walked | 9.8 m | 11.6 m | 5.3 m | **0.64 m** | 0.43 m | 0.31 m |
+
+Removing all 140 boulders changes nothing; flattening the height field
+restores it entirely. The obstacle is the continuous unevenness, not
+the obstacles.
+
+Freeing pitch and roll: **100% arrival on flat**. On Mars, three
+strategies, all stuck at **0%**:
+
+| strategy | steps | arrival | note |
+|---|---|---|---|
+| cold start on Mars | 900k | 0% | fall rate ROSE 75% → 83% |
+| warm start flat → Mars | 246k | 0% | 83% falling |
+| ladder rung ×0.15 (1.9°) | 450k | 0% | 15.3 m left |
+| ladder rung ×0.30 (3.8°) | 450k | 0% | 12.8 m left |
+| ladder rung ×0.50 (6.3°) | 450k | 0% | 12.9 m left |
+| ladder rung ×0.75 (8.0°) | 450k | 0% | 12.8 m left |
+| ladder rung ×1.00 (10.4°, full Mars) | 450k | 0% | 13.5 m left |
+
+**A policy that arrives 100% of the time on a plane, warm-started onto
+1.9 degrees of mean slope, still reaches 0%.**
+
+### What Part 2 does NOT contain
+
+No working Mars navigator, and no blind-vs-privileged comparison,
+because there is no policy good enough to compare. Running the arms
+anyway would have produced a table of zeros and a p-value measuring
+our locomotion failure while appearing to measure terrain information.
+
+The boundary is: **0° works, 1.9° does not**, freed torso and
+curriculum included, at the budgets tried.
+
+## What This Lab Does Not Claim
+
+- **This is not Mars.** It is procedural terrain matched to published
+  descriptions and imagery. MOLA elevation data exists; this is not it.
+- **No robot has walked here.** Traversability is computed from a gait
+  rule, not demonstrated. Part 2 is where that claim gets earned.
+- **The routing decision is weak** — +1.24 m median, 5 of 10 seeds.
+- **The palette is a presentation choice**, not a result. Nothing here
+  simulates atmospheric scattering; the sky is butterscotch because
+  surface imagery shows it that way.
+
 ## Running It
 
 ```bash
@@ -154,7 +229,14 @@ uv sync
 uv run mars.py --check 20            # the measurements
 uv run mars.py --scale rover --ascii # one map, in text
 uv run mars.py --scale regional      # the planetary view
-uv run render_mars.py --all          # six animations
+uv run render_mars.py --all          # six terrain animations
+
+# Part 2
+uv run mars_env.py --build-pool      # 120 tasks, once (~10 min)
+uv run train_mars.py --flat --name curr_flat          # the gate: 100%
+uv run train_mars.py --init-from curr_flat --relief-scale 0.15 \
+    --name rung_0.15                                   # the ladder
+uv run render_run.py --run curr_flat --out walk --view chase
 ```
 
 ```bash
@@ -193,14 +275,3 @@ is destroyed.
 | GPU | none for the generator or the checks; the **renderer** needs an OpenGL context |
 | Disk | ~3 GB (numpy + MuJoCo + pillow). No downloads — the planet is generated |
 | Wall clock | checks ~40 s; all six animations ~10 min |
-
-## What This Lab Does Not Claim
-
-- **This is not Mars.** It is procedural terrain matched to published
-  descriptions and imagery. MOLA elevation data exists; this is not it.
-- **No robot has walked here.** Traversability is computed from a gait
-  rule, not demonstrated. Part 2 is where that claim gets earned.
-- **The routing decision is weak** — +1.24 m median, 5 of 10 seeds.
-- **The palette is a presentation choice**, not a result. Nothing here
-  simulates atmospheric scattering; the sky is butterscotch because
-  surface imagery shows it that way.

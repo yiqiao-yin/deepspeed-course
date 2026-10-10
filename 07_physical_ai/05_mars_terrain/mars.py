@@ -210,6 +210,10 @@ class Surface:
     rocks: list[Rock] = field(default_factory=list)
     craters: list[tuple] = field(default_factory=list)   # (x, y, r, age)
     landforms: list[tuple] = field(default_factory=list)  # (kind,x,y,r,h)
+    start: tuple | None = None
+    goal: tuple | None = None
+    route: list | None = None
+    route_len: float = float("inf")
     scale: str = "rover"
     seed: int = 0
 
@@ -605,6 +609,191 @@ def geodesic(s, start, goal, step_max: float = STEP_MAX) -> float:
                 dist[(nj, ni)] = nd
                 heapq.heappush(pq, (nd, (nj, ni)))
     return float("inf")
+
+
+def solve_path(s, start, goal, step_max: float = STEP_MAX):
+    """
+    Shortest walkable route A->B as a list of cells, plus its length.
+
+    Same 8-connected Dijkstra as `geodesic`, but it keeps the
+    predecessor map so Part 2 can draw the oracle's route and walk the
+    goal back along it. Returns `(None, inf)` when B is unreachable,
+    which the caller must handle -- a map where the goal cannot be
+    reached scores every policy at zero and reads as a hard task
+    rather than a broken one.
+    """
+    import heapq
+
+    ok = traversable(s, step_max)
+    n = s.heights.shape[0]
+    e = s.extent
+    cell = e / n
+    to_ij = lambda p: (int(np.clip((p[1] + e / 2) / cell, 0, n - 1)),
+                       int(np.clip((p[0] + e / 2) / cell, 0, n - 1)))
+    a, b = to_ij(start), to_ij(goal)
+    if not ok[a] or not ok[b]:
+        return None, float("inf")
+    R2 = math.sqrt(2.0)
+    dist = {a: 0.0}
+    prev = {a: None}
+    pq = [(0.0, a)]
+    while pq:
+        dd, cur = heapq.heappop(pq)
+        if cur == b:
+            path, c = [], b
+            while c is not None:
+                path.append(c)
+                c = prev[c]
+            path.reverse()
+            return path, dd * cell
+        if dd > dist.get(cur, math.inf):
+            continue
+        j, i = cur
+        for dj, di in ((0, 1), (0, -1), (1, 0), (-1, 0),
+                       (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            nj, ni = j + dj, i + di
+            if not (0 <= nj < n and 0 <= ni < n) or not ok[nj, ni]:
+                continue
+            if dj and di and not (ok[j, ni] and ok[nj, i]):
+                continue
+            nd = dd + (R2 if (dj and di) else 1.0)
+            if nd < dist.get((nj, ni), math.inf):
+                dist[(nj, ni)] = nd
+                prev[(nj, ni)] = cur
+                heapq.heappush(pq, (nd, (nj, ni)))
+    return None, float("inf")
+
+
+def standable(s, x: float, y: float, radius: float = 0.55,
+              max_tilt_deg: float = 9.0, rock_clear: float = 0.75) -> bool:
+    """
+    Could a two-legged robot be PLACED here and stay up?
+
+    A stronger condition than `traversable`, and conflating the two
+    cost a whole training sweep. `traversable` asks whether the rise
+    to an adjacent cell is small enough to step up -- a statement
+    about gait. Standing asks something else: is the ground under the
+    robot's whole footprint flat, and is there a boulder where its
+    feet go?
+
+    Nine policies were trained on starts chosen by `traversable`
+    alone. The robot fell over 2 times in 8 doing NOTHING -- spawned
+    on a tilt or straddling a rock, it toppled before it could act --
+    and all nine arms sat at exactly 0% arrival with fall rates of
+    33-75%. All-seeds-identical-zero is a broken arm, not a finding,
+    and this lab's own Part 1 says so about a different quantity.
+    """
+    e = s.extent
+    n = s.heights.shape[0]
+    cell = e / n
+    r = max(int(radius / cell), 1)
+    i = int(np.clip((x + e / 2) / cell, 0, n - 1))
+    j = int(np.clip((y + e / 2) / cell, 0, n - 1))
+    patch = s.heights[max(0, j - r):j + r + 1, max(0, i - r):i + r + 1]
+    if patch.size < 4:
+        return False
+    if float(patch.max() - patch.min()) > math.tan(
+            math.radians(max_tilt_deg)) * 2 * radius:
+        return False
+    for k in s.rocks:
+        if math.hypot(k.x - x, k.y - y) < rock_clear + max(k.rx, k.ry):
+            return False
+    return True
+
+
+def endpoints(s, rng, min_sep: float | None = None):
+    """
+    Pick A and B: both walkable, well separated, and CONNECTED.
+
+    Connectivity is checked rather than assumed. Scattering mesas and
+    scarps across a surface can island part of it, and a start inside
+    an island is not a hard task -- it is an impossible one that every
+    policy fails identically. This repository has shipped that twice.
+    """
+    e = s.extent
+    n = s.heights.shape[0]
+    cell = e / n
+    ok = traversable(s)
+    min_sep = min_sep if min_sep is not None else e * 0.45
+
+    def walkable_point():
+        for _ in range(400):
+            x = float(rng.uniform(-e / 2 * 0.92, e / 2 * 0.92))
+            y = float(rng.uniform(-e / 2 * 0.92, e / 2 * 0.92))
+            i = int(np.clip((x + e / 2) / cell, 0, n - 1))
+            j = int(np.clip((y + e / 2) / cell, 0, n - 1))
+            # Walkable is not the same as standable. See `standable`.
+            if ok[j, i] and standable(s, x, y):
+                return x, y
+        return 0.0, 0.0
+
+    for _ in range(60):
+        a = walkable_point()
+        b = walkable_point()
+        if math.hypot(a[0] - b[0], a[1] - b[1]) < min_sep:
+            continue
+        path, L = solve_path(s, a, b)
+        if path is not None:
+            return a, b, path, L
+    return None, None, None, float("inf")
+
+
+def make_task(seed: int, route_band=(16.0, 30.0), min_detour: float = 1.15,
+              scale: str = "rover", tries: int = 220):
+    """
+    A surface WITH an A and a B on it, ready for a policy.
+
+    `route_band` bounds the ORACLE'S ROUTE LENGTH, and it is enforced
+    by REJECTION SAMPLING rather than by shortening a route that is
+    too long. That distinction is the whole design of this function.
+
+    Lab 4 capped goal distance by walking B backwards along the
+    oracle's own path until it was close enough. It works, and it
+    quietly destroys the task: the first stretch of a route is usually
+    the straight run before the first obstacle, so the capped version
+    lands B on open ground and the detour ratio collapses. Measured
+    here at 1.00-1.01 -- a straight line, with the routing decision
+    deleted. The same thing happened to lab 4's 40 m world and was
+    visible in its animations as a robot walking in a straight line
+    across an arena full of obstacles it never had to avoid.
+
+    Selecting pairs whose natural route already falls in the band
+    keeps the geometry that made the route long: measured median
+    detour 1.49x uncapped, and the band preserves it.
+
+    `min_detour` is the second filter and the more important one.
+    Length alone does not make a decision: a 20 m route across open
+    ground is 20 m of walking in a straight line, and selecting only
+    on length gave a median detour of 1.07 -- obstacles present,
+    none of them in the way. Requiring the oracle's route to be at
+    least 15% longer than the straight line selects pairs whose path
+    actually bends around something.
+
+    Returns None when no pair qualifies, rather than returning
+    something out of band -- a task that silently ignores its own
+    constraint is worse than a missing one.
+    """
+    s = generate(seed, scale)
+    rng = np.random.default_rng(seed * 7919 + 13)
+    lo, hi = route_band
+    best = None
+    for _ in range(tries):
+        a, b, path, L = endpoints(s, rng, min_sep=lo * 0.55)
+        if path is None:
+            continue
+        straight = math.hypot(a[0] - b[0], a[1] - b[1])
+        detour = L / max(straight, 1e-9)
+        if lo <= L <= hi and detour >= min_detour:
+            s.start, s.goal, s.route, s.route_len = a, b, path, L
+            return s
+        # Keep the best near-miss: in band, most bent.
+        if lo <= L <= hi and (best is None or detour > best[0]):
+            best = (detour, a, b, path, L)
+    if best is not None:
+        _, a, b, path, L = best
+        s.start, s.goal, s.route, s.route_len = a, b, path, L
+        return s
+    return None
 
 
 def add_outcrop(h: np.ndarray, wx: np.ndarray, wy: np.ndarray,
