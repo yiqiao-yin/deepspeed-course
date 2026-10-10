@@ -1,0 +1,21 @@
+[project]
+name = "mars-terrain"
+version = "0.1.0"
+description = "Lab 5 part 1 — a Mars-like surface, generated and measured. No robot."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "mujoco>=3.2",
+    "pillow>=10.0",
+]
+
+# No torch, no deepspeed, and that is the point of Part 1: this lab
+# builds and measures TERRAIN. Nothing here trains, so a dependency on
+# a training stack would be weight a reader carries for nothing. Part 2
+# adds the robot and the learning deps with it.
+
+[project.optional-dependencies]
+figures = ["matplotlib>=3.8"]
+
+[tool.uv]
+package = false

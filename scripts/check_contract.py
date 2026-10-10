@@ -48,6 +48,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Documented exceptions, with the reason. An exception with no reason is a bug.
 NO_DEEPSPEED = {
+    # The strongest exception in the list: this lab has no model at
+    # all. Part 1 of lab 5 generates terrain with numpy and renders it
+    # with MuJoCo -- no parameters, no gradients, no optimizer state,
+    # so there is nothing a DeepSpeed config could configure. Part 2
+    # adds the robot and will not be on this list.
+    "07_physical_ai/05_mars_terrain":
+        "generates and measures terrain; there is no model in it",
     "07_physical_ai/04_terrain_navigation":
         "a 12k-parameter PPO policy over MuJoCo height fields; the "
         "bottleneck is physics on the CPU, not arithmetic",
