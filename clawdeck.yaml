@@ -268,6 +268,19 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/05_mars_terrain
+    title: "Mars Terrain: the ground first"
+    summary: "Part 1 of lab 5. A generated Martian surface, measured rather than admired. No robot yet."
+    est_minutes: 8
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # All CPU: the generator is numpy and the checks never open a GL context.
+      - { label: "Measure the surface (CPU)", cmd: "uv run mars.py --check 20", primary: true }
+      - { label: "One map, in text (CPU)", cmd: "uv run mars.py --scale rover --ascii" }
+      - { label: "The planetary view (CPU)", cmd: "uv run mars.py --scale regional" }
+      # Rendering needs an OpenGL context, which a CPU-only box may not have.
+      - { label: "Animate it", cmd: "uv run render_mars.py --all", needs_gpu: true }
+
   - id: 07_physical_ai/04_terrain_navigation
     title: "Terrain Navigation: climb or go around"
     summary: "A 20x20 m arena, ridges of two kinds, and a robot that must tell them apart."

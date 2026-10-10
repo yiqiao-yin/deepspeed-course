@@ -206,6 +206,20 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/05_mars_terrain": dict(min_vram=8, gpus=1, disk=12,
+                                    script="mars.py",
+                                    launcher="python",
+                                    args="--check 20",
+                                    note="ELEVENTH launcher=python exception, "
+                                         "and the clearest one yet: this lab "
+                                         "trains NOTHING. Part 1 of lab 5 "
+                                         "generates a Mars-like surface with "
+                                         "numpy and measures it. No "
+                                         "parameters, no gradients, nothing "
+                                         "for ZeRO to shard. The GPU is "
+                                         "requested only so the renderer has "
+                                         "an OpenGL context; `mars.py --check` "
+                                         "itself is pure CPU."),
     "07_physical_ai/04_terrain_navigation": dict(min_vram=16, gpus=1, disk=20,
                                     script="train_nav.py",
                                     launcher="python",

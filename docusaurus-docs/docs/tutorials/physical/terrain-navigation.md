@@ -518,29 +518,6 @@ real capability the planner cannot express. Both are worth knowing and
 the clamp would have erased both.
 :::
 
-## What This Lab Does Not Claim
-
-![Training curves](/img/physical/nav-curves.png)
-
-- **The task is not solved.** The best arm reaches B in about four
-  episodes in ten.
-- **There is no arrival advantage for terrain information**, and the
-  collapse difference between the arms is a trend (p = 0.082), not a
-  result.
-- **The width-versus-features question is open.** Settling it needs
-  roughly 70 seeds per arm; this has nine, and says so rather than
-  picking whichever reading sounds better.
-- **Every run peaks mid-training and sags.** 1.5M environment steps is
-  short for this task,
-  and there may be late instability. The final checkpoint is what is
-  scored; the *peak* is not, because the peak of ~60 noisy 12-episode
-  evaluations is max-of-noise and selecting on it would manufacture an
-  advantage.
-- **This is a privileged channel, not a camera.** A depth arm would need
-  distillation, as in [lab 3](./terrain-vision).
-- **Four privileged seeds of nine failed outright**, and all four stay
-  in the table.
-
 ## What Went Wrong, and What It Taught Us
 
 Building this lab took several attempts, and the failures were more
@@ -579,6 +556,29 @@ re-rendered after the frame fix, that file **silently survived from the
 broken world**, sitting here beside eight corrected clips and
 indistinguishable from them. There is now a check that every image
 these pages show is produced by a shipped command.
+
+## What This Lab Does Not Claim
+
+![Training curves](/img/physical/nav-curves.png)
+
+- **The task is not solved.** The best arm reaches B in about four
+  episodes in ten.
+- **There is no arrival advantage for terrain information**, and the
+  collapse difference between the arms is a trend (p = 0.082), not a
+  result.
+- **The width-versus-features question is open.** Settling it needs
+  roughly 70 seeds per arm; this has nine, and says so rather than
+  picking whichever reading sounds better.
+- **Every run peaks mid-training and sags.** 1.5M environment steps is
+  short for this task,
+  and there may be late instability. The final checkpoint is what is
+  scored; the *peak* is not, because the peak of ~60 noisy 12-episode
+  evaluations is max-of-noise and selecting on it would manufacture an
+  advantage.
+- **This is a privileged channel, not a camera.** A depth arm would need
+  distillation, as in [lab 3](./terrain-vision).
+- **Four privileged seeds of nine failed outright**, and all four stay
+  in the table.
 
 ## Running It
 

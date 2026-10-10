@@ -142,6 +142,8 @@ jobs:
         run: uv run tests/test_terrain_vision.py
       - name: Terrain navigation (the task has a decision, the robot stands)
         run: uv run tests/test_terrain_navigation.py
+      - name: Mars terrain (generated surface properties)
+        run: uv run tests/test_mars_terrain.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py
