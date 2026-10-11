@@ -140,6 +140,64 @@ PRESETS = {
         scarp_w=(1.6, 3.0),
         scarp_h=(0.5, 1.0),
     ),
+    # THE NAVIGATION COURSE: a 34 m arena, everything else Martian.
+    #
+    # Added rather than substituted, so Parts 1-3's published numbers
+    # keep describing the surface they were measured on.
+    #
+    # Why 34 m and not 60. The decision this lab is about -- climb it
+    # or go round it -- needs the obstacle to be LARGE relative to the
+    # journey. At 60 m the robot's 8 m route crosses 15% of the arena,
+    # so blockers sit beside the path rather than across it and the
+    # measured detour is 1.09x: a straight walk past some scenery.
+    # Shrink the box and hold the route, and the same generator gives
+    # 1.38x with EVERY map forcing a detour.
+    #
+    #   arena    route   detour   maps >= 1.25x
+    #    60 m    9.0 m    1.09x      5 / 14
+    #    34 m    8.3 m    1.38x     13 / 13
+    #    26 m    7.5 m    1.35x     11 / 13
+    #
+    # Lab 4 found the same thing from the other direction: it is the
+    # RATIO of route to arena that creates the choice, not the
+    # absolute size of either. Its working geometry was a 7 m route in
+    # a 20 m arena -- 35%. This is 24%.
+    "course": dict(
+        extent=34.0,
+        cells=180,
+        relief=3.0,
+        n_craters=9,
+        crater_r=(0.20, 2.3),
+        n_boulders=75,
+        boulder_r=(0.06, 0.45),
+        ripple_wavelength=1.8,
+        ripple_amp=0.045,
+        channel_width=3.4,
+        volcano=False,
+        canyon=False,
+        flank_grade=0.035,
+        n_outcrop=3,
+        outcrop_thick=0.16,
+        n_graben=0,
+        # Denser than the 60 m arena in BOTH senses: more landforms per
+        # square metre (0.0078 vs 0.0042) and more of them across any
+        # given route. The point of the smaller box is not fewer
+        # obstacles, it is obstacles the robot cannot walk past.
+        n_hills=2,
+        hill_r=(2.0, 4.3),
+        hill_h=(0.35, 0.95),
+        n_dunes=3,
+        dune_len=(0.40, 0.65),
+        dune_w=(2.8, 5.1),
+        dune_h=(0.40, 0.80),
+        n_mesas=2,
+        mesa_r=(1.2, 2.3),
+        mesa_h=(0.55, 1.15),
+        n_scarps=3,
+        scarp_len=(0.55, 0.88),
+        scarp_w=(0.9, 1.7),
+        scarp_h=(0.5, 1.0),
+    ),
     "regional": dict(
         extent=20_000.0,
         cells=420,
@@ -738,8 +796,64 @@ def endpoints(s, rng, min_sep: float | None = None):
     return None, None, None, float("inf")
 
 
+def across_a_blocker(s, rng, want=(6.0, 14.0), min_detour: float = 1.25,
+                     tries: int = 300):
+    """
+    Place A and B on OPPOSITE SIDES of a blocking landform.
+
+    Rejection sampling on random pairs gave a median detour of 1.10x
+    at these route lengths, with only 31 of 100 maps above 1.15x.
+    Short routes in an open arena are straight: the obstacles are
+    beside the path rather than across it, and the robot never has to
+    decide anything. Part 3 measured the consequence -- an episode
+    that presents the full climb-or-go-around choice occurred once in
+    140 seeds.
+
+    So stop sampling and hoping. Pick a scarp or mesa, step off
+    perpendicular to it in both directions, and put A on one side and
+    B on the other. The straight line between them passes through the
+    blocker; any walkable route has to go round one of its ends, and
+    the detour is forced by construction rather than hoped for.
+
+    Returns the same (a, b, path, length) shape as `endpoints`, or
+    Nones when the map has no blocker that works.
+    """
+    blockers = [L for L in s.landforms if L[0] in ("scarp", "mesa")]
+    if not blockers:
+        return None, None, None, float("inf")
+    lo, hi = want
+    best = None
+    for _ in range(tries):
+        kind, cx, cy, rad, height = blockers[rng.integers(len(blockers))]
+        # Perpendicular offset, randomised in angle so the pairs are
+        # not all axis-aligned.
+        ang = float(rng.uniform(0, 2 * math.pi))
+        for step in (rad + 1.2, rad + 2.0, rad + 3.0):
+            ax, ay = cx + step * math.cos(ang), cy + step * math.sin(ang)
+            bx, by = cx - step * math.cos(ang), cy - step * math.sin(ang)
+            e = s.extent / 2 - 1.0
+            if max(abs(ax), abs(ay), abs(bx), abs(by)) > e:
+                continue
+            if not (standable(s, ax, ay) and standable(s, bx, by)):
+                continue
+            path, L = solve_path(s, (ax, ay), (bx, by))
+            if path is None:
+                continue
+            straight = math.hypot(ax - bx, ay - by)
+            detour = L / max(straight, 1e-9)
+            if lo <= L <= hi and detour >= min_detour:
+                return (ax, ay), (bx, by), path, L
+            if lo <= L <= hi and (best is None or detour > best[0]):
+                best = (detour, (ax, ay), (bx, by), path, L)
+    if best is not None:
+        _, a, b, path, L = best
+        return a, b, path, L
+    return None, None, None, float("inf")
+
+
 def make_task(seed: int, route_band=(16.0, 30.0), min_detour: float = 1.15,
-              scale: str = "rover", tries: int = 220):
+              scale: str = "rover", tries: int = 220,
+              forced: bool = False):
     """
     A surface WITH an A and a B on it, ready for a policy.
 
@@ -777,6 +891,16 @@ def make_task(seed: int, route_band=(16.0, 30.0), min_detour: float = 1.15,
     rng = np.random.default_rng(seed * 7919 + 13)
     lo, hi = route_band
     best = None
+
+    # Forced-detour mode: put A and B across a blocker. See
+    # `across_a_blocker` -- random pairs at these lengths are straight.
+    if forced:
+        a, b, path, L = across_a_blocker(s, rng, want=route_band,
+                                         min_detour=min_detour)
+        if path is None:
+            return None
+        s.start, s.goal, s.route, s.route_len = a, b, path, L
+        return s
     for _ in range(tries):
         a, b, path, L = endpoints(s, rng, min_sep=lo * 0.55)
         if path is None:

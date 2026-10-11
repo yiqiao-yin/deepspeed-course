@@ -43,6 +43,8 @@ real biped could use unmodified.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from mars import preset
@@ -52,7 +54,7 @@ from mars import preset
 # quantity that lived somewhere else, it went stale, and three runs
 # died on a shape mismatch while the arms that never touched it
 # sailed through.
-_P = preset("rover")
+_P = preset(os.environ.get("MARS_POOL_SCALE", "course"))
 ARENA, N = _P["extent"], _P["cells"]
 CELL = ARENA / N
 
