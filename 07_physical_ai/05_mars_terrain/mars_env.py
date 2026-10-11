@@ -38,6 +38,7 @@ and the policy is paid the difference.
 
 from __future__ import annotations
 
+import math
 import tempfile
 from pathlib import Path
 
@@ -117,6 +118,21 @@ POOL = 120
 _POOL_FILE = Path(__file__).parent / "task_pool.pkl"
 
 
+ROUTE_BAND = (6.0, 11.0)
+# Route length, and it is the parameter this lab got wrong first.
+#
+# The first version used 16-30 m. Lab 4 -- an EASIER task on flat
+# ground with discrete obstacles -- used about 7 m in a 20 m arena.
+# Three times the distance on rougher ground turned a navigation
+# problem into an endurance one: the robot manages roughly 6 m on
+# gently sloped terrain and was being asked for 24, so every arm
+# scored 0% and the terrain took the blame.
+#
+# At 6-11 m a policy that never trained on Mars at all already
+# arrives 1/12 of the time on the full surface, and 3/12 on gentle
+# slope. The task is learnable; the old band was not.
+
+
 def build_pool(n: int = POOL, verbose: bool = True) -> None:
     """
     Build every task once and write them to disk.
@@ -137,7 +153,7 @@ def build_pool(n: int = POOL, verbose: bool = True) -> None:
 
     tasks, t0 = {}, time.time()
     for i in range(n):
-        t = make_task(i)
+        t = make_task(i, route_band=ROUTE_BAND)
         if t is None:
             continue
         tasks[len(tasks)] = t
@@ -178,7 +194,8 @@ class NavWorld:
                  depth_res: int = 64, max_steps: int | None = None,
                  frame_skip: int = 5, seed: int | None = None,
                  goal_range: float | None = None,
-                 relief_scale: float = 1.0) -> None:
+                 relief_scale: float = 1.0,
+                 upright_w: float = 0.0) -> None:
         import mujoco
 
         # "padded" is a CONTROL, not an arm of the experiment: the blind
@@ -219,6 +236,7 @@ class NavWorld:
         # ground tilted in two directions at once, and at a 90% fall
         # rate it barely collects a usable transition to learn from.
         self.relief_scale = float(relief_scale)
+        self.upright_w = float(upright_w)
         self.rng = np.random.default_rng(seed)
         self._tmp = Path(tempfile.mkdtemp())
         self._renderer = None
@@ -505,6 +523,25 @@ class NavWorld:
         # halved lab 3's bonus and reproduced exactly that.
         reward = (self._prev_d - d) * 10.0 + 1.5
         reward -= 1e-3 * float(np.sum(np.square(action)))
+
+        # POSTURE. Nothing in the reward above pays for staying upright.
+        #
+        # That is fine on flat ground, where standing is the default and
+        # the alive bonus is enough. On ground tilted in two directions
+        # it is the whole problem, and its absence shows: the policy
+        # collects +1.5 per step for merely existing, so "topple slowly
+        # in roughly the right direction" scores about as well as "stay
+        # balanced", and at an 83% fall rate it never gathers enough
+        # upright experience to discover otherwise.
+        #
+        # Paid as a fraction of the alive bonus so the two cannot fight:
+        # at `upright_w` = 1.0 a perfectly level torso earns the full
+        # 1.5 again, and a torso at the 0.9 rad joint limit earns none.
+        if self.upright_w and "rootpitch" in self.q:
+            pitch = float(self.data.qpos[self.q["rootpitch"]])
+            roll = float(self.data.qpos[self.q["rootroll"]])
+            tilt = math.sqrt(pitch * pitch + roll * roll)
+            reward += self.upright_w * 1.5 * max(0.0, 1.0 - tilt / 0.9)
         self._prev_d = d
 
         # ARRIVING MUST NOT END THE EPISODE.

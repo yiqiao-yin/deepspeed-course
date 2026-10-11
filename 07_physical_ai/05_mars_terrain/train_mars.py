@@ -62,6 +62,12 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--name", default=None)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--hidden", type=int, default=64,
+                    help="policy width. 64 was sized for lab 4, a task "
+                         "with no balance component.")
+    ap.add_argument("--upright-w", type=float, default=0.0,
+                    help="weight on the posture term, as a fraction of "
+                         "the alive bonus")
     ap.add_argument("--relief-scale", type=float, default=1.0,
                     help="terrain curriculum: 0.0 is a plane, 1.0 is "
                          "Mars as generated")
@@ -126,11 +132,11 @@ def run(a) -> None:
     out = HERE / "runs" / (a.name or f"nav_s{a.seed}")
     out.mkdir(parents=True, exist_ok=True)
 
-    envs = [NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, seed=a.seed + i,
+    envs = [NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, upright_w=a.upright_w, seed=a.seed + i,
                      goal_range=a.goal_range)
             for i in range(a.n_envs)]
     od, ad = envs[0].obs_dim, envs[0].act_dim
-    net = ActorCritic(od, ad).to(dev)
+    net = ActorCritic(od, ad, hidden=a.hidden).to(dev)
     if a.init_from:
         # WARM START -- the curriculum step.
         #
@@ -149,6 +155,13 @@ def run(a) -> None:
         import json as _json
         src = HERE / "runs" / a.init_from
         meta = _json.loads((src / "summary.json").read_text())
+        if meta.get("hidden", 64) != a.hidden:
+            raise SystemExit(
+                f"\n  --init-from {a.init_from} was trained at hidden="
+                f"{meta.get('hidden', 64)}, this run asks for "
+                f"{a.hidden}.\n  A wider policy cannot inherit a "
+                f"narrower one's weights; train its own flat stage "
+                f"first.\n")
         if meta["obs_dim"] != od:
             raise SystemExit(
                 f"\n  --init-from {a.init_from} has obs_dim "
@@ -180,7 +193,7 @@ def run(a) -> None:
               f"{'   (DRY RUN)' if a.dry_run else ''}\n")
 
     rng = np.random.default_rng(a.seed)
-    base = [rollout(NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, seed=a.seed),
+    base = [rollout(NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, upright_w=a.upright_w, seed=a.seed),
                     random_policy(rng), seed=900 + i) for i in range(5)]
     base_ret = float(np.mean([b["return"] for b in base]))
     if not a.quiet:
@@ -260,6 +273,8 @@ def run(a) -> None:
                  "mode": a.mode, "seed": a.seed,
                  "goal_range": a.goal_range,
          "relief_scale": a.relief_scale,
+         "hidden": a.hidden,
+         "upright_w": a.upright_w,
                  "world": "mars-rover",
                  "complete": False}, indent=2))
 
@@ -276,6 +291,8 @@ def run(a) -> None:
         {"mode": a.mode, "flat": a.flat, "seed": a.seed, "device": dev,
          "goal_range": a.goal_range,
          "relief_scale": a.relief_scale,
+         "hidden": a.hidden,
+         "upright_w": a.upright_w,
          # Which WORLD this policy was trained in. Same reasoning as
          # goal_range: a run that does not record its task cannot be
          # scored or filmed afterwards without guessing.

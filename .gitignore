@@ -48,7 +48,7 @@ runpod/results/
 #     uv run mars_env.py --build-pool
 # It is cached so training does not pay ~10 s of Dijkstra per episode
 # reset, which once cost 98.6% of the wall clock.
-07_physical_ai/05_mars_terrain/task_pool.pkl
+07_physical_ai/05_mars_terrain/task_pool*.pkl
 07_physical_ai/05_mars_terrain/runs_log_*.txt
 07_physical_ai/05_mars_terrain/pool.log
 07_physical_ai/05_mars_terrain/runs_render*.log

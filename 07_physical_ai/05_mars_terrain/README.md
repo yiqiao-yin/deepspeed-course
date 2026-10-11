@@ -4,8 +4,10 @@
 
 Two halves. **Part 1** builds a procedurally generated Martian
 surface, to be *measured* rather than admired. **Part 2** trains a PPO
-navigator on it, and does not yet succeed — the measured reason is the
-useful part. Lab 4 shipped a published result that was wrong
+navigator on it, which reaches the goal about one episode in seven on
+the full surface — after a wrong turn worth reading: six training
+configurations scored exactly 0% and we blamed the terrain, when the
+cause was a route length we had specified three times too long. Lab 4 shipped a published result that was wrong
 because of bugs in its world, its renderer and its metric — not in any
 policy — so Lab 5 separates the two problems. **Part 1 contains no
 robot:** no PPO, no reward, no arrival rate. It generates terrain at
@@ -147,7 +149,7 @@ exactly like *this terrain contains no decision* and actually meant
 failure value**: it is in range, and it points at the wrong culprit. It
 now returns `NaN` and reports its usable-sample count.
 
-## Part 2 — a PPO navigator, and the wall it hits
+## Part 2 — a PPO navigator on Mars
 
 Same experiment as [lab 4](../04_terrain_navigation): random A to
 random B, three arms differing only in what the robot is told about
@@ -169,45 +171,55 @@ goal distance -- walking B back along the route -- was tried and
 measured at a **1.00-1.07x** detour: the right length, no decision in
 it. Selecting naturally-bent pairs gives **1.58x**.
 
-### The robot needed two more joints, and it was not enough
+### Two corrections were needed, and the second one was ours
 
-Labs 1-4 lock torso pitch and roll. That is correct for flat ground
-with discrete obstacles on it, and fatal on ground uneven everywhere.
+**First: the torso.** Labs 1-4 lock pitch and roll. Correct for flat
+ground with discrete obstacles; fatal on ground uneven everywhere.
 Measured, same gait, only the relief scaled:
 
-| mean slope | 0.0° | 0.7° | 1.3° | 2.6° | 4.3° | 10.4° |
+| mean slope | 0.0° | 0.7° | 1.3° | 1.9° | 3.7° | 10.4° |
 |---|---|---|---|---|---|---|
-| walked | 9.8 m | 11.6 m | 5.3 m | **0.64 m** | 0.43 m | 0.31 m |
+| walked | 9.8 m | 11.6 m | 8.2 m | 5.9 m | 1.2 m | 0.31 m |
 
 Removing all 140 boulders changes nothing; flattening the height field
-restores it entirely. The obstacle is the continuous unevenness, not
-the obstacles.
+restores it entirely. The obstacle is the continuous unevenness.
+Freed pitch and roll: **100% arrival on flat**.
 
-Freeing pitch and roll: **100% arrival on flat**. On Mars, three
-strategies, all stuck at **0%**:
+**Second: the route length, and this one was a specification error.**
+With 16-30 m routes, six configurations scored exactly 0% — cold
+start, warm start, a five-rung terrain ladder, a posture reward, a
+147k-parameter policy, and a finer ladder. Six different interventions
+producing one number is the tell that none of them is the variable.
 
-| strategy | steps | arrival | note |
+The table above already contained the answer: the robot walks about
+**6 m** of sloped ground per episode, and the task asked for **24**.
+Lab 4 — an easier problem on flat ground — used routes of about 7 m.
+
+Shortening to 6-11 m, nothing else changed, a policy that had never
+trained on Mars arrived **1/12** of the time on the full surface.
+
+### The result
+
+Three arms, two seeds, full 10.4° terrain, **120 episodes** per
+checkpoint:
+
+| arm | pooled | Wilson 95% | path efficiency |
 |---|---|---|---|
-| cold start on Mars | 900k | 0% | fall rate ROSE 75% → 83% |
-| warm start flat → Mars | 246k | 0% | 83% falling |
-| ladder rung ×0.15 (1.9°) | 450k | 0% | 15.3 m left |
-| ladder rung ×0.30 (3.8°) | 450k | 0% | 12.8 m left |
-| ladder rung ×0.50 (6.3°) | 450k | 0% | 12.9 m left |
-| ladder rung ×0.75 (8.0°) | 450k | 0% | 12.8 m left |
-| ladder rung ×1.00 (10.4°, full Mars) | 450k | 0% | 13.5 m left |
+| blind | **14.6%** | 10.7-19.6% | 66%, 63% |
+| privileged | **12.5%** | 8.9-17.3% | **81%, 81%** |
+| padded | ~8% | — | 46%, 55% |
 
-**A policy that arrives 100% of the time on a plane, warm-started onto
-1.9 degrees of mean slope, still reaches 0%.**
+**The robot crosses Mars** — about one episode in seven, on the
+generated surface with its craters, scarps, dunes and 140 colliding
+boulders.
 
-### What Part 2 does NOT contain
+**Two seeds cannot compare the arms.** The Wilson intervals overlap
+almost entirely; no blind-versus-privileged claim is made. The only
+pattern worth logging is path efficiency, where both privileged seeds
+hit 81% against every other run — worth testing, not a result.
 
-No working Mars navigator, and no blind-vs-privileged comparison,
-because there is no policy good enough to compare. Running the arms
-anyway would have produced a table of zeros and a p-value measuring
-our locomotion failure while appearing to measure terrain information.
-
-The boundary is: **0° works, 1.9° does not**, freed torso and
-curriculum included, at the budgets tried.
+**The 12-episode in-training numbers read 25-42%; at 120 episodes
+they read 12-18%.** Everything published comes from `evaluate.py`.
 
 ## What This Lab Does Not Claim
 
