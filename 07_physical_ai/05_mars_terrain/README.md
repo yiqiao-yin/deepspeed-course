@@ -221,6 +221,49 @@ hit 81% against every other run — worth testing, not a result.
 **The 12-episode in-training numbers read 25-42%; at 120 episodes
 they read 12-18%.** Everything published comes from `evaluate.py`.
 
+## Part 3 — does it tell the two classes apart?
+
+Parts 1 and 2 measured what the terrain affords and whether the robot
+arrives. Neither measured the thing in between, and **arrival rate
+cannot**: a policy that goes around everything and one that reads
+terrain properly can score identically.
+
+`analyze_decisions.py` replays existing checkpoints and watches
+behaviour -- for every landform the path comes near, did the robot go
+OVER or AROUND? 180 episodes per policy:
+
+| policy | crosses climbable | crosses blocked | difference |
+|---|---|---|---|
+| blind | 56% [42-69] | 18% [6-41] | **+39%** |
+| privileged | 63% [49-75] | 24% [10-47] | **+40%** |
+| padded (six zeros) | 57% [43-69] | 25% [11-47] | **+32%** |
+
+**It does tell them apart** -- about 3x more likely to cross a
+climbable landform. **And the terrain channel adds nothing**: the
+padded arm, with six constant zeros and no terrain information,
+discriminates as well as the privileged one.
+
+The behaviour is emergent from having a body, not from perception.
+You walk into a scarp and physics stops you. That also explains Part
+2's null: privileged never beat blind because the channel was
+supplying information contact already gave away.
+
+**What it does not settle.** Discovery-by-collision costs the walk,
+and that cost is small only because these routes barely bend -- median
+detour **1.10x**, with 31 of 100 maps above 1.15x. The next experiment
+places A and B on opposite sides of a blocker so the detour is forced.
+
+Two measurement choices worth copying: landforms the robot never
+approached are EXCLUDED rather than scored as successful avoidance,
+and a non-zero cross rate on "blocked" is reported as possibly
+correct, because `traversable()` is conservative -- one episode walked
+3.4 m where the planner routed 7.6 m.
+
+```bash
+uv run analyze_decisions.py --run m2_blind_s0 --run m2_privileged_s1 \
+    --run m2_padded_s0 --episodes 180
+```
+
 ## What This Lab Does Not Claim
 
 - **This is not Mars.** It is procedural terrain matched to published
