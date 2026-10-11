@@ -26,6 +26,13 @@ actually mattered: **the robot walks about 6 m of sloped ground per
 episode, and the task was asking for 24.** The terrain was never the
 obstacle; the route length was.
 
+**Part 4 — forcing the decision.** Rebuilds the task so every map
+makes the robot choose: a 34 m arena, twice the blocker density, and
+a detour on 13 of 13 maps. Nothing solves it — all six runs score
+zero. The lab now holds a correctly specified hard problem with a
+measured baseline, which is a better place to be than a
+mis-specified easy one.
+
 **Part 3 — the decision.** Asks the question the lab was built around
 and had never tested: does the robot actually tell a climbable dune
 from a cliff-edged scarp? It does — it crosses climbable landforms
@@ -230,19 +237,6 @@ It now returns `NaN` and reports how many samples it actually got.
 Zero and no-data are different facts and must not share a
 representation.
 :::
-
-## What This Lab Does Not Claim
-
-- **This is not Mars.** It is procedural terrain matched to published
-  descriptions and surface imagery. MOLA data exists; this is not it.
-- **No robot has walked here.** Traversability is computed from a gait
-  rule, not demonstrated. Part 2 is where that claim gets earned.
-- **The routing decision is weak** — +1.24 m median, 5 of 10 seeds.
-- **The palette is a presentation choice, not a result.** Nothing here
-  simulates scattering. The sky is butterscotch because fine suspended
-  dust reddens transmitted light and surface imagery shows it that
-  way; rendering a blue sky over red ground is the single most common
-  way a "Mars" picture announces that nobody checked.
 
 ## Part 2 — Putting a robot on it
 
@@ -604,6 +598,136 @@ Place A and B deliberately on opposite sides of a blocker, so a short
 route is *forced* to bend. Same terrain, same robot, same budget — the
 only change is that the decision becomes unavoidable. If the
 privileged arm is ever going to beat blind, that is where it happens.
+
+## Part 4 — Forcing the decision, and failing to solve it
+
+Part 3 ended with a complaint about its own task: the robot
+discriminates obstacles by contact, and contact is cheap only because
+the routes barely bend. Median detour **1.10×**. Most episodes never
+present the choice at all.
+
+Part 4 builds the task that does, and then fails to solve it. Both
+halves are the result.
+
+### Why the obstacles were in the wrong place
+
+Placing A and B across a blocker — stepping perpendicular off a scarp
+in both directions, so the straight line passes through it — raises
+the detour to 1.44×. But it also lengthens the route to 12.3 m, and
+the robot manages about 6 m on sloped ground. Constrain the route
+back to 8 m and the detour collapses to 1.09×, because the only
+blockers short enough to fit are small enough to skirt.
+
+The resolution is a ratio, not a length:
+
+| | route | arena | route / arena | detour |
+|---|---|---|---|---|
+| lab 4 (works) | 7 m | 20 m | 35% | 1.36× |
+| lab 5 Part 2 | 8 m | 60 m | **13%** | **1.10×** |
+| **Part 4 course** | **8.8 m** | **34 m** | **26%** | **1.39×** |
+
+At 60 m the robot's route crosses an eighth of the arena, so blockers
+sit *beside* the path. Shrink the box, hold the route, and the same
+generator produces a forced detour on **13 of 13** maps. This is lab
+4's geometry lesson arrived at from the opposite direction: what
+creates the decision is the ratio of route to arena, not the absolute
+size of either.
+
+### The course
+
+Denser than the 60 m arena in both senses — more landforms per square
+metre, and more of them across any given route:
+
+| | 60 m arena | course (34 m) |
+|---|---|---|
+| mean slope | 9.9° | **10.7°** |
+| landform density | 4.2 / 1000 m² | **8.7 / 1000 m²** |
+| detour | 1.10× | **1.39×** |
+| maps forcing a detour | 31% | **13 / 13** |
+
+![The forced-detour course](/img/physical/mars-p4-iso.gif)
+
+### The result: zero
+
+Three arms, two seeds, 1.2M steps each, warm-started from flat
+policies that reach 67–92% arrival. Scored on 120 episodes:
+
+| arm | seed 0 | seed 1 |
+|---|---|---|
+| blind | 0.0% | 0.8% |
+| privileged | 0.0% | 0.0% |
+| padded | 0.8% | 0.0% |
+
+**Nothing solves it.** The robot walks 8.8 m on rough Mars and
+discriminates obstacles by contact, but it cannot route around a
+blocker *and* arrive.
+
+![What failure looks like](/img/physical/mars-p4-chase.gif)
+
+The frame above is the whole thing: pressed against a scarp, all
+three ground-ahead readings red — every direction over the 0.12 m
+step limit — 4.7 m from a goal it cannot reach. In that episode it
+walked **12.0 m against a 6.2 m route** and fell. It is not failing to
+walk. It is failing to give up on a heading.
+
+:::danger What this lab now has
+A **correctly specified hard task with a measured zero baseline**,
+which is a better position than the one it was in two parts ago: a
+mis-specified easy task scoring 15% on a decision it never had to
+make.
+
+The honest summary across the whole lab: we can build Martian ground
+and measure it, a robot can cross it when the way is roughly clear,
+it tells climbable from impassable by bumping into things, and it
+cannot yet plan around an obstacle. The last of those is where the
+interesting work starts.
+:::
+
+### What would plausibly crack it
+
+Stated with their real costs, because none of them is free:
+
+1. **More training.** 1.2M steps is small. Lab 4 used 1.5M for a task
+   with no balance component and no forced detour; this adds both.
+   5–10M is the realistic ask — a day or more per arm on CPU.
+2. **Fix locomotion first.** The ~6 m range on sloped ground is the
+   constraint behind every result on this page. A dedicated
+   locomotion curriculum, with navigation added only afterwards.
+3. **MJX on GPU.** Not for the policy — a 12k-parameter network is
+   4.6× *slower* on a GPU at our batch size, measured. For the
+   *physics*: thousands of parallel environments, which is what makes
+   (1) affordable at all.
+
+:::tip A measurement that was the wrong test
+Before accepting the null we probed whether a shorter route band
+would help, by running a flat-trained policy zero-shot on forced
+courses. It scored 0/14 at every band, which looks like evidence and
+is not: a policy trained on open ground walks straight at the goal
+bearing, and on these maps that bearing points directly into a scarp.
+The probe could not distinguish "too hard to learn" from "this
+particular policy has no detour behaviour to transfer". The trained
+runs are the evidence; the probe is recorded here because it took a
+second look to notice it proved nothing.
+:::
+
+## What This Lab Does Not Claim
+
+- **This is not Mars.** It is procedural terrain matched to published
+  descriptions and surface imagery. MOLA data exists; this is not it.
+- **No robot has walked here.** Traversability is computed from a gait
+  rule, not demonstrated. Part 2 is where that claim gets earned.
+- **The routing decision is weak** — +1.24 m median, 5 of 10 seeds.
+- **The palette is a presentation choice, not a result.** Nothing here
+  simulates scattering. The sky is butterscotch because fine suspended
+  dust reddens transmitted light and surface imagery shows it that
+  way; rendering a blue sky over red ground is the single most common
+  way a "Mars" picture announces that nobody checked.
+- **Part 4's course is unsolved.** Three arms, two seeds, 1.2M steps
+  each, all at or below 0.8% arrival. The baseline to beat is zero.
+- **No blind-vs-privileged conclusion anywhere on this page.**
+  Part 2's arms were separated by less than their confidence
+  intervals, Part 3 found the terrain channel adds nothing to
+  obstacle discrimination, and Part 4 scores zero for everyone.
 
 ## Running It
 

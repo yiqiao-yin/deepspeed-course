@@ -3,7 +3,10 @@
 ## Abstract
 
 Two halves. **Part 1** builds a procedurally generated Martian
-surface, to be *measured* rather than admired. **Part 2** trains a PPO
+surface, to be *measured* rather than admired. **Part 3** asks whether the robot
+tells the two obstacle classes apart (it does -- but so does a policy
+fed constant zeros). **Part 4** rebuilds the task so every map forces
+a detour, and nothing solves it. **Part 2** trains a PPO
 navigator on it, which reaches the goal about one episode in seven on
 the full surface — after a wrong turn worth reading: six training
 configurations scored exactly 0% and we blamed the terrain, when the
@@ -262,6 +265,65 @@ correct, because `traversable()` is conservative -- one episode walked
 ```bash
 uv run analyze_decisions.py --run m2_blind_s0 --run m2_privileged_s1 \
     --run m2_padded_s0 --episodes 180
+```
+
+## Part 4 — forcing the decision, and failing to solve it
+
+Part 3's complaint about its own task: the robot discriminates by
+contact, and contact is cheap because the routes barely bend (median
+detour 1.10x). Part 4 builds the task that bends them, then fails to
+solve it. Both halves are the result.
+
+**The obstacles were in the wrong place, and it is a RATIO.**
+
+| | route | arena | route/arena | detour |
+|---|---|---|---|---|
+| lab 4 (works) | 7 m | 20 m | 35% | 1.36x |
+| lab 5 Part 2 | 8 m | 60 m | **13%** | **1.10x** |
+| **Part 4 course** | **8.8 m** | **34 m** | **26%** | **1.39x** |
+
+At 60 m the route crosses an eighth of the arena, so blockers sit
+BESIDE the path. Shrink the box, hold the route, and the same
+generator forces a detour on 13 of 13 maps. Placing A and B across a
+blocker helps only once the ratio is right -- at 60 m it just made
+routes longer (12.3 m) without the robot being able to walk them.
+
+**The course**, denser in both senses:
+
+| | 60 m arena | course (34 m) |
+|---|---|---|
+| mean slope | 9.9° | **10.7°** |
+| landform density | 4.2 /1000 m² | **8.7 /1000 m²** |
+| maps forcing a detour | 31% | **13/13** |
+
+**The result: zero.** Three arms, two seeds, 1.2M steps each,
+warm-started from flat policies reaching 67-92%. At 120 episodes:
+
+| arm | seed 0 | seed 1 |
+|---|---|---|
+| blind | 0.0% | 0.8% |
+| privileged | 0.0% | 0.0% |
+| padded | 0.8% | 0.0% |
+
+One episode walked **12.0 m against a 6.2 m route** and fell --
+pressed against a scarp with all three ground-ahead readings over the
+step limit, 4.7 m from the goal. It is not failing to walk. It is
+failing to give up on a heading.
+
+**What the lab now has:** a correctly specified hard task with a
+measured zero baseline. That is a better position than two parts ago,
+when it had a mis-specified easy task scoring 15% on a decision it
+never had to make.
+
+**What would crack it:** more steps (5-10M, a day per arm on CPU);
+fixing locomotion first (the ~6 m range on slope is the constraint
+behind every result here); or MJX on GPU -- not for the policy, which
+is 4.6x *slower* on GPU at our batch size, but for the physics.
+
+```bash
+uv run mars_env.py --build-pool --n 110     # the course, ~100 s
+uv run train_mars.py --mode privileged --seed 0 --upright-w 1.0 \
+    --init-from c_flat_privileged --name c_privileged_s0
 ```
 
 ## What This Lab Does Not Claim

@@ -39,6 +39,7 @@ and the policy is paid the difference.
 from __future__ import annotations
 
 import math
+import os
 import tempfile
 from pathlib import Path
 
@@ -48,7 +49,20 @@ from robot import hfield_png, model_xml
 from mars import (STEP_MAX, generate, geodesic as mars_geodesic,
                   make_task, preset, traversable)
 
-_P = preset("rover")
+# Which surface preset everything in this file is built from, and
+# whether endpoints are placed ACROSS a blocker instead of sampled.
+#
+# `course` is a 34 m arena. The 60 m one gave a median detour of
+# 1.09x at this route length -- the robot walked past the obstacles
+# rather than having to deal with them -- because what creates the
+# decision is the RATIO of route to arena, not the size of either.
+#
+# Defined HERE, above its first use. It was first written down beside
+# ROUTE_BAND, forty lines too late, and the module failed to import.
+SCALE = os.environ.get("MARS_POOL_SCALE", "course")
+FORCED = os.environ.get("MARS_POOL_FORCED", "1") == "1"
+
+_P = preset(SCALE)
 ARENA, N = _P["extent"], _P["cells"]
 CELL = ARENA / N
 
@@ -119,6 +133,13 @@ _POOL_FILE = Path(__file__).parent / "task_pool.pkl"
 
 
 ROUTE_BAND = (6.0, 11.0)
+# Which surface preset the pool is built from, and whether endpoints
+# are placed ACROSS a blocker instead of sampled.
+#
+# `course` is a 34 m arena. The 60 m one gave a median detour of
+# 1.09x at this route length -- the robot walked past the obstacles
+# rather than having to deal with them -- because what creates the
+# decision is the RATIO of route to arena, not the size of either.
 # Route length, and it is the parameter this lab got wrong first.
 #
 # The first version used 16-30 m. Lab 4 -- an EASIER task on flat
@@ -153,7 +174,8 @@ def build_pool(n: int = POOL, verbose: bool = True) -> None:
 
     tasks, t0 = {}, time.time()
     for i in range(n):
-        t = make_task(i, route_band=ROUTE_BAND)
+        t = make_task(i, route_band=ROUTE_BAND, min_detour=1.25,
+                      forced=FORCED, scale=SCALE)
         if t is None:
             continue
         tasks[len(tasks)] = t
