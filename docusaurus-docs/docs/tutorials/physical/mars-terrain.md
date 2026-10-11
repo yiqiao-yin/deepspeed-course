@@ -26,6 +26,14 @@ actually mattered: **the robot walks about 6 m of sloped ground per
 episode, and the task was asking for 24.** The terrain was never the
 obstacle; the route length was.
 
+**Part 3 — the decision.** Asks the question the lab was built around
+and had never tested: does the robot actually tell a climbable dune
+from a cliff-edged scarp? It does — it crosses climbable landforms
+about three times as often. But a policy fed **six constant zeros**
+discriminates just as well, so the behaviour is **emergent from
+embodiment, not perception**: you learn a scarp is impassable by
+walking into one.
+
 ![The 60 m rover patch, at eye level](/img/physical/mars-rover-ground.gif)
 
 ## Problem Statement
@@ -496,6 +504,106 @@ the conservative-oracle effect from Part 1 at its extreme — the
 planner routes around terrain the robot simply walks over. The
 efficiency figures above are therefore a *lower* bound on how direct
 these paths are.
+
+## Part 3 — Does it actually tell the two classes apart?
+
+Part 1 built two landform classes and measured that they *afford*
+different things. Part 2 trained a policy that reaches the goal about
+one episode in seven. **Neither checked the thing in between.**
+
+A robot can score 15% while treating every obstacle identically —
+going around all of them, or blundering over all of them and
+surviving the ones that happen to be climbable. **Arrival rate cannot
+distinguish those**, and arrival rate is all we had measured. Three
+separate experiments, and the lab's central claim was still untested.
+
+![Crossing the surface](/img/physical/mars-p3-iso.gif)
+
+### Measuring behaviour instead of outcome
+
+`analyze_decisions.py` replays existing checkpoints and watches what
+the robot *does*. For every landform its path comes near, it records
+whether the robot went **over** it or **around** it:
+
+$$
+\text{discrimination} \;=\;
+\underbrace{P(\text{cross} \mid \text{climbable})}_{\text{dunes, hills}}
+\;-\;
+\underbrace{P(\text{cross} \mid \text{blocked})}_{\text{scarps, mesas}}
+$$
+
+Near zero means the policy treats them the same whatever it scores.
+Two choices in that measurement matter:
+
+- **Landforms the robot never approached are excluded**, not counted
+  as successful avoidance. Scoring distant obstacles as "correctly
+  avoided" manufactures a competence that was never exercised — the
+  same error as Part 1's bounding-box measurement.
+- **A non-zero cross rate on "blocked" is not automatically a
+  mistake.** `traversable()` is conservative: one episode walked
+  3.4 m where the planner routed 7.6 m around terrain the robot
+  simply climbed.
+
+### The result, 180 episodes per policy
+
+| policy | crosses climbable | crosses blocked | **difference** |
+|---|---|---|---|
+| blind | 56% [42–69] | 18% [6–41] | **+39%** |
+| privileged | 63% [49–75] | 24% [10–47] | **+40%** |
+| **padded** (six constant zeros) | 57% [43–69] | 25% [11–47] | **+32%** |
+
+**The robot does tell them apart.** It crosses climbable landforms
+about three times as often as blocked ones, and within each policy the
+two intervals barely touch.
+
+:::danger And the terrain channel contributes nothing to it
+The padded arm receives six constant zeros — **no terrain information
+whatsoever** — and discriminates just as well as the privileged arm
+that is handed the ground profile.
+
+So the behaviour is real but it is **not perception**. It is emergent
+from having a body: you walk into a scarp and physics stops you; you
+walk onto a dune and it works. The policy does not need to be told
+which is which, because the world tells it on contact.
+
+This also explains Part 2's null. Privileged never beat blind on
+arrival because the terrain channel was supplying information the
+robot was already getting for free.
+:::
+
+![Chase view](/img/physical/mars-p3-chase.gif)
+
+### What this does not settle
+
+**Contact-based discrimination is not free — it is just cheap here.**
+Learning a scarp is impassable by walking into it costs the walk. That
+cost is small when the detour is small, and these routes barely bend:
+the shipped task pool has a **median detour of 1.10×**, and only 31 of
+100 maps exceed 1.15×.
+
+That is the condition under which advance knowledge should finally
+matter, and this lab has not created it yet. A robot that must commit
+to going left or right **before** reaching a 20 m scarp cannot afford
+to find out by collision.
+
+:::warning The clip above was chosen from 140 episodes
+The statistics in this section are unfiltered — 180 consecutive
+episodes per policy. The *animation* is not: an episode that arrives
+**and** crosses a climbable landform **and** meets a blocked one
+occurred once in 140 seeds.
+
+That rarity is not an aside, it is the finding restated. At a 1.10×
+detour, most episodes never present the decision at all.
+:::
+
+![Orbit view](/img/physical/mars-p3-orbit.gif)
+
+### Next
+
+Place A and B deliberately on opposite sides of a blocker, so a short
+route is *forced* to bend. Same terrain, same robot, same budget — the
+only change is that the decision becomes unavoidable. If the
+privileged arm is ever going to beat blind, that is where it happens.
 
 ## Running It
 

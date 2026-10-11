@@ -54,24 +54,45 @@ def pick_backend() -> str:
 
 
 def hud(frame, env, info, mode, step, relief_scale, flat):
+    """
+    The panel. Every row is something a reader can check against the
+    picture, which is the point: a HUD that cannot be falsified by
+    looking at the frame is decoration.
+    """
     from PIL import Image, ImageDraw
+
+    import numpy as _np
 
     img = Image.fromarray(frame)
     d = ImageDraw.Draw(img, "RGBA")
     gx, gy = env.map.goal
     bearing = math.atan2(gy - env.pos()[1], gx - env.pos()[0])
     off = math.degrees((bearing - env.yaw() + math.pi) % (2 * math.pi) - math.pi)
+    speed = float(_np.hypot(env.data.qvel[env.q["rootx"]],
+                            env.data.qvel[env.q["rooty"]]))
+    pitch = math.degrees(abs(float(env.data.qpos[env.q["rootpitch"]]))) \
+        if "rootpitch" in env.q else 0.0
+    roll = math.degrees(abs(float(env.data.qpos[env.q["rootroll"]]))) \
+        if "rootroll" in env.q else 0.0
+    # Efficiency, frozen at arrival and against the GEODESIC -- the same
+    # definition the published table uses. A clip that scores itself
+    # differently from the page is how lab 4 shipped a figure that
+    # disagreed with its own caption.
+    den = info.get("travelled_to_goal") or info["travelled"]
+    eff = (env.geodesic_len / den) if (info["arrived"] and den > 0.1) else None
     rows = [("mode", mode),
-            ("ground", "flat" if flat else f"Mars x{relief_scale:g}"),
+            ("ground", "flat" if flat else
+             f"Mars {_slope_deg(env):.0f}° mean slope"),
             ("step", f"{step} / {env.max_steps}"),
             ("to goal", f"{info['to_goal']:.1f} m"),
-            ("route", f"{env.route_len:.1f} m"),
-            ("heading err", f"{off:+.0f}°"),
+            ("shortest path", f"{env.geodesic_len:.1f} m"),
             ("walked", f"{info['travelled']:.1f} m"),
-            ("torso tilt", f"{math.degrees(abs(env.data.qpos[env.q['rootpitch']])):.0f}°"
-                           if "rootpitch" in env.q else "locked"),
+            ("efficiency", f"{eff:.0%}" if eff else "--"),
+            ("speed", f"{speed:.2f} m/s"),
+            ("heading err", f"{off:+.0f}°"),
+            ("torso pitch/roll", f"{pitch:.0f}° / {roll:.0f}°"),
             ("clearance", f"{env.clearance():.2f} m")]
-    w, h = 232, 26 + 19 * len(rows)
+    w, h = 248, 26 + 19 * len(rows)
     d.rounded_rectangle([12, 12, 12 + w, 12 + h], 8,
                         fill=(14, 22, 30, 225), outline=(60, 80, 96, 255))
     y = 23
@@ -90,6 +111,49 @@ def hud(frame, env, info, mode, step, relief_scale, flat):
                             fill=(14, 22, 30, 225), outline=col)
         d.text((frame.shape[1] - tw + 1, frame.shape[0] - 39), tag, fill=col)
     return np.array(img)
+
+
+def _slope_deg(env) -> float:
+    """Mean slope of the surface actually loaded, not a constant."""
+    import numpy as _np
+
+    h = env._heights.astype(float)
+    cell = env.map.extent / h.shape[0]
+    gy, gx = _np.gradient(h, cell)
+    return float(_np.degrees(_np.arctan(_np.hypot(gx, gy))).mean())
+
+
+def _terrain_panel(d, frame, env):
+    """
+    What the privileged channel sees: worst rise ahead / left / right,
+    and whether the gait can clear it. Green under the 0.12 m step
+    limit, red over -- which is the whole climb-or-go-around decision,
+    drawn.
+
+    Shown for every arm, because the question "did it go over or
+    around" is about BEHAVIOUR and applies to a blind policy too. The
+    panel is labelled as an observer's readout, not as the robot's
+    input, so a blind run cannot be misread as having seen it.
+    """
+    feats = env.terrain_feats()
+    H = frame.shape[0]
+    x0, y0, w = 12, H - 104, 248
+    d.rounded_rectangle([x0, y0, x0 + w, y0 + 88], 8,
+                        fill=(14, 22, 30, 225), outline=(60, 80, 96, 255))
+    d.text((x0 + 12, y0 + 8), "ground ahead (observer readout)",
+           fill=(150, 170, 186, 255))
+    for k, (lab, rise) in enumerate(zip(("left", "ahead", "right"),
+                                        (feats[2], feats[0], feats[4]))):
+        bx = x0 + 12 + k * 78
+        ok = rise <= STEP_LIMIT
+        col = (92, 196, 141, 255) if ok else (226, 110, 110, 255)
+        d.rounded_rectangle([bx, y0 + 28, bx + 70, y0 + 56], 5,
+                            outline=col, fill=(20, 30, 40, 200))
+        d.text((bx + 12, y0 + 35), f"{rise:+.2f} m", fill=col)
+        d.text((bx + 20, y0 + 62), lab, fill=(150, 170, 186, 255))
+
+
+STEP_LIMIT = 0.12
 
 
 def main() -> int:
@@ -157,8 +221,12 @@ def main() -> int:
                 cam.azimuth = (step * 0.6) % 360
                 cam.lookat[:] = [x, y, env._h_at(x, y)]
             r.update_scene(env.data, cam)
-            frames.append(hud(r.render(), env, info, meta["mode"], step,
-                              scale, a.flat))
+            fr = r.render()
+            from PIL import Image as _I, ImageDraw as _D
+            _img = _I.fromarray(hud(fr, env, info, meta["mode"], step,
+                                    scale, a.flat))
+            _terrain_panel(_D.Draw(_img, "RGBA"), fr, env)
+            frames.append(np.array(_img))
         # Stop filming shortly after arrival; the episode runs on.
         if info["arrived"] and after is None:
             after = 0
