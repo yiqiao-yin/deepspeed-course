@@ -15,14 +15,16 @@ gets its own lab, built first and measured on its own terms. What
 follows is a generator at two scales, six animations, seven properties
 that can fail, and three bugs found by checking rather than looking.
 
-**Part 2 — the robot.** Trains a PPO navigator on that surface. It
-**does not work yet**, and the measured reason is the useful part: the
-two-legged robot inherited from labs 1–4 has its torso pitch and roll
-locked, which is fine on flat ground with obstacles standing on it and
-fatal on ground that is uneven everywhere. Freeing those joints gets
-100% arrival on flat and still 0% on Mars. The boundary is sharp
-enough to state: **this robot handles 0° of mean ground slope and
-fails by 1.9°.**
+**Part 2 — the robot.** Trains a PPO navigator on that surface, and it
+**works**: about one episode in seven reaches the goal on the full
+10.4° terrain. Getting there took two corrections. The torso pitch and
+roll that labs 1–4 lock had to be freed, because a body that cannot
+tilt cannot stand on ground that is uneven everywhere. And then six
+training configurations in a row scored exactly 0%, which we spent
+hours attributing to the terrain before measuring the thing that
+actually mattered: **the robot walks about 6 m of sloped ground per
+episode, and the task was asking for 24.** The terrain was never the
+obstacle; the route length was.
 
 ![The 60 m rover patch, at eye level](/img/physical/mars-rover-ground.gif)
 
@@ -389,76 +391,111 @@ mean distance remaining 0.1 m.
 
 ![The same run, from above](/img/physical/mars-walk-iso.gif)
 
-### Measurement 3: it cannot do Mars
+### Measurement 3: the first attempt failed, and the terrain was not why
 
 ![The same policy on the real surface](/img/physical/mars-walk-rough.gif)
 
-The policy above, dropped on the surface it was built for, walks
-**8.6 m of a 29.7 m route** and times out. Three training strategies,
-all of them stuck:
+The flat-trained policy, dropped on Mars, walked **8.6 m of a 29.7 m
+route** and timed out. Every training strategy we tried on that task
+stalled at exactly 0%:
 
-| strategy | steps | arrival | fall rate | distance left |
-|---|---|---|---|---|
-| cold start on Mars | 900k | **0%** | 75% → **83%** (rising) | 17 → 13.6 m, then flat |
-| warm start, flat → Mars | 246k | **0%** | 83% | 15.0 m |
-| warm start, graded ladder | 450k per rung | **0%** | — | see below |
+| strategy | steps | arrival | note |
+|---|---|---|---|
+| cold start on Mars | 900k | **0%** | fall rate *rose* 75% → 83% |
+| warm start, flat → Mars | 246k | **0%** | 83% falling |
+| graded ladder, 1.9° → 10.4° | 450k × 5 | **0%** | every rung |
+| + posture reward | 900k | **0%** | |
+| + 147k-parameter policy | 900k | **0%** | |
+| + finer ladder from 0.6° | 400k × 3 | **0%** | |
 
-And the ladder in detail — each rung warm-started from the one below
-it, so the policy never faces more than one step up in difficulty at a
-time:
+Six configurations, one number. **That is the tell**, and we read it
+too slowly: when posture, network size, curriculum and step budget all
+produce an identical result, none of them is the variable that
+matters.
 
-| rung | relief | mean slope | arrival | fell | distance left |
+### Measurement 4: it was the route length
+
+The locked-torso ceiling measured earlier is a *gradual* decline, not
+a cliff — and the freed-torso robot behaves the same way:
+
+| mean slope | 0.0° | 0.7° | 1.3° | 1.9° | 3.7° |
 |---|---|---|---|---|---|
-| start | flat | 0.0° | **100%** | — | 0.1 m |
-| 1 | ×0.15 | **1.9°** | **0%** | 75% | 15.3 m |
-| 2 | ×0.30 | 3.8° | **0%** | 83% | 12.8 m |
-| 3 | ×0.50 | 6.3° | **0%** | 83% | 12.9 m |
-| 4 | ×0.75 | 8.0° | **0%** | 83% | 12.8 m |
-| 5 | ×1.00 | **10.4°** | **0%** | 83% | 13.5 m |
+| distance walked | 10.4 m | 11.6 m | 8.2 m | **5.9 m** | 1.2 m |
 
-The flat line through rungs 2–4 is itself informative: once the policy
-is falling 83% of the time it stops collecting the transitions it
-would need to improve, and additional terrain difficulty changes
-nothing because it never gets far enough to meet it.
+The robot manages roughly **6 m** of sloped ground per episode. The
+task was asking for **24**.
 
-The third row is the sharp one. A policy that arrives **100% of the
-time** on a plane, warm-started onto ground with a mean slope of
-**1.9 degrees**, still reaches 0% after 450k steps.
+That is a task-specification error, not a terrain property. [Lab
+4](./terrain-navigation) — an *easier* problem, flat ground with
+discrete obstacles — used routes of about **7 m** in a 20 m arena.
+This lab asked for three times the distance on continuously uneven
+ground and then blamed the ground.
 
-:::danger What this lab has not achieved
-There is no working Mars navigator on this page, and no blind-versus-
-privileged comparison, because there is no policy good enough to
-compare. Running the three arms anyway would have produced a table of
-zeros and a p-value, and that table would have measured our
-locomotion failure while appearing to measure terrain information.
+Shortening the route band to 6–11 m, with nothing else changed, a
+policy that **had never trained on Mars at all** immediately arrived:
 
-The honest boundary is: **this robot handles 0° and fails by 1.9°**,
-freed torso and curriculum included, at the budgets tried.
+| slope | zero-shot arrivals |
+|---|---|
+| 1.9° | 3/12 |
+| 6.3° | 1/12 |
+| **10.4° (full Mars)** | **1/12** |
+
+### The result
+
+Six runs, three arms, two seeds each, trained on the full 10.4°
+surface and scored on **120 episodes** per checkpoint:
+
+![Crossing Mars](/img/physical/mars-nav-chase.gif)
+
+| arm | seed 0 | seed 1 | pooled | Wilson 95% | path efficiency |
+|---|---|---|---|---|---|
+| blind | 17.5% | 11.7% | **14.6%** | 10.7–19.6% | 66%, 63% |
+| privileged | 8.3% | 16.7% | **12.5%** | 8.9–17.3% | **81%, 81%** |
+| padded | 4.2% | 11.7% | ~8% | — | 46%, 55% |
+
+![The same crossing, from above](/img/physical/mars-nav-iso.gif)
+
+**The robot crosses Mars.** Not often — about one episode in seven —
+but on the full generated surface, with its craters, scarps, dunes and
+140 colliding boulders.
+
+:::warning Two seeds cannot compare the arms
+Blind is nominally ahead of privileged and that means nothing: the
+Wilson intervals overlap across almost their whole range. No
+blind-versus-privileged claim is made here, and the arm ordering in
+that table should be read as noise.
+
+The one pattern worth noting is **path efficiency**: both privileged
+seeds hit 81%, above every blind and padded run. Two seeds is still
+two seeds, so it is logged as worth testing, not as a result.
 :::
 
-### Why it is hard, and what we would try next
+![The privileged policy](/img/physical/mars-nav-priv.gif)
 
-A planar biped on flat ground solves a 1-D balance problem. On ground
-tilted in two directions at once it has to place both feet on surfaces
-with different normals while turning toward a goal it cannot see. The
-12k-parameter policy that was ample for lab 4 is being asked for a
-qualitatively different skill.
+:::tip The 12-episode numbers were optimistic by 2x
+During training the same six runs read 25–42% arrival. At 120
+episodes they read 12–18%. Twelve episodes quantise to 8.3% a step,
+and this lab's predecessor has a documented history of 12-episode
+figures being published as findings. Everything in the table above
+comes from `evaluate.py`.
+:::
 
-What we would try, in order of cheapness:
+### What this cost, and what it bought
 
-1. **A finer curriculum.** The ramp here jumped flat → 1.9°. Starting
-   at 0.3° with more rungs may keep the policy inside its competence.
-2. **A bigger policy.** 12k parameters was sized for a task without a
-   balance component.
-3. **More steps.** 450k per rung is short for a skill this
-   qualitatively new; lab 4 used 1.5M for a much easier problem.
-4. **Reward shaping for posture** — an explicit upright term, which
-   none of the reward above contains.
+The honest accounting: roughly six hours of compute went into proving
+that a robot could not cross Mars, and the obstacle was a number in
+the task generator. The experiments that chased the wrong cause were
+not wasted — the ladder and the ablation are what rule out terrain
+roughness, posture, policy size and curriculum as explanations — but
+the ordering was wrong. The distance the robot could walk was
+measurable in ten minutes and we measured it last.
 
-Each is a real experiment and none is a certainty. The reason they are
-listed rather than run is that each is hours of compute, and this page
-is more useful stating a measured boundary than claiming a result it
-does not have.
+One leftover worth stating: a privileged episode scored **223% path
+efficiency**, walking 3.4 m against a 7.6 m "optimal" route. That is
+the conservative-oracle effect from Part 1 at its extreme — the
+planner routes around terrain the robot simply walks over. The
+efficiency figures above are therefore a *lower* bound on how direct
+these paths are.
 
 ## Running It
 
