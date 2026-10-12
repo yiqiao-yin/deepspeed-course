@@ -188,7 +188,8 @@ def main() -> int:
     scale = (a.relief_scale if a.relief_scale is not None
              else meta.get("relief_scale", 1.0))
     ck = torch.load(HERE / "runs" / a.run / "policy.pt", weights_only=False)
-    net = ActorCritic(meta["obs_dim"], 7)
+    net = ActorCritic(meta["obs_dim"], meta.get("act_dim", 7),
+                      hidden=meta.get("hidden", 64))
     net.load_state_dict(ck["model"])
     net.eval()
     norm = RunningNorm(meta["obs_dim"])

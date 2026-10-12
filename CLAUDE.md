@@ -207,6 +207,114 @@ technique in both is a memory technique.** ZeRO shards what the model *is*;
 token compression shrinks what it *looks at*; STAR memory bounds what it
 *retains*. Same bargain, different currency.
 
+### `07_physical_ai` is a single escalating argument about embodiment
+
+Five labs, and each one exists because the previous one ran out of
+something. They are not independent examples and the later ones assume
+the earlier measurements:
+
+| Folder | Adds | The thing it measured |
+|---|---|---|
+| `01_obstacle_hopper` | a body | the one-off bonus must be ONE-OFF, or standing on the box beats crossing it |
+| `02_biped_stairs` | a second leg | 0.04-0.10 m treads climb reliably, above that they do not. **Every later lab's `STEP_MAX = 0.12` comes from here** |
+| `03_terrain_vision` | an eye | a camera helps on ascent and nowhere else, because a corridor has nothing to decide |
+| `04_terrain_navigation` | a second dimension | climb it or go round it -- the first lab with a routing choice in it |
+| `05_mars_terrain` | a planet | terrain first (part 1), then a policy on it (parts 2-4) |
+
+**`05_mars_terrain` is split into parts ON PURPOSE.** Lab 4 published a
+result that was wrong, and the faults were in its world, its renderer
+and its metric rather than in anything a policy learned. Terrain and
+policy are different problems; mixing them leaves you unable to say
+which one broke. Part 1 therefore contains no robot at all.
+
+Two presets and a course, and the distinction is load-bearing:
+`rover` (60 m) is what parts 1-3 measured on, `course` (34 m) is the
+forced-detour task from part 4, and `regional` (20 km) exists only to
+be looked at. **New presets are ADDED, never substituted**, so
+published numbers keep describing the surface they were measured on.
+
+### The geometry lesson both navigation labs had to learn separately
+
+What makes terrain a DECISION is not obstacle size or route length. It
+is the **ratio of route to arena**:
+
+| | route | arena | ratio | detour |
+|---|---|---|---|---|
+| `04_terrain_navigation` | 7 m | 20 m | 35% | 1.36x |
+| lab 5, first attempt | 8 m | 60 m | **13%** | **1.10x** |
+| lab 5 `course` | 8.8 m | 34 m | 26% | **1.39x** |
+
+At 13% the robot walks past the obstacles and the task contains no
+choice, while every arrival number still looks reasonable. Lab 4 found
+this through ridge LENGTH; lab 5 found it through arena SIZE; it is
+the same fact. A generator that scales the box without scaling the
+landforms -- or vice versa -- produces a lab that runs, trains,
+renders and has nothing in it.
+
+Related, and measured twice: **capping goal distance by walking B back
+along the oracle's route destroys the task.** The first stretch of any
+route is the straight run before the first obstacle, so the capped
+goal lands on open ground and the detour collapses to 1.00-1.07x.
+Select naturally-bent A-B pairs instead.
+
+### A hardcoded joint index will eventually address the wrong joint
+
+Lab 5 shipped this three times in one session, and each time it looked
+like a learning failure rather than a wiring failure:
+
+- `qpos[4:]` for the leg angles -- encoded "four root joints". Freeing
+  torso pitch and roll made it six, and it raised. Lucky: `qpos[3]`
+  for yaw would have kept returning a number, just the pitch angle.
+- `ctrl[6] = action[6]` for the yaw motor -- encoded "six leg
+  actuators". Adding hip abduction made it eight, so the yaw command
+  was written into an ankle and the real yaw motor was never driven.
+  The robot stood perfectly upright at a 0% fall rate and never moved,
+  and three training runs were blamed on observation width.
+- `random_policy(rng, n=7)` -- a default action width that no longer
+  matched the body.
+
+**Resolve joints and actuators by NAME, through `jnt_qposadr` and
+`actuator_trnid`.** Note that MuJoCo actuators declared as
+`<position joint="hipL"/>` are UNNAMED: `mj_id2name(mjOBJ_ACTUATOR, i)`
+returns `None`, so filter on the joint each actuator drives, not on
+the actuator. A name filter that silently returns an empty list makes
+`ctrl[[]] = []` a no-op, which is the uncontrollable-robot failure
+above.
+
+### Measure the machine before renting one
+
+Lab 5 reached "we need more compute" and the obvious move -- rent a
+GPU -- was measurably wrong. `bench_compute.py` answers it in three
+minutes on any box:
+
+| | measured |
+|---|---|
+| 12k-param policy on GPU, rollout batch | **1.7x SLOWER** than CPU |
+| 16x more envs in one process | 1.36x -- stepping was serialised |
+| 16 worker processes (`vecenv.py`) | **2.5x** |
+| raising `--eval-every` from 3 to 15 | another **1.6x** |
+
+Two findings worth carrying: the environments were stepped in a Python
+`for` loop, so a 20-core box ran at a twentieth of itself; and the
+in-training evaluation was **~75% of wall clock**, because it stayed
+serial when training went parallel. Total 3.9x, free, on hardware
+already owned. `vecenv.py` asserts the parallel pool is BIT-IDENTICAL
+to the serial loop before anyone trusts its speed.
+
+### Arrival rate cannot tell you whether a policy reads terrain
+
+Lab 5 part 3 is the cheap experiment that should come first.
+`analyze_decisions.py` replays existing checkpoints and asks, for
+every landform the path comes near, whether the robot went OVER it or
+AROUND it. The robot discriminates about 3:1 -- **and so does an arm
+fed six constant zeros.** The behaviour is emergent from having a
+body, not from perception: you learn a scarp is impassable by walking
+into one.
+
+A policy that avoids every obstacle and one that reads terrain score
+identically on arrival. Three parts of that lab measured outcome and
+could not have distinguished them.
+
 ## The per-example contract
 
 Every example folder follows the same six-file shape. When adding or editing an example, keep it:

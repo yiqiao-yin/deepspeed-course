@@ -55,6 +55,18 @@ def main() -> None:
                     help="no terrain at all — the locomotion gate")
     ap.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     ap.add_argument("--n-envs", type=int, default=16)
+    ap.add_argument("--eval-every", type=int, default=3,
+                    help="iterations between in-training evaluations. "
+                         "Each one costs ~32k SERIAL env steps, which "
+                         "once parallel training arrived was 3x the "
+                         "wall clock of the training it measured -- "
+                         "about 75%% of the run. Raise it when "
+                         "--workers is high.")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="processes to split the environments across. "
+                         "1 keeps the original serial loop. The envs "
+                         "were stepped in a Python for-loop on one "
+                         "core, so a 20-core box ran at 5% of itself.")
     ap.add_argument("--rollout", type=int, default=256)
     ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--minibatches", type=int, default=8)
@@ -132,10 +144,28 @@ def run(a) -> None:
     out = HERE / "runs" / (a.name or f"nav_s{a.seed}")
     out.mkdir(parents=True, exist_ok=True)
 
-    envs = [NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, upright_w=a.upright_w, seed=a.seed + i,
-                     goal_range=a.goal_range)
-            for i in range(a.n_envs)]
-    od, ad = envs[0].obs_dim, envs[0].act_dim
+    # Parallel or serial, decided by --workers. The serial path is
+    # kept rather than deleted: `vecenv.py` asserts the two produce
+    # bit-identical observations and rewards, and that assertion needs
+    # something to compare against.
+    vec = None
+    if a.workers > 1:
+        from vecenv import ParallelEnvs
+
+        per = max(1, a.n_envs // a.workers)
+        vec = ParallelEnvs(n_workers=a.workers, per_worker=per,
+                           base_seed=a.seed, mode=a.mode, flat=a.flat,
+                           relief_scale=a.relief_scale,
+                           upright_w=a.upright_w, goal_range=a.goal_range)
+        a.n_envs = vec.n
+        od, ad = vec.obs_dim, vec.act_dim
+        envs = None
+    else:
+        envs = [NavWorld(mode=a.mode, flat=a.flat,
+                         relief_scale=a.relief_scale, upright_w=a.upright_w,
+                         seed=a.seed + i, goal_range=a.goal_range)
+                for i in range(a.n_envs)]
+        od, ad = envs[0].obs_dim, envs[0].act_dim
     net = ActorCritic(od, ad, hidden=a.hidden).to(dev)
     if a.init_from:
         # WARM START -- the curriculum step.
@@ -193,14 +223,19 @@ def run(a) -> None:
               f"{'   (DRY RUN)' if a.dry_run else ''}\n")
 
     rng = np.random.default_rng(a.seed)
-    base = [rollout(NavWorld(mode=a.mode, flat=a.flat, relief_scale=a.relief_scale, upright_w=a.upright_w, seed=a.seed),
-                    random_policy(rng), seed=900 + i) for i in range(5)]
+    base_env = NavWorld(mode=a.mode, flat=a.flat,
+                        relief_scale=a.relief_scale,
+                        upright_w=a.upright_w, seed=a.seed)
+    base = [rollout(base_env, random_policy(rng, base_env.act_dim),
+                    seed=900 + i) for i in range(5)]
     base_ret = float(np.mean([b["return"] for b in base]))
     if not a.quiet:
         print(f"  BASELINE random: return {base_ret:.1f}, "
               f"arrived {sum(b['arrived'] for b in base)}/5\n")
 
-    obs = np.stack([e.reset(seed=a.seed + i)[0] for i, e in enumerate(envs)])
+    obs = (vec.reset(seed=a.seed) if vec is not None
+           else np.stack([e.reset(seed=a.seed + i)[0]
+                          for i, e in enumerate(envs)]))
     norm.update(obs)
     hist, done, it, t0 = [], 0, 0, time.time()
     while done < a.total_steps:
@@ -212,16 +247,20 @@ def run(a) -> None:
                 t = torch.as_tensor(no, dtype=torch.float32, device=dev)
                 act, lp, v = net.act(t)
             an = act.cpu().numpy()
-            nx, rw, dn = [], [], []
-            for i, e in enumerate(envs):
-                o2, r, te, tr, _ = e.step(an[i])
-                if te or tr:
-                    o2, _ = e.reset()
-                nx.append(o2); rw.append(r); dn.append(float(te or tr))
+            if vec is not None:
+                nx, rw, dn = vec.step(an)
+            else:
+                nx_, rw, dn = [], [], []
+                for i, e in enumerate(envs):
+                    o2, r, te, tr, _ = e.step(an[i])
+                    if te or tr:
+                        o2, _ = e.reset()
+                    nx_.append(o2); rw.append(r); dn.append(float(te or tr))
+                nx = np.stack(nx_)
             B['o'].append(no); B['a'].append(an)
             B['l'].append(lp.cpu().numpy()); B['v'].append(v.cpu().numpy())
             B['r'].append(rw); B['d'].append(dn)
-            obs = np.stack(nx); norm.update(obs); done += a.n_envs
+            obs = nx; norm.update(obs); done += a.n_envs
         with torch.no_grad():
             lv = net.value(torch.as_tensor(norm(obs), dtype=torch.float32,
                                            device=dev))
@@ -242,7 +281,7 @@ def run(a) -> None:
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
                 opt.step()
 
-        if it % 3 == 0 or done >= a.total_steps:
+        if it % a.eval_every == 0 or done >= a.total_steps:
             ev = evaluate(net, norm, dev, a.mode, a.flat,
                           a.eval_episodes, a.seed, a.goal_range)
             ev.update(step=done, seconds=round(time.time() - t0, 1))
@@ -272,6 +311,8 @@ def run(a) -> None:
                 {"step": done, "total": a.total_steps, "latest": ev,
                  "mode": a.mode, "seed": a.seed,
                  "goal_range": a.goal_range,
+         "workers": a.workers, "n_envs": a.n_envs,
+         "eval_every": a.eval_every,
          "relief_scale": a.relief_scale,
          "hidden": a.hidden,
          "upright_w": a.upright_w,
@@ -290,6 +331,8 @@ def run(a) -> None:
         # The figure and the number were describing different worlds.
         {"mode": a.mode, "flat": a.flat, "seed": a.seed, "device": dev,
          "goal_range": a.goal_range,
+         "workers": a.workers, "n_envs": a.n_envs,
+         "eval_every": a.eval_every,
          "relief_scale": a.relief_scale,
          "hidden": a.hidden,
          "upright_w": a.upright_w,
@@ -299,7 +342,7 @@ def run(a) -> None:
          "world": "mars-rover",
          "arena_m": __import__("mars").preset("rover")["extent"],
          "max_steps": __import__("mars_env").MAX_STEPS,
-         "obs_dim": od, "params": net.n_params(),
+         "obs_dim": od, "act_dim": ad, "params": net.n_params(),
          "total_steps": a.total_steps, "baseline_return": round(base_ret, 2),
          "wall_seconds": round(time.time() - t0, 1), "final": f}, indent=2))
     with (out / "curve.csv").open("w") as fh:
