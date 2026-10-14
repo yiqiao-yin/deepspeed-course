@@ -4,6 +4,12 @@ sidebar_position: 4
 
 # Terrain Navigation
 
+<!--chain-->
+:::info **Lab 4 of 5** in [Physical AI](./overview) — five labs that build one argument.
+← previous: [Terrain Vision](./terrain-vision) · next: [Mars Terrain](./mars-terrain) →
+:::
+
+
 ## Abstract
 
 A two-legged robot is dropped at a random point **A** in a 20 × 20 m

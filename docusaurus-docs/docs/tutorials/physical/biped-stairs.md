@@ -4,6 +4,12 @@ sidebar_position: 2
 
 # A limb, or a constraint?
 
+<!--chain-->
+:::info **Lab 2 of 5** in [Physical AI](./overview) — five labs that build one argument.
+← previous: [Obstacle Hopper](./obstacle-hopper) · next: [Terrain Vision](./terrain-vision) →
+:::
+
+
 [Lab 1](./obstacle-hopper) built a one-legged hopper with its torso locked
 upright, and justified the lock in passing: free the torso and the task
 becomes the bipedal-balance problem, which is a different and much harder

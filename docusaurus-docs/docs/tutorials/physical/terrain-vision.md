@@ -2,7 +2,26 @@
 sidebar_position: 3
 ---
 
-# The ablation that changed two things
+# Terrain Vision
+
+<!--chain-->
+:::info **Lab 3 of 5** in [Physical AI](./overview) — five labs that build one argument.
+← previous: [Biped Stairs](./biped-stairs) · next: [Terrain Navigation](./terrain-navigation) →
+:::
+
+
+## Abstract
+
+A two-legged robot walks a raised plateau that either stays flat,
+climbs three steps, or drops three. From its own joints it cannot tell
+which is coming. We gave it a depth camera and asked what the camera
+is worth — and the first answer we published was wrong, because the
+comparison changed two things at once. Corrected, the camera buys a
+large gain on **ascent only**, makes performance far more **reliable**
+across seeds, and is worth **nothing** on descent, which a blind
+policy already solves perfectly. Part 2 then asks what kind of task
+would make vision *indispensable*, and across five designs fails to
+build one — which is itself the finding.
 
 :::warning This page was wrong, and the correction is the lesson
 This lab originally reported that a depth camera took a robot from
@@ -18,7 +37,9 @@ The original claim, the error, and the corrected numbers are all below.
 Nothing has been quietly edited.
 :::
 
-## The task
+## Problem Statement
+
+### The task
 
 A two-legged robot walks along a raised plateau. Partway along the ground
 stays flat, climbs three steps, or drops three steps. The approach slab
@@ -48,31 +69,9 @@ flowchart LR
   class U,D bright
 ```
 
-## The mistake
+## Solution
 
-The first version of this lab compared two robots:
-
-| arm | information | **how it was trained** |
-|---|---|---|
-| blind | proprioception only | PPO, from scratch, 1.5M steps |
-| vision | proprioception **+ depth** | **behaviour cloning from a privileged teacher** |
-
-Those differ in **two** respects, not one. The vision arm does not merely
-have a camera — it is imitating a teacher that was handed the terrain
-type directly. Crediting the whole gap to the camera assumes the training
-method contributed nothing, and nobody checked.
-
-**Behaviour cloning** (BC) means: run a teacher that *was* told the
-answer, record what a real robot could have seen paired with what the
-teacher did, then train a network to reproduce those actions by ordinary
-supervised regression. No reward, no exploration. It is the standard
-teacher–student recipe from quadruped locomotion (Lee et al. 2020;
-Kumar et al. 2021).
-
-The missing cell is obvious once stated: **a student distilled from the
-same teacher, by the same objective, with no camera.**
-
-## Four arms, three seeds each
+### Four arms, three seeds each
 
 ![Four arms, per terrain](/img/physical/terrain-arms.png)
 
@@ -89,6 +88,8 @@ seeds.
 Read the `flat` and `downstairs` columns first. **Every arm scores 100%,
 including the one with no camera.** Whatever the camera is worth, it is
 worth nothing there.
+
+## Experiments and Results
 
 ### Decomposing the original headline
 
@@ -111,7 +112,7 @@ separate them — the same lesson
 hard way.
 :::
 
-### The claim that does survive: reliability
+### Reliability
 
 | arm, `upstairs` | seeds | mean | sd |
 |---|---|---|---|
@@ -141,7 +142,7 @@ The intuition fails on the reward's structure rather than the physics:
 falling ends the episode, so stepping down cautiously and absorbing the
 drop is already near-optimal. Nothing forces anticipation.
 
-## The ablation that proved less than it looked
+### A second ablation that proved less than it looked
 
 The original page's strongest-sounding evidence was: blank the camera,
 and performance collapses to 0% on every terrain.
@@ -173,14 +174,14 @@ The mean-image control lands at 62–71% on upstairs, which is where the
 of "no usable camera" agreeing is the consistency check that says the
 control measures what it claims.
 
-## Watch it
+### Watch it
 
 One clip per scenario, because the terrains do not behave alike and an
 average over them hides the result. Every clip carries the **64×64 depth
 image the policy is actually driving on**, from the same call that feeds
 the network.
 
-### The controlled comparison
+#### The controlled comparison
 
 ![blind vs vision on upstairs](/img/physical/terrain-compare.gif)
 
@@ -190,7 +191,7 @@ the blind arm clears 45.8% and the vision arm 88.9%, so this is one of
 the roughly half the blind student misses, chosen because it shows the
 effect. It is not a typical episode and the clip says so.
 
-### The three terrains
+#### The three terrains
 
 ![flat](/img/physical/terrain-flat.gif)
 
@@ -207,7 +208,7 @@ foot has to be lifted *before* contact.
 `downstairs` is where the original thesis said vision was essential.
 Every arm clears it 100% of the time, camera or not.
 
-### Where it breaks
+#### Where it breaks
 
 ![a staircase steeper than it trained on](/img/physical/terrain-heldout.gif)
 
@@ -215,7 +216,7 @@ Rise 0.13 m, outside the training range of 0.06–0.11. The measured clear
 rate here is **0%**, and the failure is not a stumble — the gait simply
 does not reach the first tread.
 
-### All three, one set of weights
+#### All three, one set of weights
 
 ![the tour](/img/physical/terrain-tour.gif)
 
@@ -224,7 +225,7 @@ uv run render.py --all
 ```
 
 
-## Does it generalise?
+### Does it generalise?
 
 Training drew the stair rise from **[0.06, 0.11] m**. This walks it
 outside that range:
@@ -246,44 +247,7 @@ noise, or the rise may interact with gait phase. It is reported rather
 than smoothed, because an unexplained non-monotonicity is information
 about how narrow the result is.
 
-## What this lab now claims
-
-- Teacher–student distillation closes most of the gap on terrain a blind
-  policy struggles with — **including all of descent**.
-- A depth camera adds a further large gain on **ascent only**, and makes
-  it **far more reliable across seeds**.
-- Neither effect is statistically established at n=3.
-- Nothing generalises to stairs steeper than those trained on.
-
-What it no longer claims: that vision is *necessary*, that descent
-requires anticipation, or that the blanking test demonstrated anything.
-
-This is the **seventh** design in this category where a vision ablation
-came back weaker than it first appeared. The pattern is worth stating
-plainly: blind proprioceptive locomotion is far more capable than
-intuition suggests, and a controlled comparison is the only way to learn
-what a sensor is actually worth.
-
-## The failure mode worth taking away
-
-The original result was not a typo or a bad run. It was **a plausible
-number, produced by correct code, that nobody controlled**. It agreed
-with a good intuition, it came with a figure generated from real run
-artifacts, and it passed a test that looked rigorous.
-
-Shipping the scripts guarantees the numbers match what the code
-produced. It does not guarantee the *comparison* was the right one. That
-gap is where this page went wrong, and it is the gap worth watching in
-any ML system: not the models that are obviously broken, but the ones
-that look right for a reason nobody tested.
-
-An ablation means something only if it changes **one** thing. This one
-changed two, and the direction of the error was the direction of the
-hypothesis — exactly when it is hardest to notice.
-
----
-
-## Part 2: what it takes to make vision *necessary*
+## Part 2 — Making vision necessary
 
 Part 1 found the camera worth a lot on ascent and nothing at all on
 flat ground or descent. The obvious next question is not "does vision
@@ -344,7 +308,7 @@ advantage on stepping stones at this geometry, most likely because a
 A trained policy crossing the sparse footholds. Nothing to feel between
 the stones, and it clears them anyway.
 
-### Friction patches — the hazard a depth camera cannot see
+### Friction patches
 
 The ground stays perfectly flat. What changes is **grip**: patches of
 low-friction surface, visually distinct and geometrically identical.
@@ -452,7 +416,68 @@ The recurring methodological lesson is narrower and more useful:
 It invalidated two results in this section before they were published,
 and both times the "finding" had the sign the hypothesis predicted.
 
-## Reproducing all of it
+## What Went Wrong, and What It Taught Us
+
+The original result was not a typo or a bad run. It was **a plausible
+number, produced by correct code, that nobody controlled**. It agreed
+with a good intuition, it came with a figure generated from real run
+artifacts, and it passed a test that looked rigorous.
+
+Shipping the scripts guarantees the numbers match what the code
+produced. It does not guarantee the *comparison* was the right one. That
+gap is where this page went wrong, and it is the gap worth watching in
+any ML system: not the models that are obviously broken, but the ones
+that look right for a reason nobody tested.
+
+An ablation means something only if it changes **one** thing. This one
+changed two, and the direction of the error was the direction of the
+hypothesis — exactly when it is hardest to notice.
+
+---
+
+### The mistake that produced it
+
+The first version of this lab compared two robots:
+
+| arm | information | **how it was trained** |
+|---|---|---|
+| blind | proprioception only | PPO, from scratch, 1.5M steps |
+| vision | proprioception **+ depth** | **behaviour cloning from a privileged teacher** |
+
+Those differ in **two** respects, not one. The vision arm does not merely
+have a camera — it is imitating a teacher that was handed the terrain
+type directly. Crediting the whole gap to the camera assumes the training
+method contributed nothing, and nobody checked.
+
+**Behaviour cloning** (BC) means: run a teacher that *was* told the
+answer, record what a real robot could have seen paired with what the
+teacher did, then train a network to reproduce those actions by ordinary
+supervised regression. No reward, no exploration. It is the standard
+teacher–student recipe from quadruped locomotion (Lee et al. 2020;
+Kumar et al. 2021).
+
+The missing cell is obvious once stated: **a student distilled from the
+same teacher, by the same objective, with no camera.**
+
+## What This Lab Claims, and No Longer Claims
+
+- Teacher–student distillation closes most of the gap on terrain a blind
+  policy struggles with — **including all of descent**.
+- A depth camera adds a further large gain on **ascent only**, and makes
+  it **far more reliable across seeds**.
+- Neither effect is statistically established at n=3.
+- Nothing generalises to stairs steeper than those trained on.
+
+What it no longer claims: that vision is *necessary*, that descent
+requires anticipation, or that the blanking test demonstrated anything.
+
+This is the **seventh** design in this category where a vision ablation
+came back weaker than it first appeared. The pattern is worth stating
+plainly: blind proprioceptive locomotion is far more capable than
+intuition suggests, and a controlled comparison is the only way to learn
+what a sensor is actually worth.
+
+## Running It
 
 ```bash
 cd 07_physical_ai/03_terrain_vision
