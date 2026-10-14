@@ -4,6 +4,12 @@ sidebar_position: 5
 
 # Mars Terrain
 
+<!--chain-->
+:::info **Lab 5 of 5** in [Physical AI](./overview) — five labs that build one argument.
+← previous: [Terrain Navigation](./terrain-navigation)
+:::
+
+
 ## Abstract
 
 **Part 1 — the ground.** This half builds a Martian surface and then tries to catch it lying.

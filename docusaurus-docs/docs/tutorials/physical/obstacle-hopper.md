@@ -4,6 +4,12 @@ sidebar_position: 1
 
 # A robot learns to climb a step
 
+<!--chain-->
+:::info **Lab 1 of 5** in [Physical AI](./overview) — five labs that build one argument.
+next: [Biped Stairs](./biped-stairs) →
+:::
+
+
 The first lab in `07_physical_ai`, and the first in this course where the
 model acts on a **world** rather than on tokens. A three-link hopper stands
 in a 3D MuJoCo environment. Ahead of it is a box. The box is a different
