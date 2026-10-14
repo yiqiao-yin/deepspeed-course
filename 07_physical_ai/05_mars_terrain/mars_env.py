@@ -267,13 +267,63 @@ class NavWorld:
         self._build(_task(0))
         self.act_dim = int(self.model.nu)
         from robot import STAND
-        lo = self.model.actuator_ctrlrange[:6, 0]
-        hi = self.model.actuator_ctrlrange[:6, 1]
-        self._centre = np.array([STAND["hip"], STAND["knee"], STAND["ankle"]] * 2)
+
+        # DERIVE the leg actuators and their standing targets by NAME.
+        #
+        # This was `[STAND["hip"], STAND["knee"], STAND["ankle"]] * 2`
+        # with a hard `[:6]` slice -- a literal encoding "two legs,
+        # three joints each, in this order". Adding hip abduction made
+        # it eight actuators, and the old code would have driven the
+        # first six in the wrong order rather than failing: abduction
+        # commanded to a knee angle, silently, with the learning curve
+        # as the only symptom. Same class as `qpos[4:]`, caught the
+        # same way.
+        # Resolve actuators through the JOINT THEY DRIVE.
+        #
+        # The actuators in this model are unnamed -- `<position
+        # joint="hipL" .../>` carries no `name` attribute -- so
+        # `mj_id2name(mjOBJ_ACTUATOR, i)` returns None for every one
+        # of them. A first attempt filtered on those names and got an
+        # EMPTY list, which made `ctrl[[]] = []` a silent no-op: the
+        # robot had no control whatsoever and stood perfectly still at
+        # a 0% fall rate while three training runs were blamed on
+        # observation width and exploration.
+        #
+        # `actuator_trnid[i, 0]` is the joint id each actuator drives,
+        # and joints ARE named. The assertions below exist because an
+        # empty or partial mapping must never again look like a
+        # learning problem.
+        jname = {}
+        for i in range(self.model.nu):
+            jid = int(self.model.actuator_trnid[i, 0])
+            jname[i] = self._mj.mj_id2name(
+                self.model, self._mj.mjtObj.mjOBJ_JOINT, jid)
+        self._leg_act = [i for i, n in jname.items()
+                         if n and not n.startswith("root")]
+        centres = []
+        for i in self._leg_act:
+            key = next(k for k in ("hiproll", "hip", "knee", "ankle")
+                       if jname[i].startswith(k))
+            centres.append(STAND[key])
+        self._centre = np.array(centres)
+        self._n_leg = len(self._leg_act)
+        yaw = [i for i, n in jname.items() if n and n.startswith("root")]
+        assert self._leg_act, "no leg actuators resolved -- the robot " \
+                              "would be uncontrollable"
+        assert len(yaw) == 1, f"expected one root actuator, found {yaw}"
+        assert self._n_leg + 1 == self.model.nu, (
+            f"{self._n_leg} leg + 1 yaw != {self.model.nu} actuators")
+        self._yaw_act = yaw[0]
+        lo = self.model.actuator_ctrlrange[self._leg_act, 0]
+        hi = self.model.actuator_ctrlrange[self._leg_act, 1]
         # Half-range on each side of standing, clipped to what the joint
         # can actually reach, so the action never commands the impossible.
         self._span = np.minimum(self._centre - lo, hi - self._centre) * 0.9
-        self.proprio = int(self.model.nq - 2) + int(self.model.nv)
+        self._prev_action = np.zeros(self.act_dim)
+        # 3 gravity + 2 contacts + the previous action.
+        self.body_dim = 5 + self.act_dim
+        self.proprio = (int(self.model.nq - 2) + int(self.model.nv)
+                        + self.body_dim)
         extra = (PRIV_FEATS if mode in ("privileged", "padded") else 0)
         self.obs_dim = self.proprio + GOAL_FEATS + extra
         # Assert rather than trust: the observation actually produced
@@ -326,9 +376,14 @@ class NavWorld:
                 self.q[nm] = int(self.model.jnt_qposadr[jid])
         # The legs are whatever is left, in model order.
         root_adr = set(self.q.values())
-        self.leg_q = [int(self.model.jnt_qposadr[j])
-                      for j in range(self.model.njnt)
-                      if int(self.model.jnt_qposadr[j]) not in root_adr]
+        self.leg_q, self.leg_names = [], []
+        for j in range(self.model.njnt):
+            adr = int(self.model.jnt_qposadr[j])
+            if adr in root_adr:
+                continue
+            self.leg_q.append(adr)
+            self.leg_names.append(self._mj.mj_id2name(
+                self.model, self._mj.mjtObj.mjOBJ_JOINT, j))
         self.dt = self.model.opt.timestep * self.frame_skip
         self._renderer = None
         self.route_len = m.route_len
@@ -437,9 +492,56 @@ class NavWorld:
         z = np.clip(self._renderer.render(), DEPTH_NEAR, DEPTH_FAR)
         return ((z - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)).astype(np.float32)
 
+    def body_feats(self) -> np.ndarray:
+        """
+        What a legged robot needs to know about itself on rough ground.
+
+        Three things, all standard in legged-locomotion RL and all
+        missing from this lab until now:
+
+          projected gravity (3)  which way is DOWN, in the body's own
+                                 frame. A robot on a slope has no other
+                                 way to tell a tilted world from a
+                                 tilted self, and the whole problem on
+                                 Mars is slope.
+          foot contacts (2)      which feet are loaded. On flat ground
+                                 you can infer it from the gait clock;
+                                 on scree you cannot, and knowing which
+                                 leg can push is the difference between
+                                 a recovery step and a fall.
+          previous action (n)    lets the policy produce smooth
+                                 torques instead of rediscovering its
+                                 own last command from joint state.
+
+        None of these tell the robot anything about the TERRAIN -- they
+        are proprioception, available to a real machine from an IMU and
+        foot sensors. The privileged terrain channel stays separate, so
+        the blind/privileged/padded comparison is unaffected.
+        """
+        # Gravity in the torso frame, from pitch and roll.
+        pitch = float(self.data.qpos[self.q["rootpitch"]]) \
+            if "rootpitch" in self.q else 0.0
+        roll = float(self.data.qpos[self.q["rootroll"]]) \
+            if "rootroll" in self.q else 0.0
+        cp, sp, cr, sr = (np.cos(pitch), np.sin(pitch),
+                          np.cos(roll), np.sin(roll))
+        grav = np.array([-sp, cp * sr, -cp * cr])
+        contacts = np.zeros(2)
+        for k in range(self.data.ncon):
+            g1 = self.model.geom_bodyid[self.data.contact[k].geom1]
+            g2 = self.model.geom_bodyid[self.data.contact[k].geom2]
+            for bid in (g1, g2):
+                nm = self._mj.mj_id2name(self.model,
+                                         self._mj.mjtObj.mjOBJ_BODY, bid)
+                if nm == "footL":
+                    contacts[0] = 1.0
+                elif nm == "footR":
+                    contacts[1] = 1.0
+        return np.concatenate([grav, contacts, self._prev_action])
+
     def _obs(self) -> np.ndarray:
         parts = [self.data.qpos[2:], np.clip(self.data.qvel, -10.0, 10.0),
-                 self._goal_feats()]
+                 self.body_feats(), self._goal_feats()]
         if self.mode == "privileged":
             parts.append(self.terrain_feats())
         elif self.mode == "padded":
@@ -498,15 +600,24 @@ class NavWorld:
         # angles into an eight-slot tail and raised. It raised loudly,
         # which was lucky: the same literal one slot further along
         # would have quietly mis-seeded the pose instead.
-        # The leg addresses come from the model, not from a count.
-        pose = np.array([-b, -1.8 * b, 0.5 * b, -b, -1.8 * b, 0.5 * b])
-        assert len(self.leg_q) == len(pose), (
-            f"{len(self.leg_q)} leg joints in the model, {len(pose)} "
-            f"angles in the standing pose")
-        for adr, ang in zip(self.leg_q, pose):
-            self.data.qpos[adr] = ang + self.rng.uniform(-2e-2, 2e-2)
+        # The starting pose, keyed BY JOINT NAME.
+        #
+        # This was a six-element list matched positionally to
+        # `self.leg_q`, which assumed two legs of hip/knee/ankle in
+        # that order. Adding hip abduction made it eight joints and
+        # the assertion below fired -- loudly, which is the point.
+        # A positional list would otherwise have written a knee angle
+        # into an abduction joint and merely trained badly.
+        bend = {"hiproll": 0.0, "hip": -b, "knee": -1.8 * b,
+                "ankle": 0.5 * b}
+        assert len(self.leg_q) == len(self.leg_names), "leg bookkeeping"
+        for adr, nm in zip(self.leg_q, self.leg_names):
+            key = next(k for k in ("hiproll", "hip", "knee", "ankle")
+                       if nm.startswith(k))
+            self.data.qpos[adr] = bend[key] + self.rng.uniform(-2e-2, 2e-2)
         self._mj.mj_forward(self.model, self.data)
         self.t = 0
+        self._prev_action = np.zeros(self.act_dim)
         self.travelled = 0.0
         self._arrived = False
         self._travelled_at_arrival = None
@@ -529,8 +640,26 @@ class NavWorld:
         p0 = self.pos()
         # Map [-1, 1] onto joint targets CENTRED ON THE STANDING POSE,
         # so a zero action holds the robot up instead of dropping it.
-        self.data.ctrl[:6] = self._centre + action[:6] * self._span
-        self.data.ctrl[6] = action[6]
+        n_leg = len(self._leg_act)
+        self.data.ctrl[self._leg_act] = (
+            self._centre + action[:n_leg] * self._span)
+        self._prev_action = np.asarray(action, dtype=np.float64).copy()
+        # The yaw actuator, BY NAME.
+        #
+        # This was `ctrl[6] = action[6]`, a literal that encoded
+        # "there are six leg actuators and yaw is the seventh". Adding
+        # hip abduction made eight, so index 6 became a LEG: the yaw
+        # command was being written into an ankle while the real yaw
+        # motor was never driven at all. The robot could not turn
+        # toward its goal, and the symptom was a flat gate stuck at
+        # exactly 6.4 m with a 0% fall rate -- standing upright,
+        # perfectly stable, going nowhere.
+        #
+        # Third time in this lab a hardcoded joint index has silently
+        # addressed the wrong thing (qpos[4:], qpos[3], and now this),
+        # and the third time it looked like a learning failure rather
+        # than a wiring failure.
+        self.data.ctrl[self._yaw_act] = action[self._n_leg]
         for _ in range(self.frame_skip):
             self._mj.mj_step(self.model, self.data)
 
@@ -629,6 +758,15 @@ def rollout(env: NavWorld, policy, seed: int = 0) -> dict:
 
 
 def random_policy(rng, n: int = 7):
+    """
+    A uniform-random action of width `n`.
+
+    `n` defaults to 7 and MUST be passed when the body has a
+    different actuator count. Adding hip abduction made it 9, and
+    this default silently produced a 7-wide action that broadcast
+    against an 8-wide leg slice -- which at least raised. The
+    dangerous version is a default that happens to fit.
+    """
     return lambda obs: rng.uniform(-1.0, 1.0, n)
 
 
@@ -641,7 +779,8 @@ def main() -> int:
           f"{'left to go':>12}{'walked':>9}")
     for flat in (True, False):
         env = NavWorld(mode="blind", flat=flat)
-        rs = [rollout(env, random_policy(rng), seed=s) for s in range(8)]
+        rs = [rollout(env, random_policy(rng, env.act_dim), seed=s)
+              for s in range(8)]
         print(f"  {'flat' if flat else 'terrain':<12}"
               f"{np.mean([r['return'] for r in rs]):>9.1f}"
               f"{sum(r['arrived'] for r in rs):>8}/8"
