@@ -232,8 +232,30 @@ def model_xml(hfield_file: str, start: tuple[float, float],
 
 
 def _leg(tag: str, y: float) -> str:
+    """
+    One leg, and it can now move SIDEWAYS.
+
+    Every joint in labs 1-4 used axis="0 -1 0" -- hip, knee and ankle
+    all rotating about the pitch axis, so the whole leg lived in the
+    sagittal plane. On a corridor that is fine; the robot only ever
+    has to fall forwards usefully.
+
+    On ground tilted in two directions it is fatal, and it explains
+    the central failure of Part 4. The torso was freed to roll, so the
+    body leaned sideways on every slope -- and the legs had no way to
+    answer, because not one of their six joints could place a foot
+    laterally. The policy fell on 50-92% of episodes across 10M steps
+    and never improved, which is not a compute shortage: it is a robot
+    that cannot take a sideways step being asked to walk on scree.
+
+    `hiproll` is an abduction joint: it swings the whole leg out from
+    the body. Two extra joints, and the difference between a machine
+    that can catch itself and one that can only topple.
+    """
     return f"""
       <body name="thigh{tag}" pos="0 {y} 0">
+        <joint name="hiproll{tag}" type="hinge" axis="1 0 0" range="-35 35"
+               armature="0.6" damping="0.8"/>
         <joint name="hip{tag}" type="hinge" axis="0 -1 0" range="-150 20"/>
         <geom type="capsule" fromto="0 0 0 0 0 -{THIGH}" size="0.045"/>
         <body name="shin{tag}" pos="0 0 -{THIGH}">
@@ -250,7 +272,8 @@ def _leg(tag: str, y: float) -> str:
 
 # The standing pose, in radians, measured in nav_env. Position
 # actuators hold THIS when the policy outputs zero.
-STAND = {"hip": -0.30, "knee": -0.54, "ankle": 0.15}
+STAND = {"hiproll": 0.0, "hip": -0.30, "knee": -0.54,
+         "ankle": 0.15}
 
 
 def _motors() -> str:
@@ -273,7 +296,8 @@ def _motors() -> str:
     """
     out = []
     for tag in ("L", "R"):
-        for j, kp, rng in (("hip", 260, "-2.6 0.35"),
+        for j, kp, rng in (("hiproll", 150, "-0.61 0.61"),
+                           ("hip", 260, "-2.6 0.35"),
                            ("knee", 260, "-2.6 0.0"),
                            ("ankle", 110, "-0.78 0.78")):
             out.append(f'<position joint="{j}{tag}" kp="{kp}" '

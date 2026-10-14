@@ -54,7 +54,8 @@ def load(run: str):
 
     meta = json.loads((RUNS / run / "summary.json").read_text())
     ck = torch.load(RUNS / run / "policy.pt", weights_only=False)
-    net = ActorCritic(meta["obs_dim"], 7)
+    net = ActorCritic(meta["obs_dim"], meta.get("act_dim", 7),
+                      hidden=meta.get("hidden", 64))
     net.load_state_dict(ck["model"])
     net.eval()
     norm = RunningNorm(meta["obs_dim"])
