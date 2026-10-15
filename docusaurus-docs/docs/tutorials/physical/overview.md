@@ -6,11 +6,12 @@ sidebar_position: 0
 
 ## Abstract
 
-Five labs, read in order, are one argument. Each exists because the
+Six labs, read in order, are one argument. Each exists because the
 previous one ran out of something: a body that could only hop ran out
 of ground to hop over, two legs ran out of stairs they could climb, a
 blind robot ran out of terrain it could feel, a corridor ran out of
-decisions to make, and a 20 m arena ran out of planet. They are not
+decisions to make, a 20 m arena ran out of planet, and a planet ran
+out of CPU — or seemed to. They are not
 independent examples and the later ones depend on measurements made in
 the earlier ones.
 
@@ -29,11 +30,13 @@ flowchart TB
   L3["<b>Lab 3 · Terrain Vision</b><br/>an eye<br/><i>the camera helps on ascent and nowhere else</i>"]
   L4["<b>Lab 4 · Terrain Navigation</b><br/>a second dimension<br/><i>climb it, or walk around it</i>"]
   L5["<b>Lab 5 · Mars Terrain</b><br/>a planet<br/><i>terrain first, then a policy on it</i>"]
+  L6["<b>Lab 6 · Mars on GPU Physics</b><br/>a bigger machine<br/><i>measured at 1.50x, bar was 5x</i>"]
 
   L1 -->|"hopping is not walking"| L2
   L2 -->|"you cannot feel a<br/>descent before you reach it"| L3
   L3 -->|"a corridor has<br/>nothing to decide"| L4
   L4 -->|"an arena is not a world"| L5
+  L5 -->|"out of samples:<br/>rent a card?"| L6
 
   classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
   classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -43,7 +46,8 @@ flowchart TB
 
   class L1,L2 base
   class L3,L4 steel
-  class L5 bright
+  class L5 steel
+  class L6 bright
 ```
 
 | Lab | Adds | The measurement that carries forward |
@@ -53,6 +57,7 @@ flowchart TB
 | **[3 · Terrain Vision](./terrain-vision)** | an eye | a depth camera helps on **ascent only**; descent is solved perfectly blind |
 | **[4 · Terrain Navigation](./terrain-navigation)** | a second dimension | observation **width** alone destabilises a small policy, even carrying no information |
 | **[5 · Mars Terrain](./mars-terrain)** | a planet | the robot discriminates obstacles **by contact**, not by seeing them |
+| **[6 · Mars on GPU Physics](./mars-gpu-physics)** | a bigger machine | GPU physics is **1.50×** a 16-process CPU pool; the terrain is **not** why |
 
 ## What each lab had to go and get
 

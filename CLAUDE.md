@@ -209,7 +209,7 @@ token compression shrinks what it *looks at*; STAR memory bounds what it
 
 ### `07_physical_ai` is a single escalating argument about embodiment
 
-Five labs, and each one exists because the previous one ran out of
+Six labs, and each one exists because the previous one ran out of
 something. They are not independent examples and the later ones assume
 the earlier measurements:
 
@@ -220,6 +220,7 @@ the earlier measurements:
 | `03_terrain_vision` | an eye | a camera helps on ascent and nowhere else, because a corridor has nothing to decide |
 | `04_terrain_navigation` | a second dimension | climb it or go round it -- the first lab with a routing choice in it |
 | `05_mars_terrain` | a planet | terrain first (part 1), then a policy on it (parts 2-4) |
+| `06_mars_mjx` | a bigger machine | GPU physics is 1.50x a 16-process CPU pool; the terrain is NOT why |
 
 **`05_mars_terrain` is split into parts ON PURPOSE.** Lab 4 published a
 result that was wrong, and the faults were in its world, its renderer
@@ -300,6 +301,55 @@ in-training evaluation was **~75% of wall clock**, because it stayed
 serial when training went parallel. Total 3.9x, free, on hardware
 already owned. `vecenv.py` asserts the parallel pool is BIT-IDENTICAL
 to the serial loop before anyone trusts its speed.
+
+**Lab 6 asked the same question of PHYSICS and got the same answer.**
+`bench_backends.py` times MuJoCo on CPU against MJX and MuJoCo Warp on
+the card, with the bar written down first — *≥ 5x the CPU worker pool
+or it is not worth renting*:
+
+| | measured |
+|---|---|
+| CPU, 16-process pool (the baseline) | 9,337 steps/s |
+| MJX, best (then **aborts** at 4096 envs) | 0.14x |
+| Warp, 4096 envs | **1.50x** — bar was 5x, **FAILS** |
+| physics as a share of a training step | **33-34%**, so any physics win caps at **1.5x** end to end |
+
+Three things from it that generalise:
+
+- **Baseline against the pool, not one environment.** One CPU env is
+  5,630 steps/s and sixteen processes are 9,337. Dividing by the
+  single env would have reported Warp at 2.5x instead of 1.50x. The
+  comparison that flatters the new thing is rarely the one you face.
+- **A backend that `abort()`s is a data point, not a lost run.** MJX's
+  OOM is not a catchable exception -- XLA hits a `Check failed` and
+  takes the interpreter with it, which erased Warp's results *and* the
+  ablation. Each measurement now runs in its own process.
+- **Warp falls back to CPU silently** and reports throughput that
+  looks exactly like GPU throughput. `nvidia-smi` cannot answer this:
+  the question is whether JAX and Warp can *see* the card, which they
+  fail independently. Ask each backend and print it before any number.
+
+### An ablation is only an ablation if ONE thing moved
+
+Lab 6 first concluded the height-field collider costs **8.6x** of all
+GPU throughput. Withdrawn: it compared a MuJoCo `plane` geom against
+an `hfield`, which are **two different collision routines**. The
+measurement was of the collider TYPE and the conclusion named the
+TERRAIN.
+
+Re-run with the collider held fixed — a height field of zeros against
+one with relief — Mars costs **1.10x** against a 3.2% spread, for
+**5.5x** the contacts. Rocks: nothing. Resolution: nothing. The
+terrain is exonerated, and three explanations are ruled out rather
+than one confirmed.
+
+That shape — three NEGATIVE results — is exactly what a broken knob
+produces, so `tests/test_mars_mjx.py` tests the knobs rather than the
+conclusions: `rocks=0` must remove 75 geoms, `plane=True` must flatten
+the elevation while keeping `nhfield == 1`. One of those checks
+shipped unable to fail, asserting on `hfield_data` — which MuJoCo
+**normalises to [0, 1]** at compile time, so its range is 1.000 for
+every terrain. The metres are in `hfield_size[2]`.
 
 ### Arrival rate cannot tell you whether a policy reads terrain
 
@@ -467,7 +517,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 46 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 47 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
