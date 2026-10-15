@@ -146,6 +146,8 @@ jobs:
         run: uv run tests/test_mars_terrain.py
       - name: Mars on GPU physics (the ablation knobs really move the model)
         run: uv run tests/test_mars_mjx.py
+      - name: Terrain VLM (the label, the scorer, and the capacity bar)
+        run: uv run tests/test_terrain_vlm.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

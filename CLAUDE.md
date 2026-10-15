@@ -209,7 +209,7 @@ token compression shrinks what it *looks at*; STAR memory bounds what it
 
 ### `07_physical_ai` is a single escalating argument about embodiment
 
-Six labs, and each one exists because the previous one ran out of
+Seven labs, and each one exists because the previous one ran out of
 something. They are not independent examples and the later ones assume
 the earlier measurements:
 
@@ -221,6 +221,7 @@ the earlier measurements:
 | `04_terrain_navigation` | a second dimension | climb it or go round it -- the first lab with a routing choice in it |
 | `05_mars_terrain` | a planet | terrain first (part 1), then a policy on it (parts 2-4) |
 | `06_mars_mjx` | a bigger machine | GPU physics is 1.50x a 16-process CPU pool; the terrain is NOT why |
+| `07_terrain_vlm` | an eye that reads | a VLM scores 52.9%; the robot that only FEELS scores ~75% |
 
 **`05_mars_terrain` is split into parts ON PURPOSE.** Lab 4 published a
 result that was wrong, and the faults were in its world, its renderer
@@ -328,6 +329,38 @@ Three things from it that generalise:
   looks exactly like GPU throughput. `nvidia-smi` cannot answer this:
   the question is whether JAX and Warp can *see* the card, which they
   fail independently. Ask each backend and print it before any number.
+
+### The first lab here that needs ZeRO-3, and why the others do not
+
+`07_terrain_vlm` is the FIRST example in this section that calls
+`deepspeed.initialize`, and the justification is a measurement rather
+than the course's name. `verify_arch.py`, weights + optimizer per card:
+
+| Qwen2.5-VL-7B | 1 card | 8 cards |
+|---|---|---|
+| LoRA r=16 | **15.3 GB** -- already fits | 1.9 GB |
+| full fine-tune | 119.7 GB | **15.0 GB** |
+
+So the LoRA arm runs **plain python with no launcher** and only the
+full fine-tune uses `ds_config.json`. Sharding 15.3 GB that fitted
+would be the same cargo cult labs 1-6 avoid, pointed the other way.
+
+Three things from it that generalise:
+
+- **A control decides whether a number is readable.** The lab's
+  sighted arm scores 52.9%; its BLIND arm -- identical model, grey
+  image, same token count -- scores 45.0%, and the majority class
+  scores 55.0%. Sight helps (McNemar p = 0.006) and still loses to a
+  one-line heuristic. Reporting only the first comparison would have
+  been a true sentence and a false impression.
+- **A working no-information control emits ONE constant.** The blind
+  arm answered AROUND for all 429 items, which is what licenses the
+  comparison; a blind control with VARIED answers means information
+  is leaking through the pipeline.
+- **The analytic capacity table excludes activations, and they are
+  not small.** Predicted 7.3 GB for the 3B LoRA arm, measured
+  **11.5 GB**. ZeRO-3 shards parameters, gradients and optimizer
+  state -- never activations.
 
 ### An ablation is only an ablation if ONE thing moved
 
@@ -517,7 +550,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 47 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 48 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it

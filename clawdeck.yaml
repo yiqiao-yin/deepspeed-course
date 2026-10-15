@@ -268,6 +268,22 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/07_terrain_vlm
+    title: "Terrain VLM: seeing vs touching"
+    summary: "Lab 5's robot told cliffs from hills 3:1 by touch. Can a vision model beat that?"
+    est_minutes: 25
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # CPU-only and correct: the labels, the capacity argument, and the
+      # scorer all run without a GPU or a download.
+      - { label: "Are the labels sound? (CPU)", cmd: "uv run make_dataset.py --check" }
+      - { label: "Does ZeRO-3 earn its place? (CPU)", cmd: "uv run verify_arch.py" }
+      - { label: "Build the dataset (CPU, ~8 min)", cmd: "uv run make_dataset.py --seeds 400" }
+      - { label: "The BLIND control first", cmd: "uv run python train_vlm.py --lora --blind --name blind", needs_gpu: true }
+      - { label: "Train the sighted arm (~20 min)", cmd: "uv run python train_vlm.py --lora --name lora3b", primary: true, needs_gpu: true }
+      - { label: "Zero-shot baseline", cmd: "uv run evaluate.py --zero-shot", needs_gpu: true }
+      - { label: "Score it against the controls", cmd: "uv run evaluate.py --run lora3b", needs_gpu: true }
+
   - id: 07_physical_ai/06_mars_mjx
     title: "Mars on GPU physics: does it pay?"
     summary: "MuJoCo on CPU vs MJX and Warp on the card, same model. GPU loses, and the ablation says why."

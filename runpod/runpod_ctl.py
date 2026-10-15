@@ -206,6 +206,27 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/07_terrain_vlm": dict(min_vram=24, gpus=1, disk=60,
+                                    script="train_vlm.py",
+                                    args="--lora --name lora3b",
+                                    note="The FIRST example in 07_physical_ai "
+                                         "that uses DeepSpeed, and the reason "
+                                         "is measured: verify_arch.py shows a "
+                                         "7B full fine-tune needs 119.7 GB on "
+                                         "one card and 15.0 GB across eight, "
+                                         "while LoRA on the same model needs "
+                                         "15.3 GB on ONE. So the LoRA arm here "
+                                         "runs PLAIN python (nothing to shard, "
+                                         "and labs 5-6 both measured that "
+                                         "reaching for hardware first was "
+                                         "wrong), and ZeRO-3 is reserved for "
+                                         "the full arm -- `deepspeed "
+                                         "--num_gpus=8 train_vlm.py "
+                                         "--deepspeed ds_config.json`, which "
+                                         "needs a bigger box than this entry "
+                                         "rents. Measured in-use on the LoRA "
+                                         "arm: 11.5 GB of a 16 GB card, so 24 "
+                                         "is comfortable."),
     "07_physical_ai/06_mars_mjx": dict(min_vram=16, gpus=1, disk=24,
                                     script="bench_backends.py",
                                     launcher="python",
