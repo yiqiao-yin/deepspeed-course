@@ -1,0 +1,49 @@
+{
+  "_comment": "ZeRO-3 for the FULL fine-tune arm of lab 7. The 'auto' values are a HuggingFace Trainer convention, not a DeepSpeed feature: Trainer substitutes its own TrainingArguments before DeepSpeed sees this file. Launch without Trainer and 'auto' is a parse error.",
+  "_why_zero3_here": "Measured by verify_arch.py: full fine-tuning Qwen2.5-VL-7B needs 119.7 GB of weights + optimizer on one card and 15.0 GB across eight. LoRA on the same model needs 15.3 GB on ONE card, so the LoRA arm deliberately does not use this file -- sharding what already fits is decoration, and this course has twice measured that reaching for hardware before checking was wrong (lab 5: GPU 1.7x SLOWER; lab 6: GPU physics 1.50x against a 5x bar).",
+  "bf16": {
+    "enabled": "auto"
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": "auto",
+      "betas": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  "scheduler": {
+    "type": "WarmupDecayLR",
+    "params": {
+      "warmup_min_lr": "auto",
+      "warmup_max_lr": "auto",
+      "warmup_num_steps": "auto",
+      "total_num_steps": "auto"
+    }
+  },
+  "zero_optimization": {
+    "stage": 3,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "sub_group_size": 1000000000.0,
+    "reduce_bucket_size": "auto",
+    "stage3_prefetch_bucket_size": "auto",
+    "stage3_param_persistence_threshold": "auto",
+    "stage3_max_live_parameters": 1000000000.0,
+    "stage3_max_reuse_distance": 1000000000.0,
+    "stage3_gather_16bit_weights_on_model_save": true
+  },
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": "auto",
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto",
+  "steps_per_print": 10,
+  "wall_clock_breakdown": false,
+  "_stage3_init_trap": "Under stage 3 this config must exist BEFORE from_pretrained, or zero.Init never fires and every rank materialises the whole model. The symptom is an OOM whose requested allocation is trivially small on a card with gigabytes spare. train_vlm.py builds TrainingArguments first for exactly this reason.",
+  "_activations_do_not_sharD": "ZeRO-3 shards parameters, gradients and optimizer state. It does NOT shard activations, and for a VLM the image tokens dominate the sequence. Size per GPU, not in aggregate.",
+  "_offload_if_needed": {
+    "device": "cpu",
+    "pin_memory": true
+  }
+}

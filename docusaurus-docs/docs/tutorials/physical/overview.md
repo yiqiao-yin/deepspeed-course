@@ -6,12 +6,13 @@ sidebar_position: 0
 
 ## Abstract
 
-Six labs, read in order, are one argument. Each exists because the
+Seven labs, read in order, are one argument. Each exists because the
 previous one ran out of something: a body that could only hop ran out
 of ground to hop over, two legs ran out of stairs they could climb, a
 blind robot ran out of terrain it could feel, a corridor ran out of
 decisions to make, a 20 m arena ran out of planet, and a planet ran
-out of CPU — or seemed to. They are not
+out of CPU — or seemed to, and a robot that learned terrain by
+bumping into it ran out of excuses for never having looked. They are not
 independent examples and the later ones depend on measurements made in
 the earlier ones.
 
@@ -31,12 +32,14 @@ flowchart TB
   L4["<b>Lab 4 · Terrain Navigation</b><br/>a second dimension<br/><i>climb it, or walk around it</i>"]
   L5["<b>Lab 5 · Mars Terrain</b><br/>a planet<br/><i>terrain first, then a policy on it</i>"]
   L6["<b>Lab 6 · Mars on GPU Physics</b><br/>a bigger machine<br/><i>measured at 1.50x, bar was 5x</i>"]
+  L7["<b>Lab 7 · Terrain VLM</b><br/>an eye that reads<br/><i>sight helps, and still loses to touch</i>"]
 
   L1 -->|"hopping is not walking"| L2
   L2 -->|"you cannot feel a<br/>descent before you reach it"| L3
   L3 -->|"a corridor has<br/>nothing to decide"| L4
   L4 -->|"an arena is not a world"| L5
   L5 -->|"out of samples:<br/>rent a card?"| L6
+  L6 -->|"compute was not<br/>the missing thing"| L7
 
   classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
   classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -46,8 +49,8 @@ flowchart TB
 
   class L1,L2 base
   class L3,L4 steel
-  class L5 steel
-  class L6 bright
+  class L5,L6 steel
+  class L7 bright
 ```
 
 | Lab | Adds | The measurement that carries forward |
@@ -58,6 +61,7 @@ flowchart TB
 | **[4 · Terrain Navigation](./terrain-navigation)** | a second dimension | observation **width** alone destabilises a small policy, even carrying no information |
 | **[5 · Mars Terrain](./mars-terrain)** | a planet | the robot discriminates obstacles **by contact**, not by seeing them |
 | **[6 · Mars on GPU Physics](./mars-gpu-physics)** | a bigger machine | GPU physics is **1.50×** a 16-process CPU pool; the terrain is **not** why |
+| **[7 · Terrain VLM](./terrain-vlm)** | an eye that reads | a VLM that sees scores **52.9%**; the robot that only feels scores **~75%** |
 
 ## What each lab had to go and get
 
@@ -142,7 +146,7 @@ signature of a wrong variable, and it took too long to read it that way.
 
 ## Where it currently stops
 
-Lab 5 ends unsolved, and deliberately so. The robot crosses open
+Lab 7 ends unsolved, and deliberately so. The robot crosses open
 Martian ground about one episode in seven, tells climbable landforms
 from cliffs roughly 3:1 — **and a policy fed six constant zeros does
 the same**, so that discrimination comes from having a body rather than

@@ -1,0 +1,5 @@
+# Generated dataset: 85 MB of rendered views, rebuilt in minutes by
+# `uv run make_dataset.py --seeds 400`. The GENERATOR is the artifact
+# worth versioning, not its output -- and a committed dataset would
+# also freeze a bug in the labels where nobody would look for it.
+data/
