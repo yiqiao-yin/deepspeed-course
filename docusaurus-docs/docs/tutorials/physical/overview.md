@@ -4,6 +4,8 @@ sidebar_position: 0
 
 # Start Here: How These Labs Fit Together
 
+![One clip from each of the seven labs, in order](/img/physical/physical-reel.gif)
+
 ## Abstract
 
 Seven labs, read in order, are one argument. Each exists because the

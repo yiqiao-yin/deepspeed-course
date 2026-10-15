@@ -119,6 +119,18 @@ predictions rather than assumed either way.
 
 ## Where the model loses
 
+![The four confusion cells, each cycling real held-out views](/img/physical/vlm-confusion.gif)
+
+52.9% is one number covering two different behaviours, and the four
+cells separate them. The largest is not a correct one: **147 views
+(34.3%) are ground the robot could have walked straight over, refused.**
+Against 55 (12.8%) in the opposite corner.
+
+The two errors are **not symmetric in consequence**, which is worth
+saying even though this lab scores them equally. Refusing passable
+ground costs a detour; calling a scarp passable costs the rover. An
+accuracy figure prices them the same and a real mission would not.
+
 | landform | sighted | what the truth is |
 |---|---|---|
 | hill | 46.2% | almost always OVER |

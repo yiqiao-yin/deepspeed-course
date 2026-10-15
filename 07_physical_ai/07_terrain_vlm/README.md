@@ -73,6 +73,13 @@ over all 429.
 
 ## Where the model loses
 
+![confusion cells](../../docusaurus-docs/static/img/physical/vlm-confusion.gif)
+
+The largest cell is not a correct one: **147 views (34.3%) are ground
+the robot could have walked over, refused**, against 55 (12.8%) in the
+opposite corner. The two errors cost different things — a detour, or
+the rover — and an accuracy figure prices them the same.
+
 | landform | sighted | what the truth is |
 |---|---|---|
 | hill | 46.2% | almost always OVER |
@@ -160,7 +167,8 @@ uv run evaluate.py --zero-shot
 uv run evaluate.py --run blind --blind
 uv run evaluate.py --run lora3b
 
-uv run render_verdicts.py             # the animation; no GPU needed
+uv run render_verdicts.py             # sighted vs blind; no GPU needed
+uv run render_confusion.py            # where it fails; no GPU needed
 
 # The ZeRO-3 arm. Needs 8 cards. NOT YET VERIFIED ON HARDWARE.
 uv run deepspeed --num_gpus=8 train_vlm.py --name full7b \
