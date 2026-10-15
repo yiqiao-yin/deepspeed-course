@@ -268,6 +268,22 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/06_mars_mjx
+    title: "Mars on GPU physics: does it pay?"
+    summary: "MuJoCo on CPU vs MJX and Warp on the card, same model. GPU loses, and the ablation says why."
+    est_minutes: 12
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: this checks the ablation knobs really move
+      # the model, which is what the whole finding rests on.
+      - { label: "Are the knobs real? (CPU)", cmd: "uv run ../../tests/test_mars_mjx.py" }
+      # Everything below genuinely needs the card -- the GPU backends ARE
+      # the subject, so these carry needs_gpu rather than pretending.
+      - { label: "Feasibility gate: will MJX take our terrain?", cmd: "uv run probe_mjx.py", needs_gpu: true }
+      - { label: "Benchmark all three backends (~6 min)", cmd: "uv run bench_backends.py", primary: true, needs_gpu: true }
+      - { label: "Just the ablation: why is it slow?", cmd: "uv run bench_backends.py --ablate-only", needs_gpu: true }
+      - { label: "Film 16 rollouts at once", cmd: "uv run render_swarm.py --run m2_blind_s0 --tiles 16", needs_gpu: true }
+
   - id: 07_physical_ai/05_mars_terrain
     title: "Mars Terrain: the ground first"
     summary: "Part 1 of lab 5. A generated Martian surface, measured rather than admired. No robot yet."

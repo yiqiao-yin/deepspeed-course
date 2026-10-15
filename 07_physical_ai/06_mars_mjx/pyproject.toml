@@ -1,0 +1,36 @@
+[project]
+name = "mars-mjx"
+version = "0.1.0"
+description = "Lab 6 — GPU physics for the Mars course: does it actually pay?"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "mujoco>=3.2",
+    "pillow>=10.0",
+    # The two GPU physics backends under test. `mujoco-mjx` is the JAX
+    # one; `mujoco-warp` the newer Warp one. Both are the SUBJECT of
+    # this lab rather than a dependency of its conclusion -- the
+    # benchmark has to be able to report that they lose.
+    "mujoco-mjx>=3.2",
+    "jax[cuda12]>=0.4.35",
+    "mujoco-warp>=3.16.0",
+    # Used only by `render_swarm.py`, which replays lab 5's trained
+    # policy to film what parallel simulation looks like. Pinned to
+    # match every other lab; `tests/test_config_kwargs.py` checks each
+    # lock against one set of versions, because a test run against a
+    # torch learners do not have validates a world nobody is in.
+    "torch==2.11.0",
+]
+
+[tool.uv]
+package = false
+
+# A custom torch index pins its companions too. With `explicit = true`
+# only the packages named here come from it.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

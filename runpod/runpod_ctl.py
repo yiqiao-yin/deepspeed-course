@@ -206,6 +206,23 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/06_mars_mjx": dict(min_vram=16, gpus=1, disk=24,
+                                    script="bench_backends.py",
+                                    launcher="python",
+                                    args="--envs 64,256,1024,2048",
+                                    note="TWELFTH launcher=python exception, and "
+                                         "the lab is ABOUT the exception: it "
+                                         "times MuJoCo physics on CPU, MJX and "
+                                         "Warp and asks whether a GPU is worth "
+                                         "renting at all. Nothing trains -- no "
+                                         "parameters, no gradients, nothing for "
+                                         "ZeRO to shard. The measured answer is "
+                                         "no, which is why this is a measurement "
+                                         "lab and not a port. The GPU request is "
+                                         "real: the two GPU backends are the "
+                                         "subject, and the CPU pool it is "
+                                         "compared against needs the cores, so "
+                                         "rent something with both."),
     "07_physical_ai/05_mars_terrain": dict(min_vram=8, gpus=1, disk=12,
                                     script="mars.py",
                                     launcher="python",

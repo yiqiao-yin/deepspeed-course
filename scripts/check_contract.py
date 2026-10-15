@@ -55,6 +55,14 @@ NO_DEEPSPEED = {
     # adds the robot and will not be on this list.
     "07_physical_ai/05_mars_terrain":
         "generates and measures terrain; there is no model in it",
+    # Nothing trains here either -- the lab times physics backends
+    # against each other. Its SUBJECT is whether the hardware
+    # DeepSpeed usually runs on helps at all on this model, and the
+    # measured answer (1.50x a CPU worker pool, against a 5x bar) is
+    # the lab's finding rather than an omission.
+    "07_physical_ai/06_mars_mjx":
+        "benchmarks MuJoCo/MJX/Warp throughput; nothing trains, so "
+        "there is no optimizer a DeepSpeed config could configure",
     "07_physical_ai/04_terrain_navigation":
         "a 12k-parameter PPO policy over MuJoCo height fields; the "
         "bottleneck is physics on the CPU, not arithmetic",

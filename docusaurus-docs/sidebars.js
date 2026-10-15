@@ -118,6 +118,7 @@ const sidebars = {
               'tutorials/physical/terrain-vision',
               'tutorials/physical/terrain-navigation',
               'tutorials/physical/mars-terrain',
+              'tutorials/physical/mars-gpu-physics',
             ],
           },
       ],
