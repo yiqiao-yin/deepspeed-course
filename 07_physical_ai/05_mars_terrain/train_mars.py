@@ -87,6 +87,21 @@ def main() -> None:
                     help="warm-start from another run's policy. The "
                          "CURRICULUM: learn to balance on flat ground "
                          "first, then carry that into rough terrain.")
+    # Choices DERIVED from the layout table, not restated here. The
+    # hardcoded triple silently rejected `spider6`/`spider8` after
+    # they were added -- argparse exited 2, the loop swallowed it,
+    # and the sweep reported two bodies as "FAILED" training when
+    # they had never started. Same species of bug as every other one
+    # in this lab: a list that should have been a lookup.
+    ap.add_argument("--morphology", default="biped",
+                    choices=sorted(__import__("robot").LEG_LAYOUTS),
+                    help="LEG LAYOUT. Defaults to the biped every "
+                         "published number here was measured on. The "
+                         "other two exist because three labs reached "
+                         "the same wall from three directions and the "
+                         "body was the answer each time; a biped is "
+                         "statically unstable and a quadruped on three "
+                         "feet is not.")
     ap.add_argument("--goal-range", type=float, default=None,
                     help="cap how far B is placed, in metres. The arrival "
                          "reward is unreachable early on a 15 m goal, so the "
@@ -100,13 +115,14 @@ def main() -> None:
 
 
 def evaluate(net, norm, dev, mode, flat, episodes, seed,
-             goal_range=None) -> dict:
+             goal_range=None, morphology: str = "biped") -> dict:
     import numpy as np
     import torch
 
     from mars_env import NavWorld
 
     env = NavWorld(mode=mode, flat=flat, seed=seed,
+                   morphology=morphology,
                    goal_range=goal_range)
     arrived = fell = 0
     effs, lefts = [], []
@@ -156,12 +172,13 @@ def run(a) -> None:
         vec = ParallelEnvs(n_workers=a.workers, per_worker=per,
                            base_seed=a.seed, mode=a.mode, flat=a.flat,
                            relief_scale=a.relief_scale,
-                           upright_w=a.upright_w, goal_range=a.goal_range)
+                           upright_w=a.upright_w, goal_range=a.goal_range,
+                           morphology=a.morphology)
         a.n_envs = vec.n
         od, ad = vec.obs_dim, vec.act_dim
         envs = None
     else:
-        envs = [NavWorld(mode=a.mode, flat=a.flat,
+        envs = [NavWorld(mode=a.mode, flat=a.flat, morphology=a.morphology,
                          relief_scale=a.relief_scale, upright_w=a.upright_w,
                          seed=a.seed + i, goal_range=a.goal_range)
                 for i in range(a.n_envs)]
@@ -223,7 +240,7 @@ def run(a) -> None:
               f"{'   (DRY RUN)' if a.dry_run else ''}\n")
 
     rng = np.random.default_rng(a.seed)
-    base_env = NavWorld(mode=a.mode, flat=a.flat,
+    base_env = NavWorld(mode=a.mode, flat=a.flat, morphology=a.morphology,
                         relief_scale=a.relief_scale,
                         upright_w=a.upright_w, seed=a.seed)
     base = [rollout(base_env, random_policy(rng, base_env.act_dim),
@@ -283,7 +300,8 @@ def run(a) -> None:
 
         if it % a.eval_every == 0 or done >= a.total_steps:
             ev = evaluate(net, norm, dev, a.mode, a.flat,
-                          a.eval_episodes, a.seed, a.goal_range)
+                          a.eval_episodes, a.seed, a.goal_range,
+                          morphology=a.morphology)
             ev.update(step=done, seconds=round(time.time() - t0, 1))
             hist.append(ev)
             if not a.quiet:
@@ -330,6 +348,11 @@ def run(a) -> None:
         # stranded 14 m out while the evaluator reported 42% arrival.
         # The figure and the number were describing different worlds.
         {"mode": a.mode, "flat": a.flat, "seed": a.seed, "device": dev,
+         # The BODY is part of the run's identity. Without it a
+         # checkpoint cannot be replayed -- a 17-actuator policy
+         # loaded against a 9-actuator robot raises, and a renderer
+         # that rebuilt from defaults would film the wrong machine.
+         "morphology": a.morphology,
          "goal_range": a.goal_range,
          "workers": a.workers, "n_envs": a.n_envs,
          "eval_every": a.eval_every,

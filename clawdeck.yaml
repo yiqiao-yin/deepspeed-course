@@ -268,6 +268,18 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/08_long_traverse
+    title: "Long Traverse: the body is it"
+    summary: "Five bodies, one task, one budget. Four legs walk 3.5x further than two; six never fall."
+    est_minutes: 12
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: planner properties, then the comparison.
+      - { label: "Planner and routers (CPU)", cmd: "uv run traverse.py --check" }
+      - { label: "Do the bodies differ? (CPU)", cmd: "uv run ../../tests/test_morphology.py" }
+      - { label: "Compare five bodies (CPU, ~8 min)", cmd: "uv run compare_bodies.py", primary: true }
+      - { label: "Film all five side by side", cmd: "uv run render_morphology.py", needs_gpu: true }
+
   - id: 07_physical_ai/07_terrain_vlm
     title: "Terrain VLM: seeing vs touching"
     summary: "Lab 5's robot told cliffs from hills 3:1 by touch. Can a vision model beat that?"

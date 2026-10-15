@@ -1,0 +1,29 @@
+[project]
+name = "long-traverse"
+version = "0.1.0"
+description = "Lab 8 — how good must perception be before it helps a rover cross 40 m?"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "mujoco>=3.2",
+    "pillow>=10.0",
+    # The locomotion policy is lab 5's, replayed rather than retrained:
+    # waypoint following needs no new training because the policy's
+    # goal feature is range+bearing, so retargeting it is just moving
+    # the goal. torch is here to load that checkpoint.
+    "torch==2.11.0",
+]
+
+[project.optional-dependencies]
+tracking = ["wandb>=0.17"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

@@ -217,7 +217,8 @@ class NavWorld:
                  frame_skip: int = 5, seed: int | None = None,
                  goal_range: float | None = None,
                  relief_scale: float = 1.0,
-                 upright_w: float = 0.0) -> None:
+                 upright_w: float = 0.0,
+                 morphology: str = "biped") -> None:
         import mujoco
 
         # "padded" is a CONTROL, not an arm of the experiment: the blind
@@ -259,6 +260,21 @@ class NavWorld:
         # rate it barely collects a usable transition to learn from.
         self.relief_scale = float(relief_scale)
         self.upright_w = float(upright_w)
+        # Set BEFORE the first `_build`, which happens below in this
+        # constructor. Defaults to the biped labs 5-7 measured on.
+        # Everything downstream -- observation width, action width,
+        # the standing pose, the actuator list -- resolves BY NAME
+        # from the compiled model, so a new layout needs no further
+        # plumbing. That is the payoff of three hardcoded-index bugs.
+        self.morphology = str(morphology)
+        from robot import fall_clearance, stand_clearance
+        # Per-body, and identical to the old constants for the biped
+        # (0.706 and 0.400). A shorter-legged body must stand lower
+        # AND be judged fallen lower, or it is dropped on every reset
+        # and scored as collapsed while standing perfectly.
+        self._stand_clearance = stand_clearance(self.morphology)
+        self._fall_clearance = fall_clearance(self.morphology)
+        self._foot_gids: list[int] = []
         self.rng = np.random.default_rng(seed)
         self._tmp = Path(tempfile.mkdtemp())
         self._renderer = None
@@ -352,7 +368,8 @@ class NavWorld:
         relief = max(float(heights.max() - heights.min()), 1e-3)
         self.model = self._mj.MjModel.from_xml_string(
             model_xml("terrain.png", m.start, m.goal, relief=relief,
-                      rocks=([] if self.flat else m.rocks)),
+                      rocks=([] if self.flat else m.rocks),
+                      morphology=self.morphology),
             {"terrain.png": (self._tmp / "terrain.png").read_bytes()})
         self.data = self._mj.MjData(self.model)
         # EVERY qpos index, looked up BY NAME.
@@ -556,6 +573,47 @@ class NavWorld:
     def clearance(self) -> float:
         return self.torso_height() - self._h_at(*self.pos())
 
+    def stance_height(self) -> float:
+        """
+        Torso height above its OWN FEET, not above the ground.
+
+        This is the quantity that says whether the robot has
+        collapsed, and `clearance()` is not it. Clearance measures
+        torso-to-terrain, so it drops whenever the GROUND RISES --
+        a body crossing a boulder reads as fallen while standing
+        perfectly upright.
+        
+        Measured: on Mars relief, 13 of 13 clearance-triggered "falls"
+        happened at a torso tilt of 0-1 degrees. Not one was a fall.
+        The artifact scales with how low the body sits, so it
+        punishes exactly the sprawling shapes that are hardest to tip
+        -- and because `fallen()` TERMINATES training episodes, it
+        was cutting those bodies off before they could learn.
+
+        Torso-above-feet is invariant to terrain height: it shrinks
+        when the legs buckle and holds when the ground rises.
+        """
+        if not self._foot_gids:
+            self._foot_gids = [
+                i for i in range(self.model.ngeom)
+                if (self._mj.mj_id2name(self.model,
+                                        self._mj.mjtObj.mjOBJ_GEOM, i)
+                    or "").startswith("foot")]
+        if not self._foot_gids:
+            return self.clearance()
+        feet = self.data.geom_xpos[self._foot_gids, 2]
+        return float(self.torso_height() - float(feet.mean()))
+
+    def tilt_deg(self) -> float:
+        """Worst of pitch and roll, in degrees."""
+        import math as _m
+
+        out = 0.0
+        for j in ("rootpitch", "rootroll"):
+            if j in self.q:
+                out = max(out, abs(_m.degrees(float(self.data.qpos[self.q[j]]))))
+        return out
+
     # Measured, not chosen. A healthy robot settles at clearance ~0.77
     # but its startup wobble troughs at 0.49, while a genuine collapse
     # reaches 0.06-0.09. The first version used 0.55, which sat INSIDE
@@ -571,7 +629,11 @@ class NavWorld:
         moment the robot stood on one, which is how lab 3 nearly made
         `down` unlearnable by construction.
         """
-        return bool(self.clearance() < self.FALL_CLEARANCE)
+        # A fall is the BODY failing, not the ground arriving:
+        # either it has tipped past recovery, or its legs have
+        # collapsed under it. See `stance_height`.
+        return bool(self.tilt_deg() > 60.0
+                    or self.stance_height() < self._fall_clearance)
 
     def arrived(self) -> bool:
         return self.to_goal() < GOAL_RADIUS
@@ -590,7 +652,10 @@ class NavWorld:
         self._mj.mj_resetData(self.model, self.data)
         self.data.qpos[self.q['rootx']] = m.start[0]
         self.data.qpos[self.q['rooty']] = m.start[1]
-        self.data.qpos[self.q['rootz']] = START_DZ + self._h_at(*m.start)
+        # Height DERIVED from the body, not a biped constant. See
+        # robot.stand_clearance: torso_height() is qpos[rootz] + 1.0.
+        self.data.qpos[self.q['rootz']] = (
+            self._stand_clearance - 1.0 + self._h_at(*m.start))
         self.data.qpos[self.q['rootyaw']] = float(
             self.rng.uniform(-np.pi, np.pi))
         b = START_BEND
@@ -608,8 +673,12 @@ class NavWorld:
         # the assertion below fired -- loudly, which is the point.
         # A positional list would otherwise have written a knee angle
         # into an abduction joint and merely trained badly.
-        bend = {"hiproll": 0.0, "hip": -b, "knee": -1.8 * b,
-                "ankle": 0.5 * b}
+        # PER-MORPHOLOGY, not a hardcoded crouch. A sprawling body's
+        # neutral is femur-out/tibia-down (all zeros); handing it the
+        # biped's crouch folds its legs under the torso and it
+        # collapses on frame one.
+        from robot import stand_pose
+        bend = stand_pose(self.morphology)
         assert len(self.leg_q) == len(self.leg_names), "leg bookkeeping"
         for adr, nm in zip(self.leg_q, self.leg_names):
             key = next(k for k in ("hiproll", "hip", "knee", "ankle")

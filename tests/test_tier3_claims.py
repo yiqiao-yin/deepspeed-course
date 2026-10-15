@@ -80,6 +80,7 @@ TIER3 = {
     "07_physical_ai/03_terrain_vision": "claims a depth camera beats proprioception",
     "07_physical_ai/04_terrain_navigation": "claims terrain information beats blind navigation",
     "07_physical_ai/06_mars_mjx": "claims a CPU worker pool beats GPU physics on this model",
+    "07_physical_ai/08_long_traverse": "claims more legs beat two on the same task and budget",
 }
 
 BASELINE = re.compile(r"\*\*Baseline:\*\*\s*\S", re.I)
