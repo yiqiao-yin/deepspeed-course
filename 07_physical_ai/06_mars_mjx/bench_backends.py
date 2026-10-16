@@ -58,7 +58,8 @@ WORTH_RENTING = 5.0
 
 
 def build_model(seed: int = 0, *, rocks: int | None = None,
-                hfield_res: int | None = None, plane: bool = False):
+                hfield_res: int | None = None, plane: bool = False,
+                morphology: str = "biped"):
     """
     The lab 5 Mars course, with one property optionally overridden.
 
@@ -95,7 +96,8 @@ def build_model(seed: int = 0, *, rocks: int | None = None,
     tmp = Path(tempfile.mkdtemp())
     hfield_png(h, tmp / "t.png")
     xml = model_xml("t.png", task.start, task.goal,
-                    relief=max(float(h.max()), 1e-3), rocks=rock_list)
+                    relief=max(float(h.max()), 1e-3), rocks=rock_list,
+                    morphology=morphology)
     model = mujoco.MjModel.from_xml_string(
         xml, {"t.png": (tmp / "t.png").read_bytes()})
     return model, task
@@ -139,7 +141,8 @@ def cpu_rate(model, steps: int = 300) -> float:
 
 
 def cpu_pool_rate(workers: int = 16, n_envs: int = 64, flat: bool = False,
-                  steps: int = 200) -> float | None:
+                  steps: int = 200,
+                  morphology: str = "biped") -> float | None:
     """
     The REAL baseline: lab 5's worker pool, not one environment.
 
@@ -157,7 +160,8 @@ def cpu_pool_rate(workers: int = 16, n_envs: int = 64, flat: bool = False,
         return None
 
     per = max(1, n_envs // workers)
-    pool = ParallelEnvs(workers, per, 0, mode="blind", flat=flat)
+    pool = ParallelEnvs(workers, per, 0, mode="blind", flat=flat,
+                        morphology=morphology)
     try:
         pool.reset()
         acts = np.zeros((pool.n, pool.act_dim), dtype=np.float64)
@@ -356,6 +360,16 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--envs", default="64,256,1024,4096")
     ap.add_argument("--seed", type=int, default=0)
+    # THE SCOPE OF THE ORIGINAL RESULT. Lab 6 measured GPU physics at
+    # 1.50x the CPU pool on the BIPED -- 14 degrees of freedom, 14
+    # geoms. Lab 8's bodies reach 30 DoF and 33 geoms, and GPU
+    # throughput amortises better the more work there is per
+    # environment, so that number cannot simply be carried over. A
+    # measured claim is scoped to the configuration it was measured
+    # in; this flag is how the scope gets tested rather than assumed.
+    ap.add_argument("--morphology", default="biped",
+                    help="body to benchmark (biped, quadruped, hexapod, "
+                         "spider6, spider8)")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--pool-envs", type=int, default=64,
                     help="environments across the pool, as lab 5 runs it")
@@ -416,15 +430,17 @@ def main() -> int:
               "harness, not as evidence about hardware.")
     out["devices"] = devices
 
-    model, task = build_model(a.seed)
-    print(f"\n  model: {task.extent:.0f} m course, {len(task.rocks)} rocks, "
-          f"{model.ngeom} geoms, nq={model.nq} nu={model.nu}\n")
+    model, task = build_model(a.seed, morphology=a.morphology)
+    print(f"\n  model: {a.morphology}, {task.extent:.0f} m course, "
+          f"{len(task.rocks)} rocks, {model.ngeom} geoms, "
+          f"nq={model.nq} nv={model.nv} nu={model.nu}\n")
 
     if not a.ablate_only:
         print("  [1] baselines (CPU)")
         one = cpu_rate(model)
         print(f"      1 env, serial        {one:>10,.0f} steps/s")
-        pool = cpu_pool_rate(a.workers, a.pool_envs)
+        pool = cpu_pool_rate(a.workers, a.pool_envs,
+                             morphology=a.morphology)
         if pool:
             print(f"      {a.pool_envs} envs / {a.workers} workers "
                   f"{pool:>10,.0f} steps/s   {pool/one:>6.2f}x")
@@ -440,7 +456,8 @@ def main() -> int:
             print(f"\n  [{'2' if kind == 'mjx' else '3'}] {name}")
             best, rows = 0.0, {}
             for n in counts:
-                res = run_isolated(kind, n, a.seed, a.max_steps)
+                res = run_isolated(kind, n, a.seed, a.max_steps,
+                                   morphology=a.morphology)
                 if not res.get("ok"):
                     print(f"      {n:>5} envs            FAILED — "
                           f"{res.get('why')}")
@@ -479,7 +496,8 @@ def main() -> int:
         for label, kw in variants:
             runs, contacts = [], None
             for _ in range(a.repeats):
-                res = run_isolated("warp", n, a.seed, a.max_steps, **kw)
+                res = run_isolated("warp", n, a.seed, a.max_steps,
+                                   morphology=a.morphology, **kw)
                 if res.get("ok"):
                     runs.append(res["steps_per_s"])
                     contacts = res["contacts"]
