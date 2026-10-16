@@ -27,22 +27,29 @@ step budget, the extra limbs bought nothing.
 | body | legs | actuators | arrived | falls | **walked** | left |
 |---|---|---|---|---|---|---|
 | **biped** (baseline) | 2 | 9 | 0% [0, 10] | 16.7% [8, 32] | **4.0 m** | 5.9 m |
-| quadruped | 4 | 17 | 2.8% [0, 14] | 11.1% [4, 25] | **14.1 m** | 5.0 m |
-| **hexapod** | 6 | 25 | 0% [0, 10] | **0.0% [0, 10]** | **13.9 m** | 4.8 m |
-| spider6 | 6 sprawl | 19 | 0% [0, 14] | 11.1% [4, 25] | 10.6 m | 7.7 m |
-| spider8 | 8 sprawl | 25 | 0% [0, 10] | 5.6% [2, 18] | 9.3 m | 6.7 m |
+| **quadruped** | 4 | 17 | 0% [0, 10] | 11.1% [4, 25] | **16.7 m** | 5.9 m |
+| hexapod | 6 | 25 | 0% [0, 10] | 11.1% [4, 25] | 15.1 m | 5.7 m |
+| spider6 | 6 sprawl | 19 | 0% [0, 10] | 5.6% [2, 18] | 10.5 m | 7.6 m |
+| **spider8** | 8 sprawl | 25 | 0% [0, 10] | **2.8% [0, 14]** | 7.1 m | 6.6 m |
+
+> **Second version.** The first was published with bodies that had no
+> chassis — the torso capsule never spanned to the hips, so the
+> multi-legged bodies had no frame mass, no frame inertia and no
+> frame collision. All three flattered them. Every body was retrained
+> with a real frame; the biped is unchanged and serves as the
+> control. "The hexapod never fell" is **retracted** (it falls 11.1%
+> with mass); the distance advantage **grew** from 3.5× to 4.2×.
 
 ![five bodies on the same hillside](../../docusaurus-docs/static/img/physical/morphology.gif)
 
 **Distance is the result, not arrival.** Every arrival interval
-includes zero — **no body solves the task**, and reporting the
-quadruped's 2.8% as a win would be reporting one episode. What
-separates the bodies is how far they get: the biped covers **4.0 m**
-and the four- and six-legged bodies cover **14 m**, which is
-**3.5×**.
+includes zero — **no body solves the task**. What separates the
+bodies is how far they get: **4.0 m against 16.7 m**, which is
+**4.2×**.
 
-**The hexapod did not fall once in 36 episodes.** Falls fall
-monotonically with leg count: 16.7% → 11.1% → 0%.
+**Stability and distance are won by different bodies.** Sprawling
+spider8 falls least (2.8%); upright quadruped travels furthest
+(16.7 m); neither does both.
 
 ## The worst and the best, close up
 
@@ -53,10 +60,11 @@ Nine actuators, almost all spent not toppling.
 
 ![biped, median run](../../docusaurus-docs/static/img/physical/traverse-worst.gif)
 
-**Hexapod — 17.4 m** (seed 9010; range 0.3–19.7 m, fell on **0 of 16**).
-Twenty-five actuators on the same 1.5M steps, and the torso barely moves.
+**Quadruped — 19.4 m** (seed 9013; range 2.5–24.1 m, fell on 1 of 16).
+Seventeen actuators on the same budget, carrying 8.1 kg against the
+biped's 4.9 — and it covers nearly five times the ground.
 
-![hexapod, median run](../../docusaurus-docs/static/img/physical/traverse-best.gif)
+![quadruped, median run](../../docusaurus-docs/static/img/physical/traverse-best.gif)
 
 ## Morphological computation, and why it is falsifiable here
 
