@@ -44,6 +44,20 @@ and the four- and six-legged bodies cover **14 m**, which is
 **The hexapod did not fall once in 36 episodes.** Falls fall
 monotonically with leg count: 16.7% → 11.1% → 0%.
 
+## The worst and the best, close up
+
+Both are **median** runs over 16 seeds, not selected ones.
+
+**Biped — 4.0 m** (seed 9006; range 0.4–12.7 m, fell on 4 of 16).
+Nine actuators, almost all spent not toppling.
+
+![biped, median run](../../docusaurus-docs/static/img/physical/traverse-worst.gif)
+
+**Hexapod — 17.4 m** (seed 9010; range 0.3–19.7 m, fell on **0 of 16**).
+Twenty-five actuators on the same 1.5M steps, and the torso barely moves.
+
+![hexapod, median run](../../docusaurus-docs/static/img/physical/traverse-best.gif)
+
 ## Morphological computation, and why it is falsifiable here
 
 [Pfeifer and Bongard's term](https://www.researchgate.net/publication/247161863_Morphological_Computation_-_Connecting_Brain_Body_and_Environment)

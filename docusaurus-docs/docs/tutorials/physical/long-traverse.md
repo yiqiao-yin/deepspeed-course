@@ -56,6 +56,39 @@ the bodies is how far they get — 4.0 m against 14 m.
 
 **Falls fall monotonically with leg count:** 16.7% → 11.1% → 0%.
 
+## The worst and the best, close up
+
+The grid above is five panels wide and the gaits are small in it.
+These are the two ends of the result at full size.
+
+**Both are MEDIAN runs, not selected ones.** Sixteen seeds were
+scored per body and the seed closest to that body's median distance
+was filmed. Picking the hexapod's best run and the biped's worst
+would have made a better clip and a dishonest one.
+
+### Worst — the biped, 4.0 m
+
+![The biped, median run: 4.0 m](/img/physical/traverse-worst.gif)
+
+Seed 9006, the median of sixteen (range 0.4–12.7 m; it fell on 4 of
+those 16). Nine actuators, and almost all of their work goes into
+not toppling. Watch how much of the motion is lateral correction
+rather than progress — that is a statically unstable body paying its
+rent every step.
+
+### Best — the hexapod, 17.4 m
+
+![The hexapod, median run: 17.4 m](/img/physical/traverse-best.gif)
+
+Seed 9010, the median of sixteen (range 0.3–19.7 m; it fell on
+**0 of 16**). Twenty-five actuators — 2.8× the biped's, trained on
+exactly the same 1.5M steps — and the torso barely moves. Nothing is
+being caught, because nothing is falling. The capacity the biped
+spends staying upright, this body spends going somewhere.
+
+**4.0 m against 17.4 m, same terrain, same budget.** The difference
+is not the controller.
+
 ## Morphological computation
 
 [Pfeifer and Bongard's term](https://www.researchgate.net/publication/247161863_Morphological_Computation_-_Connecting_Brain_Body_and_Environment)
