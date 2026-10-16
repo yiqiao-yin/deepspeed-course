@@ -198,6 +198,74 @@ PRESETS = {
         scarp_w=(0.9, 1.7),
         scarp_h=(0.5, 1.0),
     ),
+    # THE TRAVERSE FIELD: ground a robot can actually walk, with
+    # obstacles it genuinely cannot cross. Added for lab 8.
+    #
+    # Added rather than substituted, so labs 5-7's published numbers
+    # keep describing the surfaces they were measured on.
+    #
+    # WHY IT EXISTS. Lab 8 sweeps perception quality across a long
+    # traverse and needs a world where BOTH halves of the question
+    # are live: the body can cross the ground, and some landforms
+    # must be routed around. On `course` those two conditions never
+    # hold together, measured over 10 surfaces per level:
+    #
+    #   relief   blocked landforms   robot traverses?
+    #    0.05            0.0 / 10    yes (100% over 27 m)
+    #    0.15            0.0 / 10    yes
+    #    0.30            0.6 / 10    NO  (stalls at 6.7 m)
+    #    1.00            2.8 / 10    NO  (stalls at 8.0 m)
+    #
+    # Scaling relief moves both at once, because it scales the fBm
+    # BACKGROUND and the landforms together. A perception sweep on
+    # that is unmeasurable: where there is something to decide, the
+    # robot cannot walk far enough to decide it.
+    #
+    # So this preset separates them. The background is flattened --
+    # `relief` 0.55 against `course`'s 3.0, shallower ripples, thinner
+    # outcrops, fewer boulders -- while mesa and scarp heights are
+    # left at full size. The result is lab 4's world design (walkable
+    # floor, discrete barriers) built out of Martian landforms.
+    #
+    # This is the same lesson both navigation labs learned about
+    # ratios, one level up: it is not the absolute roughness that
+    # makes terrain a decision, it is the roughness of the OBSTACLES
+    # relative to the roughness of the GROUND.
+    "traverse": dict(
+        extent=40.0,          # room for a 25-40 m route
+        cells=210,            # same ~0.19 m cell as rover and course
+        relief=0.55,          # the change that matters: walkable floor
+        n_craters=7,
+        crater_r=(0.20, 2.0),
+        n_boulders=40,        # fewer: boulders are what trip the gait
+        boulder_r=(0.06, 0.30),
+        ripple_wavelength=1.8,
+        ripple_amp=0.015,     # shallower than course's 0.045
+        channel_width=4.0,
+        volcano=False,
+        canyon=False,
+        flank_grade=0.012,    # a gentler regional slope
+        n_outcrop=2,
+        outcrop_thick=0.06,   # under the 0.12 m step limit, deliberately
+        n_graben=0,
+        # Landform heights are NOT reduced. These are the obstacles the
+        # lab is about, and shrinking them with the background is
+        # exactly what made `course` unmeasurable for this question.
+        n_hills=3,
+        hill_r=(2.5, 5.0),
+        hill_h=(0.35, 0.95),
+        n_dunes=3,
+        dune_len=(0.35, 0.60),
+        dune_w=(3.0, 5.5),
+        dune_h=(0.40, 0.80),
+        n_mesas=4,            # more blockers than course's 2
+        mesa_r=(1.4, 2.8),
+        mesa_h=(0.60, 1.20),
+        n_scarps=4,
+        scarp_len=(0.45, 0.75),
+        scarp_w=(1.0, 1.9),
+        scarp_h=(0.55, 1.05),
+    ),
     "regional": dict(
         extent=20_000.0,
         cells=420,

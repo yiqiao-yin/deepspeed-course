@@ -60,6 +60,11 @@ NO_DEEPSPEED = {
     # DeepSpeed usually runs on helps at all on this model, and the
     # measured answer (1.50x a CPU worker pool, against a 5x bar) is
     # the lab's finding rather than an omission.
+    # Nothing trains: the lab replays lab 5's policies and compares
+    # five bodies. 15-22k-parameter policies, physics-bound on CPU,
+    # so there is no optimizer a DeepSpeed config could configure.
+    "07_physical_ai/08_long_traverse":
+        "replays trained policies to compare morphologies; nothing trains",
     "07_physical_ai/06_mars_mjx":
         "benchmarks MuJoCo/MJX/Warp throughput; nothing trains, so "
         "there is no optimizer a DeepSpeed config could configure",

@@ -206,6 +206,22 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/08_long_traverse": dict(min_vram=8, gpus=1, disk=12,
+                                    script="compare_bodies.py",
+                                    launcher="python",
+                                    args="--episodes 24",
+                                    note="THIRTEENTH launcher=python "
+                                         "exception. Nothing trains here -- "
+                                         "the lab REPLAYS policies trained in "
+                                         "lab 5 and compares five bodies on "
+                                         "one task. The policies are 15-22k "
+                                         "parameters and the bottleneck is "
+                                         "MuJoCo physics on the CPU, so there "
+                                         "is nothing for ZeRO to shard. The "
+                                         "GPU is requested only so the "
+                                         "five-body animation has an OpenGL "
+                                         "context; `compare_bodies.py` itself "
+                                         "is pure CPU."),
     "07_physical_ai/07_terrain_vlm": dict(min_vram=24, gpus=1, disk=60,
                                     script="train_vlm.py",
                                     args="--lora --name lora3b",

@@ -407,6 +407,25 @@ The flat-trained policy, dropped on Mars, walked **8.6 m of a 29.7 m
 route** and timed out. Every training strategy we tried on that task
 stalled at exactly 0%:
 
+:::warning Correction — these fall rates are partly terrain contact
+[Lab 8](./long-traverse) found that `fallen()` was not a fall
+detector. It tested `clearance < threshold` — torso height above *the
+ground directly beneath it* — so on uneven terrain it fires whenever
+the **ground rises**, not when the robot tips. Measured on Mars
+relief: **13 of 13** trigger events happened at a torso tilt of
+**0–1°**. Not one was a fall.
+
+So the 75–83% figures in this table conflate genuine falls with the
+robot's belly meeting a rise. The arrival rates — all 0% — are
+unaffected, and the conclusion that the flat-trained policy cannot
+cross Mars stands. The *fall* numbers should be read as an upper
+bound on falling, not a measurement of it.
+
+The detector now tests the robot rather than the world (`tilt > 60°`
+or torso-above-its-own-feet collapsed), and lab 8 re-measures this
+biped at **16.7% [8, 32]** over 36 episodes.
+:::
+
 | strategy | steps | arrival | note |
 |---|---|---|---|
 | cold start on Mars | 900k | **0%** | fall rate *rose* 75% → 83% |

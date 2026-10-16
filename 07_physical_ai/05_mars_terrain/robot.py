@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import os
 
+import math
 import numpy as np
 
 from mars import preset
@@ -63,14 +64,178 @@ CELL = ARENA / N
 THIGH, SHIN = 0.40, 0.36
 FOOT_LEN = 0.22
 HIP_Y = 0.07                       # lateral offset of each leg
+
+# ---------------------------------------------------------------------------
+# LEG LAYOUTS. (tag, x, y) per leg, in torso-local metres.
+#
+# ADDED, NEVER SUBSTITUTED: `biped` is byte-identical to what labs 5-7
+# measured on, so their published numbers keep describing the same
+# robot. The extra layouts exist because three separate labs reached
+# the same wall from three directions -- lab 5 part 4 (0% on scree),
+# lab 7 (perception cannot help), lab 8 (the traverse stalls) -- and
+# each time the body was the answer. Lab 5 already measured it once:
+# freeing torso roll and adding hip abduction took flat ground from
+# 67-92% WITH falls to 92% with ZERO falls.
+#
+# The physical argument for more legs is static stability. A biped is
+# statically UNSTABLE -- it stays upright only by actively catching
+# itself, which is exactly what fails when the ground tilts in two
+# directions at once. A quadruped standing on three feet is stable
+# without acting; a hexapod is stable on a tripod while three legs
+# swing. That is why rough-terrain legged machines have four or six
+# legs and not two.
+#
+# `x` spreads legs fore/aft, which is what actually buys the support
+# polygon -- two legs at the same x would be a wider biped, not a
+# quadruped.
+# `legs` is (tag, x, y); `leg_scale` multiplies THIGH and SHIN.
+#
+# THE STANCE IS THE POINT, AND THE FIRST VERSION GOT IT WRONG. It
+# kept the biped's 0.76 m legs and put four of them on a 0.22 m wide
+# base -- a height-to-width ratio of 3.5, against 1.4 for ANYmal and
+# 2.0 for Spot. That is not a quadruped, it is a biped on four
+# stilts: still tippy, and it threw away the static stability that
+# was the entire argument for adding legs. Measured, it was WORSE
+# than the biped (83.3% falls vs 58.3%).
+#
+# Static stability comes from a support polygon that is wide and low
+# relative to the centre of mass, so the extra legs come with shorter
+# legs and a wider track.
+# MAMMAL vs SPRAWL, and the difference is the whole point.
+#
+# A mammal leg hangs straight DOWN from the torso, so the support
+# polygon is only as wide as the hips. Adding legs that way gives a
+# biped on stilts -- which is literally what the first attempt built,
+# and it fell MORE than the biped (83.3% vs 58.3%).
+#
+# A sprawling leg reaches OUTWARD first and only then down, so the
+# feet plant well outside the body and the body hangs low between
+# them. That is what a spider is, and it is why spiders do not fall
+# over. Support polygon becomes 2*(r_hip + femur) across while the
+# body sits at roughly tibia height.
+#
+#   kind     legs   foot circle   body height   height/width
+#   biped      2       0.14 m        0.71 m         5.4
+#   mammal4    4       0.34 m        0.41 m         1.2
+#   spider6    6       0.76 m        0.26 m         0.34
+#   spider8    8       0.76 m        0.26 m         0.34
+#
+# `legs` for a sprawl is (tag, azimuth_degrees); the leg is placed on
+# a circle and rotated to face outward, so one leg description serves
+# every azimuth.
+COXA, FEMUR, TIBIA = 0.12, 0.26, 0.26
+
+
+def _ring(prefix: str, n: int, start_deg: float = 0.0):
+    """n legs evenly spaced around the torso."""
+    return [(f"{prefix}{i}", start_deg + 360.0 * i / n) for i in range(n)]
+
+
+LEG_LAYOUTS = {
+    "biped": dict(
+        kind="mammal",
+        legs=[("L", 0.00, +HIP_Y), ("R", 0.00, -HIP_Y)],
+        leg_scale=1.0),          # untouched: labs 5-7 measured on this
+    "quadruped": dict(
+        kind="mammal",
+        legs=[("FL", +0.26, +0.17), ("FR", +0.26, -0.17),
+              ("HL", -0.26, +0.17), ("HR", -0.26, -0.17)],
+        leg_scale=0.58),         # 0.44 m legs on 0.52 x 0.34 m -> 1.3
+    "hexapod": dict(
+        kind="mammal",
+        legs=[("FL", +0.30, +0.18), ("FR", +0.30, -0.18),
+              ("ML",  0.00, +0.21), ("MR",  0.00, -0.21),
+              ("HL", -0.30, +0.18), ("HR", -0.30, -0.18)],
+        leg_scale=0.52),
+    # THE SPIDERS. Legs splay outward; the body rides low.
+    "spider6": dict(kind="sprawl", legs=_ring("S", 6, 30.0), leg_scale=1.0),
+    "spider8": dict(kind="sprawl", legs=_ring("S", 8, 22.5), leg_scale=1.0),
+}
+
+
+# Standing clearance as a FRACTION of leg length, and the fall
+# threshold as a fraction of that. Both were biped constants
+# (START_DZ -0.294 -> clearance 0.706, FALL_CLEARANCE 0.40) and both
+# silently assumed 0.76 m legs.
+#
+# Giving the quadruped shorter legs while holding the torso at the
+# biped's height left its feet hanging ~0.3 m off the ground: the
+# robot was dropped every reset and the measured fall rate went UP
+# (15% -> 25% -> 35% doing nothing). A constant calibrated for one
+# body is not a constant, it is a hidden parameter of that body.
+#
+# Derived so the biped reproduces its own numbers exactly:
+#   0.706 / 0.76 = 0.929      standing clearance / leg length
+#   0.40  / 0.706 = 0.567     fall threshold / standing clearance
+STAND_FRAC = 0.706 / (0.40 + 0.36)
+FALL_FRAC = 0.40 / 0.706
+
+
+def leg_length(name: str) -> float:
+    """
+    The length that sets STANDING HEIGHT, in metres.
+
+    For a mammal leg that is the whole limb, because it hangs down.
+    For a sprawl it is the TIBIA only: the femur reaches sideways and
+    contributes width, not height. Using total limb length for a
+    spider would stand it twice as tall as it can reach, which is the
+    same dangling-feet bug that made the first quadruped worse.
+    """
+    d = LEG_LAYOUTS[name]
+    if d.get("kind") == "sprawl":
+        return TIBIA / STAND_FRAC        # so stand_clearance == TIBIA
+    return (THIGH + SHIN) * float(d["leg_scale"])
+
+
+def stand_pose(name: str) -> dict:
+    """
+    Joint targets a body holds when the policy outputs zero.
+
+    Per-morphology because a sprawl's neutral is not a mammal's. The
+    biped crouches (hip -0.30, knee -0.54); a spider stands with the
+    femur horizontal and the tibia vertical, which is all zeros. Lab
+    5's `reset` hardcoded the crouch, so a spider given that pose
+    folds its legs under itself and collapses on frame one.
+    """
+    if LEG_LAYOUTS[name].get("kind") == "sprawl":
+        return {"hiproll": 0.0, "hip": 0.0, "knee": 0.0, "ankle": 0.0}
+    b = 0.30
+    return {"hiproll": 0.0, "hip": -b, "knee": -1.8 * b, "ankle": 0.5 * b}
+
+
+def layout_kind(name: str) -> str:
+    return LEG_LAYOUTS[name].get("kind", "mammal")
+
+
+def stand_clearance(name: str) -> float:
+    """Torso clearance this body stands at. Biped: 0.706 m."""
+    return STAND_FRAC * leg_length(name)
+
+
+def fall_clearance(name: str) -> float:
+    """Below this, the body has collapsed. Biped: 0.400 m."""
+    return FALL_FRAC * stand_clearance(name)
+
+
+def leg_layout(name: str):
+    if name not in LEG_LAYOUTS:
+        raise SystemExit(f"unknown morphology {name!r}; "
+                         f"have {sorted(LEG_LAYOUTS)}")
+    d = LEG_LAYOUTS[name]
+    return d["legs"], float(d["leg_scale"])
 START_Z = 1.00
 
 
 def model_xml(hfield_file: str, start: tuple[float, float],
               goal: tuple[float, float], relief: float = 3.0,
-              rocks=()) -> str:
+              rocks=(), morphology: str = "biped") -> str:
     """
-    One MuJoCo model: a height-field floor and a two-legged robot on it.
+    One MuJoCo model: a height-field floor and a legged robot on it.
+
+    `morphology` selects a layout from `LEG_LAYOUTS` and DEFAULTS TO
+    THE BIPED, so every caller written before this parameter existed
+    -- all of labs 5, 6 and 7 -- builds exactly the robot they
+    measured. Nothing about their numbers changes.
 
     The height field is loaded from a PNG written by `hfield_png()`.
     `relief` is the vertical scale MuJoCo multiplies the PNG by, and
@@ -91,6 +256,8 @@ def model_xml(hfield_file: str, start: tuple[float, float],
         f'euler="{k.roll:.4f} {k.pitch:.4f} {k.yaw:.4f}" '
         f'material="rock" condim="3" friction="0.95 0.1 0.1"/>'
         for k in rocks)
+    legs, leg_k = leg_layout(morphology)
+    kind = layout_kind(morphology)
     return f"""
 <mujoco model="terrain_nav">
   <compiler angle="degree"/>
@@ -220,18 +387,56 @@ def model_xml(hfield_file: str, start: tuple[float, float],
         <camera name="eye" pos="0.09 0 0.10" xyaxes="0 -1 0 0.55 0 0.84"/>
       </body>
 
-      {_leg("L", +HIP_Y)}
-      {_leg("R", -HIP_Y)}
+      {"".join(_sprawl_leg(t, az) for t, az in legs) if kind == "sprawl"
+        else "".join(_leg(t, yy, xx, leg_k) for t, xx, yy in legs)}
     </body>
   </worldbody>
   <actuator>
-    {_motors()}
+    {_motors(legs, kind)}
   </actuator>
 </mujoco>
 """
 
 
-def _leg(tag: str, y: float) -> str:
+def _sprawl_leg(tag: str, az_deg: float) -> str:
+    """
+    One spider leg: coxa swings horizontally, femur reaches OUT,
+    tibia drops DOWN.
+
+    The body is placed on a circle at `az_deg` and rotated to match,
+    so the same description serves every azimuth and the joint axes
+    stay leg-local. Joint NAME PREFIXES are kept identical to the
+    mammal leg (hiproll / hip / knee) because the environment
+    resolves joints, actuators and the standing pose by name -- a new
+    body needs no plumbing as long as it speaks the same names.
+    """
+    cx = COXA * math.cos(math.radians(az_deg))
+    cy = COXA * math.sin(math.radians(az_deg))
+    return f"""
+      <body name="thigh{tag}" pos="{cx:.4f} {cy:.4f} 0" euler="0 0 {az_deg}">
+        <joint name="hiproll{tag}" type="hinge" axis="0 0 1" range="-40 40"
+               armature="0.4" damping="0.6"/>
+        <joint name="hip{tag}" type="hinge" axis="0 -1 0" range="-55 55"
+               armature="0.4" damping="0.6"/>
+        <geom type="capsule" fromto="0 0 0 {FEMUR} 0 0" size="0.035"/>
+        <body name="shin{tag}" pos="{FEMUR} 0 0">
+          <joint name="knee{tag}" type="hinge" axis="0 -1 0" range="-20 100"
+                 armature="0.4" damping="0.6"/>
+          <geom name="tibia{tag}" type="capsule"
+                fromto="0 0 0 0 0 -{TIBIA}" size="0.032"/>
+          <!-- An explicit FOOT at the tip. The shin capsule's
+               `geom_xpos` is its CENTRE, so measuring torso-to-foot
+               against it reads half a tibia short -- which put every
+               spider permanently below the fall threshold (100%
+               "falls" while standing still). A tip sphere puts the
+               measured foot where the foot actually is. -->
+          <geom name="foot{tag}_geom" type="sphere"
+                pos="0 0 -{TIBIA}" size="0.034"/>
+        </body>
+      </body>"""
+
+
+def _leg(tag: str, y: float, x: float = 0.0, k: float = 1.0) -> str:
     """
     One leg, and it can now move SIDEWAYS.
 
@@ -253,15 +458,15 @@ def _leg(tag: str, y: float) -> str:
     that can catch itself and one that can only topple.
     """
     return f"""
-      <body name="thigh{tag}" pos="0 {y} 0">
+      <body name="thigh{tag}" pos="{x} {y} 0">
         <joint name="hiproll{tag}" type="hinge" axis="1 0 0" range="-35 35"
                armature="0.6" damping="0.8"/>
         <joint name="hip{tag}" type="hinge" axis="0 -1 0" range="-150 20"/>
-        <geom type="capsule" fromto="0 0 0 0 0 -{THIGH}" size="0.045"/>
-        <body name="shin{tag}" pos="0 0 -{THIGH}">
+        <geom type="capsule" fromto="0 0 0 0 0 -{THIGH*k}" size="0.045"/>
+        <body name="shin{tag}" pos="0 0 -{THIGH*k}">
           <joint name="knee{tag}" type="hinge" axis="0 -1 0" range="-150 0"/>
-          <geom type="capsule" fromto="0 0 0 0 0 -{SHIN}" size="0.04"/>
-          <body name="foot{tag}" pos="0 0 -{SHIN}">
+          <geom type="capsule" fromto="0 0 0 0 0 -{SHIN*k}" size="0.04"/>
+          <body name="foot{tag}" pos="0 0 -{SHIN*k}">
             <joint name="ankle{tag}" type="hinge" axis="0 -1 0" range="-45 45"/>
             <geom name="foot{tag}_geom" type="capsule"
                   fromto="-0.05 0 0 {FOOT_LEN - 0.05} 0 0" size="0.045"/>
@@ -276,7 +481,7 @@ STAND = {"hiproll": 0.0, "hip": -0.30, "knee": -0.54,
          "ankle": 0.15}
 
 
-def _motors() -> str:
+def _motors(legs, kind: str = "mammal") -> str:
     """
     POSITION actuators, not torque motors.
 
@@ -295,7 +500,20 @@ def _motors() -> str:
     modern legged-locomotion work does, for exactly this reason.
     """
     out = []
-    for tag in ("L", "R"):
+    if kind == "sprawl":
+        # Three joints per leg, and a spider has many legs: eight legs
+        # x three is 24 actuators before yaw. Gains are lower than the
+        # biped's because each leg carries an eighth of the weight,
+        # not a half.
+        for tag, _az in legs:
+            for j, kp, rng in (("hiproll", 90, "-0.70 0.70"),
+                               ("hip", 140, "-0.96 0.96"),
+                               ("knee", 140, "-0.35 1.75")):
+                out.append(f'<position joint="{j}{tag}" kp="{kp}" '
+                           f'ctrlrange="{rng}"/>')
+        out.append('<motor joint="rootyaw" ctrlrange="-1 1" gear="45"/>')
+        return "\n    ".join(out)
+    for tag, _x, _y in legs:
         for j, kp, rng in (("hiproll", 150, "-0.61 0.61"),
                            ("hip", 260, "-2.6 0.35"),
                            ("knee", 260, "-2.6 0.0"),

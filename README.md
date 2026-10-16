@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 61 pages with
+The documentation site is the primary way to read this material: 62 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -255,7 +255,8 @@ deepspeed-course/
     ├── 04_terrain_navigation/   # A 20x20 arena. Climb it, or walk around it
     ├── 05_mars_terrain/         # Part 1: a Mars-like surface, measured. No robot yet
     ├── 06_mars_mjx/             # MJX and Warp timed against 16 CPU processes. GPU loses
-    └── 07_terrain_vlm/          # A VLM reads traversability. First ZeRO-3 here, and it is measured
+    ├── 07_terrain_vlm/          # A VLM reads traversability. First ZeRO-3 here, and it is measured
+    └── 08_long_traverse/        # Five bodies, one task. Four legs walk 3.5x further than two
 ```
 
 **Every example folder has the same six files** (the contract in

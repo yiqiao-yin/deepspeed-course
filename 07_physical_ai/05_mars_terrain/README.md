@@ -1,5 +1,14 @@
 # Mars Terrain
 
+> **Correction (from lab 8).** Fall rates reported on this page are
+> partly *terrain contact*, not falls. The old `fallen()` tested torso
+> clearance above the ground beneath it, which fires whenever the
+> ground RISES — 13 of 13 trigger events occurred at 0–1° of tilt.
+> Arrival rates (all 0% on Mars relief) are unaffected and the
+> conclusions stand; read the fall figures as an upper bound. The
+> detector now tests tilt and torso-above-its-own-feet. See
+> `../08_long_traverse/README.md`.
+
 ## Abstract
 
 Two halves. **Part 1** builds a procedurally generated Martian
