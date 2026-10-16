@@ -255,7 +255,18 @@ def amdahl_share(run: str, repeats: int = 3) -> dict | None:
     # Repeats: the pool rate moved 16.4k -> 19.2k between two runs of
     # this script, which swings the share from 33% to 28%. A single
     # sample would publish whichever one it happened to get.
-    rates = [r for r in (cpu_pool_rate(workers, envs, flat=s.get("flat", False))
+    # THE MORPHOLOGY MUST COME FROM THE RUN, and this line is the
+    # second time that lesson has been paid for in this file. It
+    # originally omitted it, so a spider8 TRAINING rate was divided
+    # by a BIPED PHYSICS rate and reported physics as 21% of a step
+    # when a direct profile puts it near 67%. Exactly the error this
+    # whole section exists to warn about -- a measured number used
+    # outside the configuration it was measured in -- committed
+    # inside the fix for it.
+    body = s.get("morphology", "biped")
+    rates = [r for r in (cpu_pool_rate(workers, envs,
+                                       flat=s.get("flat", False),
+                                       morphology=body)
                          for _ in range(repeats)) if r]
     if not rates:
         return None
@@ -263,6 +274,7 @@ def amdahl_share(run: str, repeats: int = 3) -> dict | None:
     shares = sorted(train / r for r in rates)
     # Time per step: training = physics + everything else.
     return {"run": run, "workers": workers, "n_envs": envs,
+            "morphology": body,
             "flat": s.get("flat", False), "train_steps_per_s": train,
             "physics_steps_per_s": phys, "physics_runs": rates,
             "share": train / phys,
@@ -533,8 +545,9 @@ def main() -> int:
     am = amdahl_share(a.amdahl_run, a.repeats)
     if am:
         s = am["share"]
-        print(f"\n  [5] Amdahl — measured on lab 5 run `{am['run']}` "
-              f"({am['workers']} workers, {am['n_envs']} envs, "
+        print(f"\n  [5] Amdahl — run `{am['run']}` "
+              f"({am.get('morphology', '?')}, {am['workers']} workers, "
+              f"{am['n_envs']} envs, "
               f"{'flat' if am['flat'] else 'Mars relief'})")
         print(f"      training        {am['train_steps_per_s']:>10,.0f} "
               f"steps/s   (its own recorded wall clock)")
