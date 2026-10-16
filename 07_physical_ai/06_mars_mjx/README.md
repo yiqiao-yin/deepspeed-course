@@ -88,6 +88,28 @@ in this ablation explains away the gap to the published benchmarks, and
 this lab does not claim one; what it establishes is which three
 explanations are **ruled out**.
 
+## Scope check: a bigger robot (lab 8)
+
+Everything above is measured on the **biped** (14 DoF). Lab 8 built
+bodies twice that size, so the verdict was re-tested:
+
+| body | DoF | CPU pool | Warp @ 4096 | vs pool | physics share | ceiling |
+|---|---|---|---|---|---|---|
+| biped | 14 | 8,341/s | 13,870/s | 1.66x | 59% | 2.5x |
+| spider8 | 30 | 2,579/s | 5,311/s | **2.06x** | **21%** | **1.3x** |
+
+The GPU advantage grows with the body, so the original number was
+scoped rather than universal. But spider8's physics runs at the
+biped's rate (6,183 vs 6,276/s) -- the TERRAIN dominates physics
+cost, not the robot -- while 25 actuators and a 91-wide observation
+make the LEARNER the bottleneck. Net end-to-end gain: ~1.1x.
+
+The verdict holds for a different reason than before: renting was
+wrong for the biped because the GPU was barely faster; it is wrong
+for the spider because physics is no longer what costs.
+
+    uv run bench_backends.py --morphology spider8
+
 ## Amdahl: why 1.50× would not have been enough anyway
 
 Physics is not the whole training step. Measured on lab 5's own

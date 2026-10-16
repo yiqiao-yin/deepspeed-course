@@ -162,6 +162,54 @@ Mars must therefore be far more expensive to simulate — is the
 intuition the throughput table refutes. An eyeball estimate from this
 picture alone would get it wrong by a factor of five.
 
+## Scope check: does the verdict hold for a bigger robot?
+
+Every number above was measured on **lab 5's biped** — 14 degrees of
+freedom, 9 actuators. A measured claim is scoped to the configuration
+it was measured in, and lab 8 then built bodies more than twice that
+size, so the verdict had to be re-tested rather than carried over.
+GPU throughput amortises better the more work each environment does,
+which is exactly the condition a bigger body creates.
+
+Re-run on the same card, `--morphology spider8`:
+
+| body | DoF | geoms | CPU pool | Warp @ 4096 | vs pool |
+|---|---|---|---|---|---|
+| biped | 14 | 89 | 8,341/s | 13,870/s | **1.66×** |
+| spider8 | 30 | 108 | 2,579/s | 5,311/s | **2.06×** |
+
+**The GPU advantage does grow with the body** — 1.66× to 2.06× — so
+the original figure was indeed scoped rather than universal. It is
+still far under the 5× bar.
+
+### And then Amdahl reversed
+
+The expectation was that physics would be a *larger* share of
+training for the heavier body. It is much smaller:
+
+| body | training | physics alone | physics share | ceiling at infinite GPU |
+|---|---|---|---|---|
+| biped | 3,729/s | 6,276/s | **59%** | 2.5× |
+| spider8 | 1,299/s | 6,183/s | **21%** | **1.3×** |
+
+Spider8's physics runs at almost exactly the biped's rate (6,183 vs
+6,276/s) — the **terrain** dominates the physics cost, not the robot.
+What became expensive is everything else: 25 actuators and a 91-wide
+observation make the policy update and rollout handling the
+bottleneck.
+
+So for the body that actually walks, physics is a fifth of the work,
+and a 2.06× physics speedup yields about **1.1× end to end**. The
+verdict holds, and the reason has changed completely:
+
+> Renting was wrong for the biped because the GPU was barely faster.
+> It is wrong for the spider because physics is no longer what costs.
+
+The bottleneck moved from the simulator to the learner, which is a
+different problem and a cheaper one — more CPU cores, larger
+batches, fewer evaluation passes. That is the same class of free win
+lab 5 found sitting in a serial `for` loop.
+
 ## Amdahl: 1.50× would not have been enough anyway
 
 Physics is not the whole training step. Measured on lab 5's own
