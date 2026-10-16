@@ -54,8 +54,37 @@ def main() -> int:
     sys.path.insert(0, str(LAB5))
     import mujoco
 
+    import mars
+    import mars_env
     import robot
     from mars_env import NavWorld
+
+    # INJECT A TINY TASK POOL.
+    #
+    # `NavWorld` draws from `task_pool.pkl`, which is GITIGNORED and
+    # takes ~20 minutes to build. So it exists on a developer's
+    # machine and never in CI -- this suite passed locally and died
+    # in CI at the first `NavWorld(...)`, which is the plainest
+    # possible "works on my machine".
+    #
+    # A two-surface pool generated here costs a second and makes the
+    # test depend on the SHIPPED generator rather than on a local
+    # artifact. Skipping the checks when the pool is absent would be
+    # worse than useless: the metric checks below are the whole point
+    # of the file, and they would silently not run in the one place
+    # that gates merges.
+    if not mars_env._TASKS:
+        pool = []
+        for sd in (0, 1):
+            surf = mars.generate(sd, scale="course")
+            rng = np.random.default_rng(sd)
+            pts = [(x, y) for x, y in
+                   rng.uniform(-12, 12, size=(200, 2))
+                   if mars.standable(surf, x, y)]
+            assert len(pts) >= 2, "no standable points on a generated surface"
+            surf.start, surf.goal = pts[0], pts[-1]
+            pool.append(surf)
+        mars_env._TASKS = pool
 
     print("=" * 74)
     print("  LAB 8 — the bodies, and the metric that judges them")
