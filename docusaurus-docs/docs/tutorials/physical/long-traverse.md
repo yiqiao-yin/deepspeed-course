@@ -22,8 +22,8 @@ Each time the suspect was the same, and here it is finally tested:
 body changes.**
 
 The body was the bottleneck, and the margin is not subtle. A
-four-legged robot walks **3.5× further** than the biped, and a
-six-legged one did not fall once in 36 episodes.
+four-legged robot walks **4.2× further** than the biped, and an
+eight-legged one falls a sixth as often.
 
 **Baseline:** the biped labs 5–7 measured on — 2 legs, 9 actuators,
 byte-identical here and asserted so by the suite.
@@ -38,10 +38,10 @@ trainer's own evaluation is 12 episodes where 8.3% is a single run.
 | body | legs | actuators | arrived | falls | **walked** |
 |---|---|---|---|---|---|
 | **biped** (baseline) | 2 | 9 | 0% [0, 10] | 16.7% [8, 32] | **4.0 m** |
-| quadruped | 4 | 17 | 2.8% [0, 14] | 11.1% [4, 25] | **14.1 m** |
-| **hexapod** | 6 | 25 | 0% [0, 10] | **0.0% [0, 10]** | **13.9 m** |
-| spider6 | 6 sprawl | 19 | 0% [0, 14] | 11.1% [4, 25] | 10.6 m |
-| spider8 | 8 sprawl | 25 | 0% [0, 10] | 5.6% [2, 18] | 9.3 m |
+| **quadruped** | 4 | 17 | 0% [0, 10] | 11.1% [4, 25] | **16.7 m** |
+| hexapod | 6 | 25 | 0% [0, 10] | 11.1% [4, 25] | 15.1 m |
+| spider6 | 6 sprawl | 19 | 0% [0, 10] | 5.6% [2, 18] | 10.5 m |
+| **spider8** | 8 sprawl | 25 | 0% [0, 10] | **2.8% [0, 14]** | 7.1 m |
 
 ![Five bodies walking the same Mars hillside side by side](/img/physical/morphology.gif)
 
@@ -50,11 +50,12 @@ machine changes. On this seed the biped manages 1.6 m while the others
 cover 17–22 m.
 
 **Distance is the result, not arrival.** Every arrival interval
-includes zero: **no body solves the task**, and calling the
-quadruped's 2.8% a win would be reporting one episode. What separates
-the bodies is how far they get — 4.0 m against 14 m.
+includes zero — **no body solves the task**. What separates the
+bodies is how far they get: 4.0 m against 16.7 m, which is **4.2×**.
 
-**Falls fall monotonically with leg count:** 16.7% → 11.1% → 0%.
+**Stability and distance are won by different bodies.** The
+sprawling spider8 falls least (2.8%), the upright quadruped travels
+furthest (16.7 m), and neither does both.
 
 ## The worst and the best, close up
 
@@ -76,18 +77,18 @@ not toppling. Watch how much of the motion is lateral correction
 rather than progress — that is a statically unstable body paying its
 rent every step.
 
-### Best — the hexapod, 17.4 m
+### Best — the quadruped, 19.4 m
 
-![The hexapod, median run: 17.4 m](/img/physical/traverse-best.gif)
+![The quadruped, median run: 19.4 m](/img/physical/traverse-best.gif)
 
-Seed 9010, the median of sixteen (range 0.3–19.7 m; it fell on
-**0 of 16**). Twenty-five actuators — 2.8× the biped's, trained on
-exactly the same 1.5M steps — and the torso barely moves. Nothing is
-being caught, because nothing is falling. The capacity the biped
-spends staying upright, this body spends going somewhere.
+Seed 9013, the median of sixteen (range 2.5–24.1 m; it fell on 1 of
+those 16). Seventeen actuators, trained on exactly the same 1.5M
+steps, carrying a chassis that makes it **8.1 kg against the biped's
+4.9 kg** — and it still covers nearly five times the ground. The
+torso stays level; almost none of the motion is correction.
 
-**4.0 m against 17.4 m, same terrain, same budget.** The difference
-is not the controller.
+**4.0 m against 19.4 m, same terrain, same budget, and the heavier
+body wins.** The difference is not the controller.
 
 ## Morphological computation
 
@@ -112,8 +113,10 @@ What it can do is make the prediction falsifiable:
 
 **It held.** The hexapod and spider8 carry **2.8× the actuators** and
 got exactly the same 1.5M steps — fewer samples per action dimension
-— and still won on both falls and distance. The capacity the biped
-spends learning not to topple, they never spend at all.
+— and still beat the biped on both falls and distance, while also
+carrying a chassis that makes them nearly twice its mass. The
+capacity the biped spends learning not to topple, they never spend
+at all.
 
 ```mermaid
 flowchart LR
@@ -127,8 +130,8 @@ flowchart LR
   subgraph R["ONLY THE BODY CHANGES"]
     direction TB
     r1["biped · 9 act<br/>4.0 m · 16.7% falls"]
-    r2["quadruped · 17 act<br/>14.1 m · 11.1% falls"]
-    r3["hexapod · 25 act<br/>13.9 m · <b>0% falls</b>"]
+    r2["quadruped · 17 act<br/>16.7 m · 11.1% falls"]
+    r3["spider8 · 25 act<br/>7.1 m · <b>2.8% falls</b>"]
   end
   w1 --> B
   w2 --> B
@@ -165,16 +168,20 @@ So the prediction was: **sprawlers fall less and travel less.**
 *more*. `compare_bodies.py` prints `NO TRADE-OFF HERE` by itself — a
 branch that exists so the script can contradict its author.
 
-**The trade-off is real one level in.** Among the multi-legged bodies:
+**Among the multi-legged bodies it is exactly as predicted**, and
+with a proper chassis it is unambiguous:
 
-| posture | bodies | walked |
-|---|---|---|
-| upright | quadruped, hexapod | 14.1, 13.9 m |
-| sprawling | spider6, spider8 | 10.6, 9.3 m |
+| posture | bodies | falls | walked |
+|---|---|---|---|
+| upright | quadruped, hexapod | 11.1%, 11.1% | **16.7, 15.1 m** |
+| sprawling | spider6, spider8 | **5.6%, 2.8%** | 10.5, 7.1 m |
 
-Upright walks about **33% further**, at no stability gain. The biped
-baseline is so weak it loses to everything, which hid the posture
-effect completely.
+Sprawling halves the fall rate and costs a third to a half of the
+distance. That is the stability/efficiency trade comparative
+biomechanics reports for posture in animals, reproduced here. The
+biped baseline is so weak it loses to everything, which hides the
+effect entirely — the trade only appears when the comparison is
+between bodies that both work.
 
 > **Legs buy stability. Posture decides whether you can spend it on
 > distance.**
@@ -187,6 +194,50 @@ sprawling-to-erect shift is real vertebrate history and the trade-off
 is measured in real animals, but a MuJoCo robot can only illustrate
 *why such a trade-off exists*. It is not evidence about how tetrapods
 evolved.
+
+## A second correction: the bodies had no chassis
+
+The numbers above are the **second** version of this experiment, and
+the first was published before this was found.
+
+The torso is a capsule of radius 0.06 m on the centreline, sized for
+a biped whose hips sit 0.07 m out. The hexapod's hips sit at 0.30 m,
+so **nothing spanned the gap** — a reader noticed the legs looked
+detached, and they were. MuJoCo still attaches child bodies to the
+parent frame, so the physics was a valid rigid structure and the
+policies were correct for the model. But that model handed the
+multi-legged bodies their limbs for free:
+
+| missing | consequence |
+|---|---|
+| chassis **mass** | a hexapod weighed exactly what a biped weighs |
+| chassis **inertia** | `Izz` identical across all five bodies |
+| chassis **collision** | terrain passed between the legs |
+
+All three errors flattered the multi-legged result, which is the one
+direction a measurement must never be wrong in.
+
+With a real frame (300 kg/m³ — structure and air, not a billet) the
+quadruped goes from 4.9 to **8.1 kg** and the hexapod to **9.2 kg**,
+with **20–26× the rotational inertia**. Every body was retrained from
+scratch. What changed:
+
+| | before (no chassis) | after (chassis) |
+|---|---|---|
+| biped | 4.0 m, 16.7% falls | **identical** — the control |
+| quadruped | 14.1 m | **16.7 m** |
+| hexapod | 13.9 m, **0.0%** falls | 15.1 m, **11.1%** falls |
+| spider8 | 9.3 m, 5.6% falls | 7.1 m, **2.8%** falls |
+
+**Retracted:** "the hexapod did not fall once in 36 episodes." That
+was an artifact of a body with no mass. With a chassis it falls
+11.1%, and the most stable body is the sprawling spider8 at 2.8%.
+
+**Strengthened:** the distance advantage *grew*, from 3.5× to
+**4.2×**, and the posture trade-off became unambiguous. The heavier,
+higher-inertia bodies still win — so the stability is geometric,
+which is what the morphological-computation claim predicted and what
+the broken model could not have told us.
 
 ## The metric was broken, and that is the real lesson
 

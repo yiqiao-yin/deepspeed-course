@@ -387,6 +387,7 @@ def model_xml(hfield_file: str, start: tuple[float, float],
         <camera name="eye" pos="0.09 0 0.10" xyaxes="0 -1 0 0.55 0 0.84"/>
       </body>
 
+      {_chassis(morphology)}
       {"".join(_sprawl_leg(t, az) for t, az in legs) if kind == "sprawl"
         else "".join(_leg(t, yy, xx, leg_k) for t, xx, yy in legs)}
     </body>
@@ -396,6 +397,54 @@ def model_xml(hfield_file: str, start: tuple[float, float],
   </actuator>
 </mujoco>
 """
+
+
+# Structural frame density, kg/m^3. NOT the 1000 the solid limb
+# capsules use: a chassis is a frame with electronics and air inside,
+# not a billet. 300 puts the hexapod's frame at ~2 kg against its
+# ~4.9 kg torso, which is the right order for a machine this size.
+CHASSIS_DENSITY = 300.0
+
+
+def _chassis(morphology: str) -> str:
+    """
+    Geometry spanning the hips, which did not exist until it was
+    noticed missing.
+
+    THE BUG THIS FIXES. The torso is a capsule of radius 0.06 m on the
+    centreline, sized for a biped whose hips sit 0.07 m out. The
+    hexapod's hips sit at 0.30 m, so nothing at all spanned the gap:
+    the legs looked detached because they WERE geometrically
+    detached. MuJoCo still attaches child bodies to the parent body
+    frame, so the physics was a valid rigid structure and the trained
+    policies were correct for the model -- but that model gave the
+    multi-legged bodies their limbs for free:
+
+      * no chassis MASS      (a hexapod weighed what a biped weighs)
+      * no chassis INERTIA   (Izz identical across all five bodies)
+      * no chassis COLLISION (terrain passed between the legs)
+
+    Every one of those errors flatters the multi-legged result, which
+    is the direction a measurement must never be wrong in.
+
+    The biped gets NO chassis and is unchanged: its hips are already
+    inside the torso capsule, so adding one would alter the body
+    labs 5-7 measured on.
+    """
+    legs, _k = leg_layout(morphology)
+    kind = layout_kind(morphology)
+    if morphology == "biped":
+        return ""
+    if kind == "sprawl":
+        r = COXA + 0.05
+        return (f'<geom name="chassis" type="cylinder" '
+                f'pos="0 0 0.05" size="{r:.3f} 0.02" '
+                f'density="{CHASSIS_DENSITY}"/>')
+    hx = max(abs(x) for _t, x, _y in legs) + 0.05
+    hy = max(abs(y) for _t, _x, y in legs) + 0.05
+    return (f'<geom name="chassis" type="box" pos="0 0 0.05" '
+            f'size="{hx:.3f} {hy:.3f} 0.02" '
+            f'density="{CHASSIS_DENSITY}"/>')
 
 
 def _sprawl_leg(tag: str, az_deg: float) -> str:
