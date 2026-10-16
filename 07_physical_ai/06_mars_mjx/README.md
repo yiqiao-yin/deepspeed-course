@@ -95,18 +95,20 @@ bodies twice that size, so the verdict was re-tested:
 
 | body | DoF | CPU pool | Warp @ 4096 | vs pool | physics share | ceiling |
 |---|---|---|---|---|---|---|
-| biped | 14 | 8,341/s | 13,870/s | 1.66x | 59% | 2.5x |
-| spider8 | 30 | 2,579/s | 5,311/s | **2.06x** | **21%** | **1.3x** |
+| biped | 14 | 8,341/s | 13,870/s | 1.66x | 49% | 2.0x |
+| spider8 | 30 | 2,579/s | 5,311/s | **2.06x** | **56%** | **2.3x** |
 
-The GPU advantage grows with the body, so the original number was
-scoped rather than universal. But spider8's physics runs at the
-biped's rate (6,183 vs 6,276/s) -- the TERRAIN dominates physics
-cost, not the robot -- while 25 actuators and a 91-wide observation
-make the LEARNER the bottleneck. Net end-to-end gain: ~1.1x.
+> **Corrected.** The first version of this table reported spider8's
+> physics share as 21%, from dividing its TRAINING rate by the
+> BIPED's PHYSICS rate -- `amdahl_share` was not passing morphology
+> through. Spider8's physics is 3.2x SLOWER than the biped's (30 DoF
+> vs 14), and physics is the majority of its step, not a fifth.
 
-The verdict holds for a different reason than before: renting was
-wrong for the biped because the GPU was barely faster; it is wrong
-for the spider because physics is no longer what costs.
+The GPU advantage grows with the body, so lab 6's original number was
+scoped rather than universal. With physics at 56% and a 2.06x
+speedup, the end-to-end gain is ~1.40x -- real, but far short of the
+5x bar fixed before any measurement, and not worth renting eight
+cards for when the same wall-clock is available locally.
 
     uv run bench_backends.py --morphology spider8
 

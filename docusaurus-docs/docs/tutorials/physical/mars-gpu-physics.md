@@ -182,33 +182,41 @@ Re-run on the same card, `--morphology spider8`:
 the original figure was indeed scoped rather than universal. It is
 still far under the 5× bar.
 
-### And then Amdahl reversed
+### And Amdahl, measured correctly the second time
 
-The expectation was that physics would be a *larger* share of
-training for the heavier body. It is much smaller:
+:::warning This section was published wrong once
+The first version reported physics as **21%** of a spider8 training
+step. That figure came from dividing spider8's *training* rate by the
+**biped's** *physics* rate — `amdahl_share` was not passing the
+morphology through, so it benchmarked the wrong robot. It is exactly
+the error this whole page warns about, committed inside the fix for
+it. Corrected below; the verdict is unchanged, the reasoning is not.
+:::
 
 | body | training | physics alone | physics share | ceiling at infinite GPU |
 |---|---|---|---|---|
-| biped | 3,729/s | 6,276/s | **59%** | 2.5× |
-| spider8 | 1,299/s | 6,183/s | **21%** | **1.3×** |
+| biped | 3,729/s | 7,601/s | **49%** | 2.0× |
+| spider8 | 1,299/s | **2,350/s** | **56%** | 2.3× |
 
-Spider8's physics runs at almost exactly the biped's rate (6,183 vs
-6,276/s) — the **terrain** dominates the physics cost, not the robot.
-What became expensive is everything else: 25 actuators and a 91-wide
-observation make the policy update and rollout handling the
-bottleneck.
+Spider8's physics is **3.2× slower** than the biped's — 30 degrees of
+freedom against 14, and 33 collision geoms against 14. Physics is the
+*majority* of its training step, slightly more than for the biped,
+not less.
 
-So for the body that actually walks, physics is a fifth of the work,
-and a 2.06× physics speedup yields about **1.1× end to end**. The
-verdict holds, and the reason has changed completely:
+Combining with the measured 2.06× GPU speedup:
 
-> Renting was wrong for the biped because the GPU was barely faster.
-> It is wrong for the spider because physics is no longer what costs.
+$$\text{end to end} = \frac{1}{0.44 + 0.56/2.06} \approx 1.40\times$$
 
-The bottleneck moved from the simulator to the learner, which is a
-different problem and a cheaper one — more CPU cores, larger
-batches, fewer evaluation passes. That is the same class of free win
-lab 5 found sitting in a serial `for` loop.
+**The verdict holds against the pre-registered bar** — 2.06× is far
+short of the 5× set before any measurement — but it is a judgement
+call rather than a rout. A 1.40× end-to-end saving is real; it is
+simply not worth renting eight cards for when the same hour of
+wall-clock is available locally.
+
+An independent direct profile of the training loop agrees on the
+shape: physics 67%, PPO update 32%, everything else under 1%. The two
+methods bracket the physics share at **55–67%**, and both say the
+simulator is still the thing to beat.
 
 ## Amdahl: 1.50× would not have been enough anyway
 
