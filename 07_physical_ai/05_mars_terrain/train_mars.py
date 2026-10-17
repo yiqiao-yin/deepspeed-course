@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import json
 import time
 from pathlib import Path
 
@@ -102,6 +103,22 @@ def main() -> None:
                          "body was the answer each time; a biped is "
                          "statically unstable and a quadruped on three "
                          "feet is not.")
+    ap.add_argument("--body-spec", default=None,
+                    help="JSON of make_layout() kwargs, e.g. "
+                         "'{\"n_legs\": 6, \"posture\": \"sprawl\"}'. "
+                         "Overrides --morphology. This is how lab 9 trains "
+                         "bodies that have no name: the search explores a "
+                         "parameter space, and requiring a registry entry "
+                         "per shape would mean editing source inside a "
+                         "loop.")
+    ap.add_argument("--integrator", default=None,
+                    help="MuJoCo integrator. None keeps the shipped RK4 so "
+                         "labs 5-8 are unchanged. `implicitfast` is 3.93x "
+                         "faster AND what MuJoCo recommends for "
+                         "contact-rich models (RK4 is for energy-conserving "
+                         "systems and can inject contact vibration). It "
+                         "changes measured behaviour, so runs under it are "
+                         "not comparable with earlier labs.")
     ap.add_argument("--goal-range", type=float, default=None,
                     help="cap how far B is placed, in metres. The arrival "
                          "reward is unreachable early on a 15 m goal, so the "
@@ -115,14 +132,16 @@ def main() -> None:
 
 
 def evaluate(net, norm, dev, mode, flat, episodes, seed,
-             goal_range=None, morphology: str = "biped") -> dict:
+             goal_range=None, morphology: str = "biped",
+             integrator=None, layout=None) -> dict:
     import numpy as np
     import torch
 
     from mars_env import NavWorld
 
     env = NavWorld(mode=mode, flat=flat, seed=seed,
-                   morphology=morphology,
+                   morphology=morphology, integrator=integrator,
+                   layout=layout,
                    goal_range=goal_range)
     arrived = fell = 0
     effs, lefts = [], []
@@ -154,6 +173,17 @@ def run(a) -> None:
     from ppo import (ActorCritic, RunningNorm, clipped_policy_loss,
                      compute_gae, pick_device)
 
+    # The body, built ONCE here and handed to every environment --
+    # the rollout pool, the evaluator and the probe. Building it
+    # separately in each place is how a search ends up training one
+    # shape and scoring another.
+    _layout = None
+    if getattr(a, "body_spec", None):
+        from robot import make_layout
+        _layout = make_layout(**json.loads(a.body_spec))
+        print(f"  body spec: {a.body_spec}  -> "
+              f"{len(_layout['legs'])} legs, {_layout['kind']}")
+
     dev = pick_device(a.device)
     torch.manual_seed(a.seed)
     np.random.seed(a.seed)
@@ -173,12 +203,14 @@ def run(a) -> None:
                            base_seed=a.seed, mode=a.mode, flat=a.flat,
                            relief_scale=a.relief_scale,
                            upright_w=a.upright_w, goal_range=a.goal_range,
-                           morphology=a.morphology)
+                           morphology=a.morphology,
+                           integrator=a.integrator, layout=_layout)
         a.n_envs = vec.n
         od, ad = vec.obs_dim, vec.act_dim
         envs = None
     else:
         envs = [NavWorld(mode=a.mode, flat=a.flat, morphology=a.morphology,
+                         integrator=a.integrator, layout=_layout,
                          relief_scale=a.relief_scale, upright_w=a.upright_w,
                          seed=a.seed + i, goal_range=a.goal_range)
                 for i in range(a.n_envs)]
@@ -241,6 +273,7 @@ def run(a) -> None:
 
     rng = np.random.default_rng(a.seed)
     base_env = NavWorld(mode=a.mode, flat=a.flat, morphology=a.morphology,
+                        integrator=a.integrator, layout=_layout,
                         relief_scale=a.relief_scale,
                         upright_w=a.upright_w, seed=a.seed)
     base = [rollout(base_env, random_policy(rng, base_env.act_dim),
@@ -301,7 +334,8 @@ def run(a) -> None:
         if it % a.eval_every == 0 or done >= a.total_steps:
             ev = evaluate(net, norm, dev, a.mode, a.flat,
                           a.eval_episodes, a.seed, a.goal_range,
-                          morphology=a.morphology)
+                          morphology=a.morphology,
+                          integrator=a.integrator, layout=_layout)
             ev.update(step=done, seconds=round(time.time() - t0, 1))
             hist.append(ev)
             if not a.quiet:
@@ -352,7 +386,8 @@ def run(a) -> None:
          # checkpoint cannot be replayed -- a 17-actuator policy
          # loaded against a 9-actuator robot raises, and a renderer
          # that rebuilt from defaults would film the wrong machine.
-         "morphology": a.morphology,
+         "morphology": a.morphology, "integrator": a.integrator,
+         "body_spec": json.loads(a.body_spec) if a.body_spec else None,
          "goal_range": a.goal_range,
          "workers": a.workers, "n_envs": a.n_envs,
          "eval_every": a.eval_every,

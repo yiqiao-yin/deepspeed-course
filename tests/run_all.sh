@@ -60,6 +60,7 @@ TESTS=(
     tests/test_mars_mjx.py
     tests/test_terrain_vlm.py
     tests/test_morphology.py
+    tests/test_bodyspec.py
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py

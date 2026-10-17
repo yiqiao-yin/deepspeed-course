@@ -171,6 +171,28 @@ STAND_FRAC = 0.706 / (0.40 + 0.36)
 FALL_FRAC = 0.40 / 0.706
 
 
+def layout_leg_length(layout: dict) -> float:
+    """Standing-height driver for a layout dict (see `leg_length`)."""
+    if layout.get("kind") == "sprawl":
+        return TIBIA / STAND_FRAC
+    return (THIGH + SHIN) * float(layout.get("leg_scale", 1.0))
+
+
+def layout_stand_clearance(layout: dict) -> float:
+    return STAND_FRAC * layout_leg_length(layout)
+
+
+def layout_fall_clearance(layout: dict) -> float:
+    return FALL_FRAC * layout_stand_clearance(layout)
+
+
+def layout_stand_pose(layout: dict) -> dict:
+    if layout.get("kind") == "sprawl":
+        return {"hiproll": 0.0, "hip": 0.0, "knee": 0.0, "ankle": 0.0}
+    b = 0.30
+    return {"hiproll": 0.0, "hip": -b, "knee": -1.8 * b, "ankle": 0.5 * b}
+
+
 def leg_length(name: str) -> float:
     """
     The length that sets STANDING HEIGHT, in metres.
@@ -217,6 +239,76 @@ def fall_clearance(name: str) -> float:
     return FALL_FRAC * stand_clearance(name)
 
 
+def make_layout(n_legs: int, posture: str = "mammal",
+                leg_scale: float = 0.58, spread: float = 0.26,
+                width: float = 0.17, mid_widen: float = 0.0) -> dict:
+    """
+    A body from PARAMETERS, not from a hand-written table.
+
+    `LEG_LAYOUTS` holds five layouts someone typed out. That is fine
+    for comparing five bodies and useless for searching the space of
+    bodies, which is what lab 9 does: leg count, limb length, stance
+    width and posture are all continuous-ish knobs and none of them
+    should require editing source to change.
+
+    Every named layout is reproducible from this function, which is
+    the check that it is a generalisation rather than a parallel
+    implementation (`tests/test_bodyspec.py` asserts it).
+
+      n_legs    2+; mammal layouts need an even count (legs come in
+                pairs along the body), sprawls take any number
+      posture   "mammal" -- limbs under the body, fast and tippy
+                "sprawl" -- limbs out to the side, stable and slow
+      leg_scale multiplies THIGH/SHIN; sprawls ignore it and use
+                COXA/FEMUR/TIBIA
+      spread    fore-aft half-extent (mammal) or hip radius (sprawl)
+      width     lateral half-extent; mammal only
+      mid_widen extra lateral offset for rows that are neither front
+                nor hind. Not a fudge: insects splay their middle
+                legs so the swing phase does not collide with the
+                front and hind pairs, and the hand-written hexapod
+                encodes that (0.21 against 0.18). Zero for bodies
+                with fewer than three rows, where it cannot apply.
+    """
+    if n_legs < 2:
+        raise ValueError(f"a body needs at least 2 legs, got {n_legs}")
+    if posture not in ("mammal", "sprawl"):
+        raise ValueError(f"unknown posture {posture!r}")
+
+    if posture == "sprawl":
+        # Evenly around a circle, offset so no leg points dead ahead
+        # (a leg on the axis of travel is in the way of the goal).
+        off = 180.0 / n_legs
+        return dict(kind="sprawl", leg_scale=1.0,
+                    legs=[(f"S{i}", off + 360.0 * i / n_legs)
+                          for i in range(n_legs)])
+
+    if n_legs % 2:
+        raise ValueError(
+            f"a mammal layout places legs in LEFT/RIGHT pairs, so it "
+            f"needs an even count; got {n_legs}. Use posture='sprawl' "
+            f"for odd counts.")
+    pairs = n_legs // 2
+    # Rows evenly spaced fore-aft. One pair sits at x=0 rather than
+    # at +-spread, which would be a zero-length body.
+    xs = ([0.0] if pairs == 1
+          else [spread - 2 * spread * i / (pairs - 1) for i in range(pairs)])
+    # Row names: a 2-legged body is just L/R, two pairs are Front and
+    # Hind, three are Front/Mid/Hind, and beyond that they are
+    # numbered. Anatomical names stop being meaningful past three
+    # rows, and the alternative -- F/M/H for a 2-pair body -- would
+    # call the back legs "mid", which is how the first version of
+    # this function failed to reproduce the hand-written quadruped.
+    rows = {1: [""], 2: ["F", "H"], 3: ["F", "M", "H"]}.get(
+        pairs, [str(i) for i in range(pairs)])
+    legs = []
+    for i, (tag, x) in enumerate(zip(rows, xs)):
+        w = width + (mid_widen if 0 < i < pairs - 1 else 0.0)
+        legs.append((f"{tag}L", round(x, 4), +round(w, 4)))
+        legs.append((f"{tag}R", round(x, 4), -round(w, 4)))
+    return dict(kind="mammal", leg_scale=leg_scale, legs=legs)
+
+
 def leg_layout(name: str):
     if name not in LEG_LAYOUTS:
         raise SystemExit(f"unknown morphology {name!r}; "
@@ -228,7 +320,8 @@ START_Z = 1.00
 
 def model_xml(hfield_file: str, start: tuple[float, float],
               goal: tuple[float, float], relief: float = 3.0,
-              rocks=(), morphology: str = "biped") -> str:
+              rocks=(), morphology: str = "biped",
+              layout: dict | None = None) -> str:
     """
     One MuJoCo model: a height-field floor and a legged robot on it.
 
@@ -236,6 +329,11 @@ def model_xml(hfield_file: str, start: tuple[float, float],
     THE BIPED, so every caller written before this parameter existed
     -- all of labs 5, 6 and 7 -- builds exactly the robot they
     measured. Nothing about their numbers changes.
+
+    `layout` takes a dict straight from `make_layout` and overrides
+    `morphology`. That is the path lab 9's body search uses: it
+    explores shapes that have no name, so requiring a registry entry
+    per body would mean editing source inside a search loop.
 
     The height field is loaded from a PNG written by `hfield_png()`.
     `relief` is the vertical scale MuJoCo multiplies the PNG by, and
@@ -256,8 +354,13 @@ def model_xml(hfield_file: str, start: tuple[float, float],
         f'euler="{k.roll:.4f} {k.pitch:.4f} {k.yaw:.4f}" '
         f'material="rock" condim="3" friction="0.95 0.1 0.1"/>'
         for k in rocks)
-    legs, leg_k = leg_layout(morphology)
-    kind = layout_kind(morphology)
+    if layout is not None:
+        legs = layout["legs"]
+        leg_k = float(layout.get("leg_scale", 1.0))
+        kind = layout.get("kind", "mammal")
+    else:
+        legs, leg_k = leg_layout(morphology)
+        kind = layout_kind(morphology)
     return f"""
 <mujoco model="terrain_nav">
   <compiler angle="degree"/>
@@ -387,7 +490,7 @@ def model_xml(hfield_file: str, start: tuple[float, float],
         <camera name="eye" pos="0.09 0 0.10" xyaxes="0 -1 0 0.55 0 0.84"/>
       </body>
 
-      {_chassis(morphology)}
+      {_chassis(morphology, layout)}
       {"".join(_sprawl_leg(t, az) for t, az in legs) if kind == "sprawl"
         else "".join(_leg(t, yy, xx, leg_k) for t, xx, yy in legs)}
     </body>
@@ -406,7 +509,7 @@ def model_xml(hfield_file: str, start: tuple[float, float],
 CHASSIS_DENSITY = 300.0
 
 
-def _chassis(morphology: str) -> str:
+def _chassis(morphology: str, layout: dict | None = None) -> str:
     """
     Geometry spanning the hips, which did not exist until it was
     noticed missing.
@@ -431,9 +534,15 @@ def _chassis(morphology: str) -> str:
     inside the torso capsule, so adding one would alter the body
     labs 5-7 measured on.
     """
-    legs, _k = leg_layout(morphology)
-    kind = layout_kind(morphology)
-    if morphology == "biped":
+    if layout is not None:
+        legs, kind = layout["legs"], layout.get("kind", "mammal")
+    else:
+        legs, _k = leg_layout(morphology)
+        kind = layout_kind(morphology)
+    if kind == "mammal" and len(legs) == 2:
+        # A two-legged body's hips sit inside the torso capsule, so a
+        # chassis would add geometry where none belongs -- and would
+        # change the biped labs 5-8 measured on.
         return ""
     if kind == "sprawl":
         r = COXA + 0.05

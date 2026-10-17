@@ -90,6 +90,19 @@ torso stays level; almost none of the motion is correction.
 **4.0 m against 19.4 m, same terrain, same budget, and the heavier
 body wins.** The difference is not the controller.
 
+:::info Lab 9 complicates this conclusion
+[Body Search](./body-search) turned the body into parameters and
+searched the space. Every multi-legged body here was *also* squatter
+and wider than its biped, so leg count and proportion moved together
+and only leg count got the credit. Separated, most of the effect
+belongs to **proportion**: a short, wide *two-legged* body beats every
+multi-legged shape.
+
+The measurements on this page stand — same bodies, same physics, and
+the 4.2× survives re-measurement on displacement at 4.4×. The
+interpretation was too simple.
+:::
+
 ## Morphological computation
 
 [Pfeifer and Bongard's term](https://www.researchgate.net/publication/247161863_Morphological_Computation_-_Connecting_Brain_Body_and_Environment)

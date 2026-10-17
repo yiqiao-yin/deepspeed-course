@@ -268,6 +268,20 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/09_body_search
+    title: "Body Search: proportion wins"
+    summary: "Search body shapes instead of guessing five. A short wide biped beats every multi-legged robot."
+    est_minutes: 15
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: the generator's promise, then the plan.
+      - { label: "Is a body really parameters? (CPU)", cmd: "uv run ../../tests/test_bodyspec.py" }
+      - { label: "What would the search run? (CPU)", cmd: "uv run search_bodies.py --stage count --plan" }
+      - { label: "Why implicitfast (CPU, ~2 min)", cmd: "uv run speed_physics.py" }
+      - { label: "Rank the trained bodies (CPU)", cmd: "uv run rank_bodies.py --episodes 24", primary: true }
+      - { label: "Film the ranked grid", cmd: "uv run render_search.py", needs_gpu: true }
+      - { label: "Film the body zoo", cmd: "uv run render_zoo.py", needs_gpu: true }
+
   - id: 07_physical_ai/08_long_traverse
     title: "Long Traverse: the body is it"
     summary: "Five bodies, one task, one budget. Four legs walk 3.5x further than two; six never fall."

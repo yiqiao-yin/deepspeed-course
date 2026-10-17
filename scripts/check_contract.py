@@ -63,6 +63,9 @@ NO_DEEPSPEED = {
     # Nothing trains: the lab replays lab 5's policies and compares
     # five bodies. 15-22k-parameter policies, physics-bound on CPU,
     # so there is no optimizer a DeepSpeed config could configure.
+    "07_physical_ai/09_body_search":
+        "searches body shapes and ranks trained policies; the bottleneck "
+        "is CPU physics, and the lab's own measurement says so",
     "07_physical_ai/08_long_traverse":
         "replays trained policies to compare morphologies; nothing trains",
     "07_physical_ai/06_mars_mjx":
