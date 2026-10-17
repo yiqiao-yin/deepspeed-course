@@ -8,7 +8,7 @@ sidebar_position: 0
 
 ## Abstract
 
-Nine labs, read in order, are one argument. Each exists because the
+Ten labs, read in order, are one argument. Each exists because the
 previous one ran out of something: a body that could only hop ran out
 of ground to hop over, two legs ran out of stairs they could climb, a
 blind robot ran out of terrain it could feel, a corridor ran out of
@@ -39,6 +39,7 @@ flowchart TB
   L7["<b>Lab 7 · Terrain VLM</b><br/>an eye that reads<br/><i>sight helps, and still loses to touch</i>"]
   L8["<b>Lab 8 · Long Traverse</b><br/>more legs<br/><i>4 legs walk 3.5x further; 6 never fall</i>"]
   L9["<b>Lab 9 · Body Search</b><br/>the right shape<br/><i>a short wide biped beats them all</i>"]
+  L10["<b>Lab 10 · Does Perception Pay?</b><br/>an answer, at last<br/><i>no — and biased is worse than blind</i>"]
 
   L1 -->|"hopping is not walking"| L2
   L2 -->|"you cannot feel a<br/>descent before you reach it"| L3
@@ -48,6 +49,7 @@ flowchart TB
   L6 -->|"compute was not<br/>the missing thing"| L7
   L7 -->|"nor was perception:<br/>it was the body"| L8
   L8 -->|"but which body?<br/>search, do not guess"| L9
+  L9 -->|"a body travels.<br/>does seeing pay now?"| L10
 
   classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
   classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -57,8 +59,8 @@ flowchart TB
 
   class L1,L2 base
   class L3,L4 steel
-  class L5,L6,L7,L8 steel
-  class L9 bright
+  class L5,L6,L7,L8,L9 steel
+  class L10 bright
 ```
 
 | Lab | Adds | The measurement that carries forward |
@@ -72,6 +74,7 @@ flowchart TB
 | **[7 · Terrain VLM](./terrain-vlm)** | an eye that reads | a VLM that sees scores **52.9%**; the robot that only feels scores **~75%** |
 | **[8 · Long Traverse](./long-traverse)** | more legs | four legs walk **3.5× further** than two; six fall **0%** of 36 episodes |
 | **[9 · Body Search](./body-search)** | the right shape | a **short, wide biped** beats every multi-legged body — proportion, not leg count |
+| **[10 · Does Perception Pay?](./perception-pays)** | an answer | perfect terrain knowledge **ties** none; the realistic version is **worse** |
 
 ## What each lab had to go and get
 
@@ -156,7 +159,7 @@ signature of a wrong variable, and it took too long to read it that way.
 
 ## Where it currently stops
 
-Lab 9 ends unsolved, and deliberately so. The robot crosses open
+Lab 10 ends unsolved, and deliberately so. The robot crosses open
 Martian ground about one episode in seven, tells climbable landforms
 from cliffs roughly 3:1 — **and a policy fed six constant zeros does
 the same**, so that discrimination comes from having a body rather than

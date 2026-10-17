@@ -5,8 +5,8 @@ sidebar_position: 9
 # Body Search
 
 <!--chain-->
-:::info **Lab 9 of 9** in [Physical AI](./overview) — nine labs that build one argument.
-← previous: [Long Traverse](./long-traverse)
+:::info **Lab 9 of 10** in [Physical AI](./overview) — ten labs that build one argument.
+← previous: [Long Traverse](./long-traverse) · next: [Does Perception Pay?](./perception-pays) →
 :::
 
 
