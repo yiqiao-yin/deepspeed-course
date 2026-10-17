@@ -150,6 +150,8 @@ jobs:
         run: uv run tests/test_terrain_vlm.py
       - name: Morphology (bodies differ as claimed; "fallen" means fallen)
         run: uv run tests/test_morphology.py
+      - name: Body spec (a body is parameters, and reproduces the hand-written ones)
+        run: uv run tests/test_bodyspec.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

@@ -218,7 +218,9 @@ class NavWorld:
                  goal_range: float | None = None,
                  relief_scale: float = 1.0,
                  upright_w: float = 0.0,
-                 morphology: str = "biped") -> None:
+                 morphology: str = "biped",
+                 integrator: str | None = None,
+                 layout: dict | None = None) -> None:
         import mujoco
 
         # "padded" is a CONTROL, not an arm of the experiment: the blind
@@ -267,13 +269,28 @@ class NavWorld:
         # from the compiled model, so a new layout needs no further
         # plumbing. That is the payoff of three hardcoded-index bugs.
         self.morphology = str(morphology)
-        from robot import fall_clearance, stand_clearance
+        # None keeps the shipped RK4, so labs 5-8 are untouched.
+        # Lab 9 measures `implicitfast` at 3.9x the speed; whether it
+        # is the SAME WORLD is a separate question the lab answers
+        # with a trained policy rather than with open-loop drift.
+        self.integrator = integrator
+        # A body straight from `robot.make_layout`, overriding the
+        # named morphology. Lab 9 searches shapes that have no name,
+        # so requiring a registry entry per body would mean editing
+        # source inside a search loop.
+        self.layout = layout
+        from robot import (fall_clearance, layout_fall_clearance,
+                           layout_stand_clearance, stand_clearance)
         # Per-body, and identical to the old constants for the biped
         # (0.706 and 0.400). A shorter-legged body must stand lower
         # AND be judged fallen lower, or it is dropped on every reset
         # and scored as collapsed while standing perfectly.
-        self._stand_clearance = stand_clearance(self.morphology)
-        self._fall_clearance = fall_clearance(self.morphology)
+        if self.layout is not None:
+            self._stand_clearance = layout_stand_clearance(self.layout)
+            self._fall_clearance = layout_fall_clearance(self.layout)
+        else:
+            self._stand_clearance = stand_clearance(self.morphology)
+            self._fall_clearance = fall_clearance(self.morphology)
         self._foot_gids: list[int] = []
         self.rng = np.random.default_rng(seed)
         self._tmp = Path(tempfile.mkdtemp())
@@ -366,10 +383,14 @@ class NavWorld:
         # varies per seed -- baking one constant would stretch every
         # map that did not happen to match it.
         relief = max(float(heights.max() - heights.min()), 1e-3)
+        _xml = model_xml("terrain.png", m.start, m.goal, relief=relief,
+                         rocks=([] if self.flat else m.rocks),
+                         morphology=self.morphology, layout=self.layout)
+        if self.integrator:
+            _xml = _xml.replace('integrator="RK4"',
+                                f'integrator="{self.integrator}"')
         self.model = self._mj.MjModel.from_xml_string(
-            model_xml("terrain.png", m.start, m.goal, relief=relief,
-                      rocks=([] if self.flat else m.rocks),
-                      morphology=self.morphology),
+            _xml,
             {"terrain.png": (self._tmp / "terrain.png").read_bytes()})
         self.data = self._mj.MjData(self.model)
         # EVERY qpos index, looked up BY NAME.
@@ -677,8 +698,9 @@ class NavWorld:
         # neutral is femur-out/tibia-down (all zeros); handing it the
         # biped's crouch folds its legs under the torso and it
         # collapses on frame one.
-        from robot import stand_pose
-        bend = stand_pose(self.morphology)
+        from robot import layout_stand_pose, stand_pose
+        bend = (layout_stand_pose(self.layout) if self.layout is not None
+                else stand_pose(self.morphology))
         assert len(self.leg_q) == len(self.leg_names), "leg bookkeeping"
         for adr, nm in zip(self.leg_q, self.leg_names):
             key = next(k for k in ("hiproll", "hip", "knee", "ankle")

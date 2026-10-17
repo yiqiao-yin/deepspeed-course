@@ -206,6 +206,25 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/09_body_search": dict(min_vram=8, gpus=1, disk=14,
+                                    script="rank_bodies.py",
+                                    launcher="python",
+                                    args="--episodes 24",
+                                    note="FOURTEENTH launcher=python "
+                                         "exception. Nothing here trains "
+                                         "under DeepSpeed -- the policies "
+                                         "are 15-45k parameters and the "
+                                         "bottleneck is MuJoCo physics on "
+                                         "the CPU. The lab's own speed "
+                                         "finding makes the point: swapping "
+                                         "the integrator from RK4 to "
+                                         "implicitfast gave 1.7-2.6x end to "
+                                         "end, MORE than the ~1.40x eight "
+                                         "rented GPUs would have bought. The "
+                                         "GPU request is only so the three "
+                                         "animations have an OpenGL context; "
+                                         "the search and the ranking are "
+                                         "pure CPU."),
     "07_physical_ai/08_long_traverse": dict(min_vram=8, gpus=1, disk=12,
                                     script="compare_bodies.py",
                                     launcher="python",

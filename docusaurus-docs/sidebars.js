@@ -121,6 +121,7 @@ const sidebars = {
               'tutorials/physical/mars-gpu-physics',
               'tutorials/physical/terrain-vlm',
               'tutorials/physical/long-traverse',
+              'tutorials/physical/body-search',
             ],
           },
       ],
