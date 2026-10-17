@@ -206,6 +206,19 @@ EXAMPLES = {
                                          "distributed launcher would be cargo "
                                          "cult. The scheduling behaviour itself "
                                          "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/10_perception_pays": dict(min_vram=8, gpus=1, disk=14,
+                                    script="perception_sweep.py",
+                                    launcher="python",
+                                    args="--seeds 8",
+                                    note="FIFTEENTH launcher=python "
+                                         "exception, and the simplest: "
+                                         "NOTHING TRAINS. The lab replays "
+                                         "lab 9's policies and varies a "
+                                         "router's accuracy, so there are no "
+                                         "gradients and nothing for ZeRO to "
+                                         "shard. Pure CPU; the GPU is "
+                                         "requested only so the belief "
+                                         "animation has an OpenGL context."),
     "07_physical_ai/09_body_search": dict(min_vram=8, gpus=1, disk=14,
                                     script="rank_bodies.py",
                                     launcher="python",

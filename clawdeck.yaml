@@ -268,6 +268,19 @@ labs:
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/10_perception_pays
+    title: "Does perception pay? (No)"
+    summary: "Perfect terrain knowledge ties no knowledge. Realistic perception is worse than none."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: the decidability check is the one worth
+      # failing on -- a sweep over undecidable tasks measures nothing.
+      - { label: "Is the task decidable? (CPU)", cmd: "uv run perception_sweep.py --check" }
+      - { label: "The sweep, 8 seeds (CPU, ~12 min)", cmd: "uv run perception_sweep.py --seeds 8", primary: true }
+      - { label: "Just the oracle arm (CPU)", cmd: "uv run perception_sweep.py --arm oracle --seeds 8" }
+      - { label: "Film the three beliefs", cmd: "uv run render_beliefs.py", needs_gpu: true }
+
   - id: 07_physical_ai/09_body_search
     title: "Body Search: proportion wins"
     summary: "Search body shapes instead of guessing five. A short wide biped beats every multi-legged robot."

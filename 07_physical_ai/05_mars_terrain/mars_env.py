@@ -129,7 +129,16 @@ MAX_STEPS = 4000
 # lucky draws.
 _TASKS: dict[int, object] = {}
 POOL = 120
-_POOL_FILE = Path(__file__).parent / "task_pool.pkl"
+# ONE FILE PER SCALE. The pool used to be a single `task_pool.pkl`
+# regardless of `MARS_POOL_SCALE`, so building a pool for a different
+# preset would silently overwrite the one labs 5-9 train on -- and
+# nothing would error. Every later run would quietly train on
+# different terrain while reporting the same lab.
+#
+# `course` keeps the original filename so existing pools (and the
+# 20 minutes they cost to build) stay valid.
+_POOL_FILE = Path(__file__).parent / (
+    "task_pool.pkl" if SCALE == "course" else f"task_pool_{SCALE}.pkl")
 
 
 ROUTE_BAND = (6.0, 11.0)

@@ -122,6 +122,7 @@ const sidebars = {
               'tutorials/physical/terrain-vlm',
               'tutorials/physical/long-traverse',
               'tutorials/physical/body-search',
+              'tutorials/physical/perception-pays',
             ],
           },
       ],
