@@ -176,6 +176,39 @@ differently: landings fell 1.0% → 0.0% over 550k steps while crashes fell
 **The plateau reproduced exactly after the physics was corrected**, which
 is what makes it a property of the reward rather than an artifact.
 
+### What the reward is actually paying for
+
+A reward is a list of terms with weights, and reading the weights tells you
+almost nothing: a large coefficient on a quantity that barely moves
+contributes nothing, and a small one on something that moves a lot
+dominates. The only way to know is to integrate each term over episodes the
+trained policy actually produces — `uv run evaluate.py runs/r_reveal
+--reward-audit`:
+
+| term | per episode | share |
+|---|---|---|
+| **terminal** (landed or crashed) | +56.67 | **74%** |
+| **shaping** (altitude potential) | +17.59 | **23%** |
+| upright | +2.35 | 3% |
+| spin · alive · dive · gas | −0.15 combined | under 1% |
+
+Three knobs moved across two redesigns, and they were not the same kind of
+change. Pricing a timeout at −10 against a crash's −60 said *running out
+the clock is six times better than touching the ground*, and paying 0.20
+per step merely for existing said *delay is fine*. Those were wrong
+statements of the goal, not missing guidance — the policy believing them is
+the system working. Only the altitude term is shaping, and it is the safe
+kind: potential-based, so it provably cannot change which policy is
+optimal, only how findable it is.
+
+:::tip The most useful number here is the zero
+**The propellant penalty contributes 0.0% of the reward, and the policy
+still flies on a quarter of the baseline's gas.** Efficiency was never paid
+for. It fell out of "land soon and land softly" — the terminal bonus plus
+the altitude potential. If you want frugal behaviour, you may not need a
+frugality term; you may just need to stop paying for delay.
+:::
+
 ## What the rig sweep actually found
 
 Not what was predicted. The falsifier was written first: *if count is what
