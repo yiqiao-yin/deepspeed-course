@@ -146,8 +146,9 @@ def _hull_visual() -> str:
         # the body read as having a floor rather than floating.
         out.append(
             f'      <geom type="box" material="trim" contype="0" conaffinity="0" '
-            f'group="1" size="{0.5 * (xb - xa) + 0.013:.4f} {hw * 0.985:.4f} 0.016" '
-            f'pos="{xm:.4f} 0 {zf + 0.016:.4f}"/>')
+            f'group="1" size="{0.5 * (xb - xa) + 0.013:.4f} '
+            f'{hw * 0.972:.4f} 0.015" '
+            f'pos="{xm:.4f} 0 {zf + 0.011:.4f}"/>')
 
     # Canopy: BOX slices, not ellipsoids.
     #
