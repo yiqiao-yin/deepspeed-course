@@ -93,6 +93,57 @@ def evaluate(run_dir, episodes: int = 48, seed0: int = 900_000,
             "gas": float(np.mean(gas))}
 
 
+def reward_audit(run_dir, episodes: int = 24, seed0: int = 900_000,
+                 **env_kw) -> dict:
+    """
+    What is the reward ACTUALLY paying for?
+
+    A reward function is a list of terms with weights, and reading
+    the weights tells you almost nothing: a term with a large
+    coefficient on a quantity that barely moves contributes nothing,
+    and a small coefficient on something that moves a lot dominates.
+    The only way to know is to integrate each term over episodes the
+    trained policy actually produces.
+
+    Doing that here found the most useful fact in the lab: the
+    propellant penalty contributes 0.0% of the total, and the policy
+    still flies on a quarter of the baseline's gas. Efficiency was
+    never paid for -- it fell out of "land soon and land softly".
+    """
+    import torch
+
+    from aerial_env import AerialEnv, PHYS_DT, SUBSTEPS
+
+    net, norm = load_policy(run_dir)
+    env = AerialEnv(**env_kw)
+    dt = SUBSTEPS * PHYS_DT
+    tot = {k: 0.0 for k in ("terminal", "shaping", "upright", "spin",
+                            "dive", "alive", "gas")}
+    for ep in range(episodes):
+        o = env.reset(seed0 + ep)
+        prev = env._prev_phi
+        while True:
+            with torch.no_grad():
+                x = torch.as_tensor(norm(o), dtype=torch.float32).unsqueeze(0)
+                a = net.distribution(x).mean.squeeze(0).numpy()
+            o, _r, done, _ = env.step(np.clip(a, 0.0, 1.0))
+            w = env.omega()
+            tot["upright"] += 2.0 * env.up_dot() * dt
+            tot["spin"] -= 0.05 * float(w @ w) * dt
+            tot["gas"] -= 0.004 * float(np.sum(env.u_act)) * dt
+            tot["dive"] -= 0.02 * max(0.0, abs(env.vel()[2]) - 4.0) * dt
+            tot["alive"] += 0.05 * dt
+            phi = env._potential()
+            tot["shaping"] += 0.995 * phi - prev
+            prev = phi
+            if done:
+                tot["terminal"] += 80.0 if env.landed_ok() else -60.0
+                break
+    mass = sum(abs(v) for v in tot.values()) or 1.0
+    return {k: {"per_episode": v / episodes, "share": abs(v) / mass}
+            for k, v in tot.items()}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -100,6 +151,8 @@ def main() -> int:
     ap.add_argument("run")
     ap.add_argument("--episodes", type=int, default=48)
     ap.add_argument("--seed0", type=int, default=900_000)
+    ap.add_argument("--reward-audit", action="store_true",
+                    help="integrate every reward term over real episodes")
     ap.add_argument("--compare", action="store_true",
                     help="score the classical baseline on the SAME throws")
     a, _ = ap.parse_known_args()
@@ -114,6 +167,18 @@ def main() -> int:
     print("=" * 74)
     print(f"  EVALUATE — {run.name}: rig {meta['rig']}, "
           f"terrain {meta['preset']}")
+    if a.reward_audit:
+        d = reward_audit(run, a.episodes, a.seed0, **kw)
+        print(f"  {'term':<10} {'per episode':>12} {'share':>8}")
+        for k, v in sorted(d.items(), key=lambda kv: -abs(kv[1]["share"])):
+            print(f"  {k:<10} {v['per_episode']:>12.2f} "
+                  f"{v['share']:>7.1%}")
+        print(f"\n  Weights tell you nothing on their own: a big "
+              f"coefficient on a\n  quantity that barely moves contributes "
+              f"nothing. Only the integral\n  over real episodes says what "
+              f"the policy is being paid for.")
+        return 0
+
     print("=" * 74)
     r = evaluate(run, a.episodes, a.seed0, **kw)
     lo, hi = r["ci"]
