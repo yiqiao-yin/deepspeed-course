@@ -6,13 +6,20 @@ no learning — scored on the same held-out throws.
 ~55 minutes on 20 CPU cores. No GPU.
 **Falsifier:** if thruster COUNT is what matters, clean-landing rate is
 monotone in nozzle count. *It looked monotone, and then it wasn't* — see
-[What the rig sweep actually found](#what-the-rig-sweep-actually-found).
+[Does adding more thrusters help?](#does-adding-more-thrusters-help).
 
 A 2-tonne car is thrown into the air tumbling. It has about three seconds
 of flight, ten cold-gas nozzles, and a tank holding seven seconds of
 hover. It has to arrive on its wheels.
 
-## Where this comes from
+## Motivation
+
+:::info In plain words
+Tesla showed a car doing a stunt: drive upside down along a ramp, fire
+thrusters, spin in mid air, land on its wheels. It was one video clip. We
+rebuilt it as real physics so the thing can actually be tested, and then
+taught a computer to fly it.
+:::
 
 Tesla revealed the Roadster on 15 October 2026 at SpaceX's McGregor site:
 the car drove inverted along a ramp held by fan suction, then made a
@@ -25,7 +32,15 @@ independent measurement. Everything below except those three numbers is a
 stated engineering assumption. This is a physics sandbox motivated by the
 reveal, not a reconstruction of anyone's hardware.
 
-## The physics comes first, and it has to be audited
+## Checking the simulator before trusting it
+
+:::info In plain words
+Before training anything, we check the simulated world obeys the laws it
+is supposed to: energy and momentum have to be conserved, fuel burned has
+to match fuel spent. This caught five mistakes. None of them would have
+shown up in the training results, because a learning curve looks just as
+convincing when the world is wrong.
+:::
 
 `uv run verify.py` measures residuals against the equations the lab
 claims to solve, and prints them rather than printing the word "passed":
@@ -45,7 +60,13 @@ published.** A learning curve cannot find any of them — it rises just as
 happily against a broken simulator, and the policy exploits whatever you
 built rather than whatever you meant.
 
-### The tank holds 297 kg, not 244
+### How much gas actually fits
+
+:::info In plain words
+Squeezed to 10,000 psi, air stops behaving like the textbook says. We had
+guessed at the correction and were 22% wrong about how much fuel the car
+carries. We now use a reference physics library instead of a guess.
+:::
 
 The first version picked a compressibility of 1.95 by hand because it made
 the arithmetic come out. CoolProp's reference equation of state disagrees:
@@ -61,7 +82,13 @@ The ideal figure is denser than *liquid* nitrogen (807 kg/m³), which
 should have been the tell. Tables are now generated from CoolProp and
 committed; interpolation error over the operating envelope is 0.001% mean.
 
-### Specific impulse is not a constant
+### The thrusters get weaker as they fire
+
+:::info In plain words
+Emptying a pressurised tank makes it cold, and cold gas pushes less hard.
+Thrust efficiency drops about 40% from full to empty, then falls off a
+cliff. Treating it as a constant overstated the fuel budget by 27%.
+:::
 
 The tank cools as it drains — the blowdown is isentropic — and a cold tank
 holds less pressure. Effective exhaust velocity falls with it:
@@ -80,14 +107,25 @@ falls off a cliff when the regulator drops out. Total impulse integrated
 along this path is **139 kN·s**; a constant-vₑ model claims 176, a **27%
 overstatement**.
 
-### "Expand to ambient" is impossible on Mars
+### The same thruster works better on Mars
+
+:::info In plain words
+A rocket nozzle fights the air pressure around it. Mars has almost none,
+so identical hardware gets about 9% more push there for free.
+:::
 
 It takes nitrogen below its 63.15 K triple point. The nozzle uses a real
 area ratio with the `(pₑ − pₐ)·Aₑ` term, which also shows that Earth has an
 *optimum* area ratio and Mars does not — and that the **same hardware gets
 Isp 65.8 s on Mars against 60.6 s on Earth**, purely from ambient pressure.
 
-### The simulation had the wrong centre of mass
+### The simulated car was the wrong car
+
+:::info In plain words
+As fuel burns the car gets lighter, and we updated the weight but not the
+balance point. The simulator was quietly modelling a vehicle that does not
+exist, and the policy spent its first full training run learning to fly it.
+:::
 
 The worst defect, and invisible from outside. Gas mass was written into
 `body_mass` as it burned, but not into `body_subtreemass` — and MuJoCo
@@ -97,7 +135,15 @@ composite-rigid-body dynamics are expressed. Angular momentum drifted
 **3.5e-07**, a factor of 89,000. The policy had been training against a
 vehicle that does not exist.
 
-### RK4, which reverses topic 7
+### Choosing the maths solver
+
+:::info In plain words
+Simulators step forward in time using an approximation, and there are
+several to choose from. The fast one is right for a walking robot that is
+always touching the ground. A flying car needs the accurate one, or the
+simulated spin slowly drifts and the car learns to correct a problem that
+is not real.
+:::
 
 Measured on a 4 s tumble in vacuum with zero contacts:
 
@@ -116,7 +162,13 @@ on a task whose entire content is arresting a tumble: the policy would
 spend propellant cancelling the integrator. RK4 costs 4× end to end
 (5,700 → 1,300 steps/s) and is worth it.
 
-### An ideal cold-gas tank freezes its own propellant
+### A perfectly insulated tank freezes itself
+
+:::info In plain words
+If no heat leaks into the tank, the gas gets so cold while emptying that it
+turns to liquid inside. Our equations only describe gas, so the model now
+refuses that case loudly instead of returning a confident wrong answer.
+:::
 
 At β = 0 — perfect insulation — the tank crosses the saturation dome below
 about 60 kg remaining and nitrogen condenses inside it. The single-phase
@@ -125,6 +177,14 @@ interpolating across the dome and returning a plausible pressure. The
 default β = 0.30 keeps 54 K of superheat margin.
 
 ## The result
+
+:::info In plain words
+We trained the controller for 4 million practice steps, about an hour on an
+ordinary laptop processor. It lands 89 times out of 100, against 75 for a
+conventional engineered controller, and it does it on a quarter of the
+fuel. The fuel margin is the valuable part: the car only carries about
+seven seconds of thrust.
+:::
 
 96 held-out throws, rig `reveal`, Earth, rolling terrain:
 
@@ -147,7 +207,44 @@ momentum, velocity — and the panel reads tank pressure and temperature,
 compressibility, superheat margin, chamber pressure, live Isp, nozzle exit
 temperature against the freezing point, and thrust fraction.
 
-## The plateau
+### The same four landings, one at a time
+
+The film above runs all four throws together. Here they are separately, in
+case one is easier to watch than four. Each is a different random tumble
+off the ramp, and the policy has never seen any of them.
+
+**Throw 1** — 0.93 s, 24 kg of gas.
+
+![Throw 1](../../docusaurus-docs/static/img/aerial/aerial-throw-1.gif)
+
+**Throw 2** — 1.81 s, 60 kg. The hardest of the four: it arrives higher and
+has to come a long way down.
+
+![Throw 2](../../docusaurus-docs/static/img/aerial/aerial-throw-2.gif)
+
+**Throw 3** — 1.05 s, 29 kg.
+
+![Throw 3](../../docusaurus-docs/static/img/aerial/aerial-throw-3.gif)
+
+**Throw 4** — 0.89 s, 25 kg. The cheapest: it starts nearly level, so there
+is little to undo.
+
+![Throw 4](../../docusaurus-docs/static/img/aerial/aerial-throw-4.gif)
+
+Watch the **nozzle valve bars** at the bottom. The policy fires hard early
+to kill the spin, then shuts almost everything off and falls, then catches
+itself at the end. That coasting middle is where the fuel saving comes
+from, and nobody programmed it.
+
+## How it learned, and where it got stuck
+
+:::info In plain words
+Partway through training the car found a loophole. It learned to stop
+crashing by simply never landing: hover until the clock runs out, collect
+the safety points, take no risk. It sat there for 600,000 practice steps.
+That was our fault, not its own, and fixing the scoring fixed the
+behaviour.
+:::
 
 ![The learning curve](../../docusaurus-docs/static/img/aerial/aerial-curve.gif)
 
@@ -176,7 +273,15 @@ differently: landings fell 1.0% → 0.0% over 550k steps while crashes fell
 **The plateau reproduced exactly after the physics was corrected**, which
 is what makes it a property of the reward rather than an artifact.
 
-### What the reward is actually paying for
+### What we were actually paying it for
+
+:::info In plain words
+You score the car to teach it what good looks like. We measured where the
+points actually came from, and the surprise was that the penalty for
+wasting fuel contributed nothing at all, yet the car is four times more
+frugal than the engineered controller. It became efficient without being
+told to.
+:::
 
 A reward is a list of terms with weights, and reading the weights tells you
 almost nothing: a large coefficient on a quantity that barely moves
@@ -209,7 +314,13 @@ the altitude potential. If you want frugal behaviour, you may not need a
 frugality term; you may just need to stop paying for delay.
 :::
 
-## What the rig sweep actually found
+## Does adding more thrusters help?
+
+:::info In plain words
+No. We tested nine thruster layouts and expected more to be better. What
+actually matters is which direction they point. A car with 12 thrusters
+that can brake beats one with 18 that can only push forward.
+:::
 
 Not what was predicted. The falsifier was written first: *if count is what
 matters, the rate is monotone in nozzle count.* Read the first five rows
@@ -243,7 +354,14 @@ nozzles sat at counts 12 and 20, and 20 was the largest in the table.
 
 ![Every rig, turning, with what it cannot produce](../../docusaurus-docs/static/img/aerial/aerial-rigs.gif)
 
-### Rank is the wrong test
+### Why the standard engineering check fails
+
+:::info In plain words
+Engineers have a standard test for whether a set of actuators can control
+a vehicle. It quietly assumes each one can push and pull. A thruster only
+pushes. So a layout can pass the test with full marks and still be unable
+to slow down, which is exactly what happened.
+:::
 
 `reveal` is **rank 6 and can produce exactly zero backward force.** Every
 horizontal nozzle on it pushes the same way: it can accelerate and it
@@ -267,6 +385,13 @@ nozzles as `minimal` and scores **16% against 66%**, because it has no
 fore-aft lever arm and therefore no pitch torque in *either* direction.
 
 ## Better hardware, slower learning
+
+:::info In plain words
+The car with braking thrusters is better hardware, and the engineered
+controller shows it: 98% versus 75%. But when we trained from scratch on
+both with the same time budget, the better car finished no better. Extra
+ability is also extra things to work out.
+:::
 
 The classical controller does no exploration, so it reads the hardware
 directly: `fore10` beats `reveal` 98% to 75%. Give the same two rigs to
@@ -304,7 +429,14 @@ evaluation uses the distribution mean. `fore10`'s training trace reads 0%
 at 3.2M while its deterministic policy was already landing — the noise
 was masking a policy that had learned.
 
-## What is modelled
+## What is in the simulation, and what is not
+
+:::info In plain words
+The short version: the flying, the contact, the thermodynamics of the fuel
+and the nozzles are all modelled properly. The exhaust blowing dust around
+and the car bending under load are not, and the list below says so rather
+than leaving you to find out.
+:::
 
 6-DOF rigid-body flight · real-gas tank blowdown from CoolProp tables,
 isentropic with a wall-return blend · an isenthalpic regulator · a
@@ -386,7 +518,14 @@ watchdog as backstop. See `SECURITY.md`.
 Rent this one for **cores, not a card**. The manifest asks for a GPU only
 so the flight GIF has an OpenGL context.
 
-## Why MuJoCo and not a web 3D engine
+## Why not a game engine
+
+:::info In plain words
+The animations are drawn by the physics simulator itself, not by separate
+animation software. If the picture came from somewhere else it could show
+the car doing something the physics never did, which is a mistake this
+course has made before.
+:::
 
 A renderer that is not the simulator can show a car doing something the
 physics never did, and this course has paid for that once already. Every

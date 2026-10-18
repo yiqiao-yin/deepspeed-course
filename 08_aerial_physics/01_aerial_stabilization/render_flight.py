@@ -306,7 +306,7 @@ def hud(img, env, step, n_steps, label: str, trace=None):
 
 
 def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
-         classical, every, max_frames, world="earth"):
+         classical, every, max_frames, world="earth", per_throw=None):
     import mujoco
     import torch
     from PIL import Image
@@ -351,7 +351,13 @@ def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
                           float(np.linalg.norm(env.omega()))))
             if k % every == 0 or done:
                 p = env.pos()
-                cam.lookat[:] = [p[0], p[1], max(p[2] * 0.6, 0.4)]
+                # Track the car properly and pull back as it climbs.
+                # At 0.6 * height with a fixed 9.5 m distance the car
+                # left the top of the frame above about 7 m, which is
+                # inside the normal throw.
+                alt = max(env.altitude(), 0.0)
+                cam.lookat[:] = [p[0], p[1], max(p[2] * 0.85, 0.5)]
+                cam.distance = 9.5 + 0.45 * max(alt - 2.0, 0.0)
                 cam.azimuth = 128.0 + 14.0 * math.sin(k / 150.0)
                 r.update_scene(env.data, cam)
                 add_plumes(r.scene, env, mujoco)
@@ -366,6 +372,8 @@ def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
         tail = 10 if env.landed_ok() else 6
         shots.extend([shots[-1]] * tail)
         frames.extend(shots)
+        if per_throw is not None:
+            per_throw.append((shots, env.outcome, k / 100.0, env.gas_used))
         results.append(env.outcome)
         print(f"    throw {ep + 1}: {env.outcome:<13} "
               f"{k / 100:.2f} s, gas {env.gas_used:.0f} kg, "
@@ -410,6 +418,11 @@ def main() -> int:
     ap.add_argument("--colors", type=int, default=160)
     ap.add_argument("--max-frames", type=int, default=900)
     ap.add_argument("--out", default="aerial-flight")
+    ap.add_argument("--split", action="store_true",
+                    help="ALSO write one short GIF per throw. The combined "
+                         "film is 197 frames and 40 MB, which is the right "
+                         "artefact for studying a policy and the wrong one "
+                         "for a reader skimming a page.")
     a, _ = ap.parse_known_args()
 
     os.environ["MUJOCO_GL"] = pick_backend()
@@ -422,10 +435,17 @@ def main() -> int:
         flat = meta.get("flat", False)
         preset = "rolling" if meta["preset"] == "flat" else meta["preset"]
 
+    clips: list = [] if a.split else None
     frames, res = film(a.run, rig, preset, flat, a.episodes, a.seed0,
                        (a.width, a.height), a.classical, a.every,
-                       a.max_frames, a.world)
+                       a.max_frames, a.world, clips)
     save_gif(frames, OUT / f"{a.out}.gif", a.frame_ms, a.colors)
+    if clips:
+        print()
+        for i, (shots, outcome, secs, gas) in enumerate(clips, 1):
+            save_gif(shots, OUT / f"{a.out}-{i}.gif", a.frame_ms, a.colors)
+            print(f"      throw {i}: {outcome}, {secs:.2f} s, "
+                  f"{gas:.0f} kg of gas")
     ok = sum(r == "landed_ok" for r in res)
     print(f"  {ok}/{len(res)} of the filmed throws landed cleanly "
           f"— this is a FILM of a sample, not the measurement "
