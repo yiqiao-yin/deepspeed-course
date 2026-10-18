@@ -154,6 +154,8 @@ jobs:
         run: uv run tests/test_bodyspec.py
       - name: Perception pays (the task must contain a decision)
         run: uv run tests/test_perception_pays.py
+      - name: "Aerial stabilization: the rig is parameters, the gas is real"
+        run: uv run tests/test_aerial_stabilization.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

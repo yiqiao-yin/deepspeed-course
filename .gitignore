@@ -52,3 +52,9 @@ runpod/results/
 07_physical_ai/05_mars_terrain/runs_log_*.txt
 07_physical_ai/05_mars_terrain/pool.log
 07_physical_ai/05_mars_terrain/runs_render*.log
+
+# Topic 8 lab 1: training outputs and logs are reproducible from the
+# scripts and would otherwise put hundreds of MB of checkpoints into
+# history. The published numbers live in the README and the docs page.
+08_aerial_physics/*/runs/
+08_aerial_physics/*/*.log

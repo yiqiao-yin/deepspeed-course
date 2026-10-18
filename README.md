@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 64 pages with
+The documentation site is the primary way to read this material: 65 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -248,7 +248,7 @@ deepspeed-course/
 │   ├── 03_pairformer/           # The AlphaFold3 trunk — deletes the MSA representation
 │   └── 04_structure_module/     # IPA + FAPE → coordinates. SE(3)-invariant by construction
 │
-└── 07_physical_ai/        # Acting in a simulated world: physics, not tokens
+├── 07_physical_ai/        # Acting in a simulated world: physics, not tokens
     ├── 01_obstacle_hopper/      # MuJoCo + PPO from scratch. Why ONE seed proves nothing
     ├── 02_biped_stairs/         # A 2x2 of morphologies. The switches INTERACT
     ├── 03_terrain_vision/       # A depth camera. You cannot FEEL for a descent
@@ -258,7 +258,10 @@ deepspeed-course/
     ├── 07_terrain_vlm/          # A VLM reads traversability. First ZeRO-3 here, and it is measured
     ├── 08_long_traverse/        # Five bodies, one task. Four legs walk 3.5x further than two
     ├── 09_body_search/          # A body is parameters. Proportion beats leg count
-    └── 10_perception_pays/      # Perfect terrain knowledge ties none. Biased is worse
+│   └── 10_perception_pays/      # Perfect terrain knowledge ties none. Biased is worse
+│
+└── 08_aerial_physics/     # Leaving the ground. The budget is propellant, not time
+    └── 01_aerial_stabilization/ # A tumbling cold-gas car. PPO lands it on a third of the gas
 ```
 
 **Every example folder has the same six files** (the contract in
