@@ -81,31 +81,41 @@ def _quat_to_mat(q: np.ndarray) -> np.ndarray:
         [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]])
 
 
-def tank_state(m_gas: float, beta: float = BETA_WALL) -> tuple[float, float, float]:
+def tank_state(m_gas: float, beta: float = BETA_WALL,
+               world: str = "earth") -> dict:
     """
-    Pressure, temperature and availability for the gas left.
+    The complete propellant state, from the reference equation of state.
 
-    Real gas, because the ideal law is 25% wrong at this density and
-    the error points the flattering way. Z is interpolated linearly
-    in density between 1.0 at vacuum and `Z_N2` at the full tank --
-    a two-point fit to the compressibility, which is crude and is
-    SAID to be crude, rather than a table this lab would then have to
-    verify.
+    Returns tank pressure and temperature, chamber pressure after the
+    regulator, effective exhaust velocity, throat mass flux, nozzle
+    exit temperature, and the THRUST FRACTION -- current thrust over
+    design-point thrust, which is what scales the actuator command.
 
-    Temperature follows an adiabatic expansion blended toward ambient
-    by `beta`: emptying a tank cools it, a cold tank gives less
-    pressure, and a policy that fires everything early pays for it
-    later. beta = 0 is adiabatic, beta = 1 is isothermal.
+    Nothing here is a correlation. The first version used an
+    isothermal tank, a compressibility of 1.95 picked by hand and a
+    constant exhaust velocity of 659 m/s. All three were wrong in the
+    same direction as each other and in the opposite direction to the
+    error they were covering for.
     """
+    import gas
+
+    import thrusters as TH
+
     m_gas = max(m_gas, 0.0)
     rho = m_gas / TH.TANK_V
-    rho0 = TH.M_GAS_0 / TH.TANK_V
-    z = 1.0 + (TH.Z_N2 - 1.0) * (rho / rho0)
-    t_ad = TH.T_TANK * max(rho / rho0, 1e-6) ** (GAMMA_N2 - 1.0)
-    t = t_ad + beta * (TH.T_TANK - t_ad)
-    p = z * rho * TH.R_N2 * t
-    avail = float(np.clip(p / TH.P_DROPOUT, 0.0, 1.0))
-    return p, t, avail
+    rho0 = TH.gas_mass() / TH.TANK_V
+    T = gas.blowdown_T(rho, rho0, TH.T_TANK, beta) if rho > 1e-6 else 80.0
+    p = gas.tank_p(rho, T) if rho > 1e-6 else 0.0
+    pc = min(TH.P_REG, p / TH.REG_HEADROOM)
+    h = gas.tank_h(rho, T) if rho > 1e-6 else 0.0
+    if pc <= gas._tab()["pc"][0] or m_gas <= 0.05:
+        return dict(p=p, T=T, pc=0.0, ce=1.0, G=0.0, Te=0.0, frac=0.0, h=h)
+    ce = gas.nozzle_ce(pc, h, world)
+    G = gas.nozzle_G(pc, h, world)
+    Te = gas.nozzle_Te(pc, h, world)
+    G0, ce0 = TH.design_point()
+    return dict(p=p, T=T, pc=pc, ce=ce, G=G, Te=Te, h=h,
+                frac=float(np.clip((G * ce) / (G0 * ce0), 0.0, 1.5)))
 
 
 class AerialEnv:
@@ -122,7 +132,7 @@ class AerialEnv:
     def __init__(self, rig_name: str = "default", preset: str = "rolling",
                  seed: int = 0, flat: bool = False,
                  roll: bool = False, beta: float = BETA_WALL,
-                 integrator: str = "implicitfast",
+                 integrator: str = "RK4", world: str = "earth",
                  toss: float = 1.0, **rig_kw) -> None:
         import mujoco
 
@@ -131,15 +141,17 @@ class AerialEnv:
         self.preset = "flat" if flat else preset
         self.roll_task = roll
         self.beta = beta
+        self.world = TH.WORLDS[world]
         self.toss = toss
         self.rng = np.random.default_rng(seed)
 
         self.model, self.rig, self.surf = CAR.build(
             rig_name, preset, seed=seed, flat=flat, start_z=6.0,
-            integrator=integrator, **rig_kw)
+            integrator=integrator, world=self.world, **rig_kw)
         self.data = mujoco.MjData(self.model)
         self.aid = CAR.resolve(self.model, self.rig)
         self.fmax = np.array([t.fmax for t in self.rig])
+        self.at = np.array([t.throat_area for t in self.rig])
         self.act_dim = len(self.rig)
 
         self.chassis = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY,
@@ -170,6 +182,10 @@ class AerialEnv:
                                         "ground")
 
         self.m_dry_body = float(self.model.body_mass[self.chassis])
+        # Everything hanging off the chassis (four wheels), so the
+        # subtree mass can be kept correct as gas leaves.
+        self._wheel_mass = float(self.model.body_mass.sum()
+                                 - self.model.body_mass[self.chassis])
         self.I_body0 = self.model.body_inertia[self.chassis].copy()
         self._delay_n = max(1, int(round(DELAY_S * CTRL_HZ)))
 
@@ -244,13 +260,30 @@ class AerialEnv:
 
     # -- gas ---------------------------------------------------------
     def _apply_mass(self) -> None:
-        """Mass and inertia shrink as gas leaves. 244 kg of 1994 is
-        12%, and the roll inertia moves more than the mass does
-        because the tanks sit outboard."""
+        """
+        Mass and inertia shrink as gas leaves: 297 kg of 2047 is 15%,
+        and roll inertia moves more than mass does because the tanks
+        sit outboard.
+
+        `body_subtreemass` MUST be maintained alongside `body_mass`.
+        MuJoCo derives `subtree_com` by dividing accumulated mass
+        moments by `body_subtreemass`, and the composite-rigid-body
+        dynamics are expressed about that point -- so leaving it at
+        its compile-time value does not merely mis-report the centre
+        of mass, it SIMULATES THE WRONG VEHICLE.
+
+        This shipped. The audit caught it by measuring angular
+        momentum in a ballistic tumble: 3.1e-02 drift against RK4's
+        true 4.2e-07, a factor of 74,000, with the subtree mass stuck
+        at the dry 1750 kg while the chassis carried 1959.
+        """
         self.model.body_mass[self.chassis] = self.m_dry_body + self.m_gas
         extra = self.m_gas * TH.Y_TANK ** 2
         self.model.body_inertia[self.chassis] = (
             self.I_body0 + np.array([extra, 0.0, extra]))
+        tot = float(self.model.body_mass[self.chassis]) + self._wheel_mass
+        self.model.body_subtreemass[self.chassis] = tot
+        self.model.body_subtreemass[0] = tot
 
     # -- episode -----------------------------------------------------
     def reset(self, seed: int | None = None) -> np.ndarray:
@@ -280,7 +313,9 @@ class AerialEnv:
         self.data.qvel[3:6] = spin / max(np.linalg.norm(spin), 1e-9) * \
             r.uniform(0.5, 3.0) * self.toss
 
-        self.m_gas = TH.M_GAS_0
+        self.m_gas = TH.gas_mass()
+        self.tank = tank_state(self.m_gas, self.beta,
+                               self.world.name)
         self._apply_mass()
         self.u_act = np.zeros(self.act_dim)
         self._hist = [np.zeros(self.act_dim) for _ in range(self._delay_n)]
@@ -297,7 +332,7 @@ class AerialEnv:
 
     def _obs(self) -> np.ndarray:
         R = self.rotmat()
-        _p, _t, avail = tank_state(self.m_gas, self.beta)
+        tk = tank_state(self.m_gas, self.beta, self.world.name)
         alt = self.altitude()
         # Local slope under the car, as a gradient. A landing has to
         # match ground the car did not pick.
@@ -317,7 +352,7 @@ class AerialEnv:
             self.vel() / 10.0,                    # 3
             [alt / 6.0, self.clearance() / 6.0],  # 2
             [gx, gy],                             # 2
-            [self.m_gas / TH.M_GAS_0, avail],     # 2
+            [self.m_gas / TH.gas_mass(), tk["frac"]],   # 2
             [1.0 - self.t / MAX_STEPS],           # 1
             self.u_act,                           # act_dim
         ]).astype(np.float64)
@@ -331,17 +366,25 @@ class AerialEnv:
         rew = 0.0
         done = False
         for _ in range(SUBSTEPS):
-            # Valve lag, then availability, then the actual command.
+            # Valve lag, then the real-gas chain, then the command.
+            #
+            # MuJoCo's actuator gear is the DESIGN-POINT thrust, so
+            # the command is scaled by how far current conditions
+            # have fallen from it. That ratio is not a fudge: it is
+            # (G_t c_e) now over (G_t c_e) at a full tank, and on
+            # Earth it reaches 0.4 before the tank is empty.
             self.u_act += (u_delayed - self.u_act) * (PHYS_DT / VALVE_TAU)
             self.u_act = np.clip(self.u_act, 0.0, 1.0)
-            _p, _t, avail = tank_state(self.m_gas, self.beta)
-            if self.m_gas <= 0.05:
-                avail = 0.0
-            eff = self.u_act * avail
+            tk = tank_state(self.m_gas, self.beta, self.world.name)
+            self.tank = tk
+            eff = self.u_act * tk["frac"]
             self.data.ctrl[self.aid] = eff
 
-            thrust = float(np.sum(eff * self.fmax))
-            dm = thrust / TH.VE * PHYS_DT
+            # Mass flow is throat flux x throat area, per nozzle. It
+            # is NOT thrust/v_e with a constant v_e -- that was the
+            # old model, and it understated consumption by a fifth
+            # late in the burn when c_e has collapsed.
+            dm = float(np.sum(self.u_act * self.at)) * tk["G"] * PHYS_DT
             dm = min(dm, self.m_gas)
             self.m_gas -= dm
             self.gas_used += dm
@@ -473,23 +516,33 @@ def main() -> int:
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--episodes", type=int, default=12)
     ap.add_argument("--budget", action="store_true")
+    ap.add_argument("--world", default="earth", choices=("earth", "mars"))
     a, _ = ap.parse_known_args()
 
     if a.budget:
-        print("=" * 74)
-        print("  THE TANK — what it can and cannot buy")
-        print("=" * 74)
-        print(f"  {'gas kg':>7} {'bar':>8} {'K':>7} {'avail':>7}")
-        for m in (244, 200, 150, 100, 60, 30, 12, 4):
-            p, t, av = tank_state(float(m))
-            print(f"  {m:>7} {p / 1e5:>8.0f} {t:>7.0f} {av:>6.0%}")
-        print(f"\n  regulator drops out below {TH.P_DROPOUT / 1e5:.0f} bar; "
-              f"below that thrust falls with tank pressure.")
-        print(f"  whole tank  = {TH.total_impulse() / 1000:.0f} kN·s "
-              f"= {TH.hover_seconds():.1f} s of hover")
+        w = TH.WORLDS[a.world]
+        m0 = TH.gas_mass()
+        print("=" * 78)
+        print(f"  THE TANK — what it can and cannot buy, on {w.name}")
+        print("=" * 78)
+        print(f"  {'gas kg':>7} {'tank bar':>9} {'T K':>6} {'p_c bar':>8} "
+              f"{'c_e':>6} {'Isp':>6} {'T exit':>7} {'thrust':>8}")
+        for frac in (1.0, 0.8, 0.6, 0.45, 0.3, 0.18, 0.1, 0.05, 0.02):
+            d = tank_state(m0 * frac, BETA_WALL, w.name)
+            print(f"  {m0 * frac:>7.1f} {d['p'] / 1e5:>9.0f} {d['T']:>6.0f} "
+                  f"{d['pc'] / 1e5:>8.1f} {d['ce']:>6.0f} "
+                  f"{d['ce'] / TH.G0:>6.1f} {d['Te']:>7.1f} "
+                  f"{d['frac']:>7.0%}")
+        imp = TH.total_impulse(world=w)
+        print(f"\n  total impulse {imp / 1000:.1f} kN·s along the real "
+              f"blowdown; a constant-c_e")
+        print(f"  figure would claim {m0 * TH.design_point(w)[1] / 1000:.1f} "
+              f"kN·s. Hover: {TH.hover_seconds(w):.1f} s.")
+        print(f"  'thrust' is the fraction of design-point thrust a "
+              f"fully-open valve gives.")
         return 0
 
-    env = AerialEnv(a.rig, a.preset, flat=a.flat)
+    env = AerialEnv(a.rig, a.preset, flat=a.flat, world=a.world)
     print("=" * 74)
     print(f"  ENV — rig {a.rig} ({env.act_dim} thrusters), "
           f"terrain {env.preset}")

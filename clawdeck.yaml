@@ -396,7 +396,7 @@ labs:
 
   - id: 08_aerial_physics/01_aerial_stabilization
     title: "Aerial Stabilization: cold-gas car"
-    summary: "A tumbling 2-tonne car and eight seconds of gas. PPO beats the textbook controller."
+    summary: "A tumbling 2-tonne car and 7 seconds of gas. Full rank is not reachability."
     est_minutes: 15
     gpu: { min_vram_gb: 8, count: 1 }
     run:
@@ -405,7 +405,10 @@ labs:
       # program, the PPO checks import no simulator, and training is a
       # 13k-parameter MLP against MuJoCo on the CPU -- measured FASTER
       # than a card. Clawdeck is right to advertise these as "Runs now".
-      - { label: "What the rig can do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "Why RK4, measured (CPU)", cmd: "uv run verify.py --only integrators" }
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "The propellant, real gas (CPU, instant)", cmd: "uv run gas.py" }
       - { label: "What the tank can buy (CPU, instant)", cmd: "uv run aerial_env.py --budget" }
       - { label: "PPO properties, no simulator (CPU)", cmd: "uv run ppo.py" }
       - { label: "The baseline that does not learn (CPU, ~3 min)", cmd: "uv run classical.py --episodes 24" }

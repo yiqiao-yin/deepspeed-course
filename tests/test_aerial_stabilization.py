@@ -65,6 +65,7 @@ def main() -> int:
     sys.path.insert(0, str(LAB))
     import mujoco
 
+    import aerial_env as AE
     import car as CAR
     import terrain
     import thrusters as TH
@@ -76,35 +77,99 @@ def main() -> int:
     # ------------------------------------------------------------------
     # 1. Propellant arithmetic — the number the lab is sized from.
     # ------------------------------------------------------------------
-    print("\n  The tank")
-    m_real = TH.gas_mass_from_tank()
-    m_ideal = TH.TANK_P0 / (TH.R_N2 * TH.T_TANK) * TH.TANK_V
-    check("the stated gas mass is the one the constants imply",
-          abs(m_real - TH.M_GAS_0) < 1.0, f"{m_real:.1f} vs {TH.M_GAS_0}")
-    check("the ideal gas law OVERSTATES it, and by a lot",
-          m_ideal > m_real * 1.5, f"ideal {m_ideal:.0f} kg vs real {m_real:.0f}")
+    print("\n  The tank — a reference equation of state, not a guess")
+    import gas
+
+    m_real = TH.gas_mass()
+    m_ideal = TH.TANK_P0 / (gas.R_N2 * TH.T_TANK) * TH.TANK_V
+    rho0 = m_real / TH.TANK_V
+    Z = gas.compressibility(rho0, TH.T_TANK)
+    check("compressibility at 689 bar is ~1.60, from CoolProp's EOS",
+          abs(Z - 1.602) < 0.01, f"Z = {Z:.3f}")
+    check("...which this lab first GUESSED at 1.95 and got 244 kg",
+          abs(m_real - 296.8) < 1.5, f"{m_real:.1f} kg")
+    check("the ideal gas law overstates the fill by ~60%",
+          1.5 < m_ideal / m_real < 1.75, f"ideal {m_ideal:.0f} kg")
     check("...to a density above LIQUID nitrogen (807 kg/m³) — the tell",
           m_ideal / TH.TANK_V > 790, f"{m_ideal / TH.TANK_V:.0f} kg/m³")
-    check("Isp 73 s gives the exhaust velocity used",
-          abs(TH.VE_IDEAL - 73.0 * 9.80665) < 1e-6)
+
+    # Blowdown: the tank cools, and that is not a detail.
+    t_full = gas.blowdown_T(rho0, rho0, TH.T_TANK, 0.30)
+    t_low = gas.blowdown_T(0.1 * rho0, rho0, TH.T_TANK, 0.30)
+    check("the tank COOLS as it empties (isentropic blowdown)",
+          t_low < t_full - 80.0, f"{t_full:.0f} K → {t_low:.0f} K")
+    check("beta = 1 is isothermal — the knob does what it says",
+          abs(gas.blowdown_T(0.1 * rho0, rho0, TH.T_TANK, 1.0)
+              - TH.T_TANK) < 1.0)
+
+    # The saturation guard. A perfectly insulated cold-gas tank
+    # condenses its own propellant, and the single-phase tables do
+    # not describe that -- so the model must REFUSE it rather than
+    # interpolate across the dome and return a plausible pressure.
+    try:
+        gas.blowdown_T(0.1 * rho0, rho0, TH.T_TANK, 0.0)
+        check("a fully adiabatic blowdown is REFUSED as two-phase", False,
+              "it returned a number — the dome was interpolated across")
+    except ValueError as e:
+        check("a fully adiabatic blowdown is REFUSED as two-phase",
+              "two-phase" in str(e).lower() or "saturation" in str(e).lower())
+    check("...but the default beta = 0.30 is comfortably superheated",
+          gas.superheat(0.1 * rho0, t_low) > gas.SUPERHEAT_MIN,
+          f"{gas.superheat(0.1 * rho0, t_low):.0f} K of margin")
+    check("above the critical density there is NO saturation line",
+          gas.T_sat(gas.RHO_CRIT + 50) == 0.0
+          and gas.superheat(gas.RHO_CRIT + 50, 290.0) is None,
+          "superheat is undefined, not 290 K")
+
+    # The nozzle. Effective exhaust velocity is not a constant, and
+    # the pressure term is why Mars and Earth differ on identical
+    # hardware.
+    h0 = gas.tank_h(rho0, TH.T_TANK)
+    ce_e = gas.nozzle_ce(TH.P_REG, h0, "earth")
+    ce_m = gas.nozzle_ce(TH.P_REG, h0, "mars")
+    check("Isp is in the published cold-gas range (55-75 s)",
+          55.0 < ce_e / TH.G0 < 75.0, f"{ce_e / TH.G0:.1f} s on earth")
+    check("the SAME nozzle does better on Mars — (p_e - p_a)A_e",
+          ce_m > ce_e * 1.05,
+          f"{ce_m / TH.G0:.1f} s vs {ce_e / TH.G0:.1f} s")
+    low = gas.tank_h(0.15 * rho0,
+                     gas.blowdown_T(0.15 * rho0, rho0, TH.T_TANK, 0.30))
+    check("...and c_e FALLS through the burn — it is not a constant",
+          gas.nozzle_ce(TH.P_REG, low, "earth") < ce_e * 0.85,
+          f"{gas.nozzle_ce(TH.P_REG, low, 'earth'):.0f} m/s late "
+          f"vs {ce_e:.0f} at the start")
+    check("the nozzle exit stays above nitrogen's triple point",
+          gas.nozzle_Te(TH.P_REG, h0, "earth") > gas.T_TRIPLE,
+          f"{gas.nozzle_Te(TH.P_REG, h0, 'earth'):.0f} K vs "
+          f"{gas.T_TRIPLE:.0f} K")
+
+    imp = TH.total_impulse()
+    check("total impulse is integrated along the blowdown, not m*c_e",
+          imp < m_real * ce_e * 0.9,
+          f"{imp / 1000:.0f} kN·s vs the {m_real * ce_e / 1000:.0f} "
+          f"a constant c_e would claim")
     hov = TH.hover_seconds()
     check("the whole tank buys SECONDS of hover, not minutes",
-          4.0 < hov < 15.0, f"{hov:.1f} s")
+          3.0 < hov < 12.0, f"{hov:.1f} s")
 
-    import aerial_env as AE
-
-    p0, t0, a0 = AE.tank_state(TH.M_GAS_0)
-    p1, t1, a1 = AE.tank_state(TH.M_GAS_0 * 0.25)
-    check("pressure falls as gas leaves", p1 < p0 * 0.5,
-          f"{p0/1e5:.0f} → {p1/1e5:.0f} bar")
-    check("and the tank COOLS doing it (adiabatic blowdown)",
-          t1 < t0 - 30.0, f"{t0:.0f} → {t1:.0f} K")
-    _p, t_iso, _a = AE.tank_state(TH.M_GAS_0 * 0.25, beta=1.0)
-    check("beta=1 is isothermal — the knob does what it says",
-          abs(t_iso - TH.T_TANK) < 1.0, f"{t_iso:.0f} K")
-    check("availability saturates at 1 while the regulator holds", a0 == 1.0)
-    check("and collapses when the tank falls below dropout",
-          AE.tank_state(6.0)[2] < 0.35, f"{AE.tank_state(6.0)[2]:.2f}")
+    # Worlds must be coherent. The first version ran Earth gravity
+    # with Martian air density, which is not any planet.
+    print("\n  Worlds")
+    check("gravity, air density and ambient pressure travel together",
+          TH.MARS.g < TH.EARTH.g and TH.MARS.rho_air < TH.EARTH.rho_air
+          and TH.MARS.p_amb < TH.EARTH.p_amb)
+    check("Mars gravity is Mars gravity", abs(TH.MARS.g - 3.72) < 0.02,
+          f"{TH.MARS.g:.3f} m/s²")
+    m_e, _r, _s = CAR.build("reveal", flat=True, world=TH.EARTH)
+    m_m, _r, _s = CAR.build("reveal", flat=True, world=TH.MARS)
+    check("...and the MODEL gets them, not just the bookkeeping",
+          abs(m_e.opt.gravity[2] + TH.EARTH.g) < 1e-4
+          and abs(m_m.opt.gravity[2] + TH.MARS.g) < 1e-4,
+          f"{m_e.opt.gravity[2]:.3f} vs {m_m.opt.gravity[2]:.3f}")
+    check("the same hardware hovers longer on Mars",
+          TH.hover_seconds(TH.MARS) > TH.hover_seconds(TH.EARTH) * 2.0,
+          f"{TH.hover_seconds(TH.MARS):.1f} s vs "
+          f"{TH.hover_seconds(TH.EARTH):.1f} s")
 
     # ------------------------------------------------------------------
     # 2. The rig generator.
@@ -130,6 +195,12 @@ def main() -> int:
     for nm in ("minimal", "reveal", "wide", "dense"):
         rr = TH.rig(nm)
         tot[nm] = sum(t.fmax * t.direction[2] for t in rr if t.role == "lift")
+    check("every nozzle has a real THROAT AREA, not just a thrust",
+          all(t.throat_area > 0 for t in r10)
+          and all(abs(t.fmax - t.throat_area * TH.design_point()[0]
+                      * TH.design_point()[1]) < 1.0 for t in r10),
+          f"{min(t.throat_area for t in r10) * 1e6:.0f}–"
+          f"{max(t.throat_area for t in r10) * 1e6:.0f} mm²")
     check("every rig is built at EQUAL installed lift — the control",
           max(tot.values()) - min(tot.values()) < 1.0,
           ", ".join(f"{k} {v/1000:.1f}kN" for k, v in tot.items()))
@@ -174,6 +245,41 @@ def main() -> int:
           dw["n_thrusters"] == dm["n_thrusters"] and dw["roll_pure_Nm"] > 1e3,
           f"both N={dw['n_thrusters']}, waisted roll "
           f"{dw['roll_pure_Nm']:,.0f} N·m")
+
+    # RANK IS NOT REACHABILITY. The counterexample is kept here
+    # permanently: `reveal` is rank 6 and can produce no backward
+    # force at all, because every horizontal nozzle pushes the same
+    # way and commands cannot go negative. Measured against the
+    # classical controller, every rig that can brake lands >=98% and
+    # every rig that cannot tops out at 83% -- a 12-nozzle rig
+    # beating an 18-nozzle one. The lab shipped `rank` as its
+    # headline hardware metric and it was the wrong invariant.
+    print("\n  Rank is not reachability")
+    r_rev = TH.rig("reveal")
+    B_rev = TH.effectiveness(r_rev)
+    check("reveal is FULL RANK",
+          int(np.linalg.matrix_rank(B_rev, tol=1e-6)) == 6)
+    check("...and can produce ZERO backward force anyway",
+          TH.max_wrench(B_rev, 0, -1) < 1.0,
+          f"{TH.max_wrench(B_rev, 0, -1):.1f} N of braking")
+    check("...which `dead_axes` names and `rank` cannot",
+          "-Fx" in TH.dead_axes(B_rev), str(TH.dead_axes(B_rev)))
+    r_fore = TH.rig("fore10")
+    check("adding ONE fore pair fixes it, at +2 nozzles",
+          TH.max_wrench(TH.effectiveness(r_fore), 0, -1)
+          > 0.9 * TH.wet_mass() * TH.EARTH.g,
+          f"{TH.max_wrench(TH.effectiveness(r_fore), 0, -1):,.0f} N")
+    check("...while an 18-nozzle rig without one still cannot brake",
+          "-Fx" in TH.dead_axes(TH.effectiveness(TH.rig("dense8"))),
+          "dense8, 18 nozzles, rank 6, no braking")
+    check("reach is signed and spans all six axes",
+          TH.reach(B_rev).shape == (6, 2))
+    check("...and the polytope is one-sided where the hardware is",
+          TH.reach(B_rev)[0, 0] == 0.0 and TH.reach(B_rev)[0, 1] > 1e3)
+    check("waisted has NO pitch torque in either direction",
+          set(TH.dead_axes(TH.effectiveness(TH.rig("waisted"))))
+          >= {"-Ty", "+Ty"},
+          str(TH.dead_axes(TH.effectiveness(TH.rig("waisted")))))
 
     # The lab's thesis, checkable in closed form.
     d10, d20 = TH.audit("reveal", TH.rig("reveal")), \
@@ -220,6 +326,26 @@ def main() -> int:
     # 5. Mass, inertia, and cosmetics that must not weigh anything.
     # ------------------------------------------------------------------
     print("\n  The vehicle")
+    # The bug that made the simulation wrong rather than merely
+    # mis-reported: MuJoCo divides accumulated mass moments by
+    # body_subtreemass to get subtree_com, and the whole
+    # composite-rigid-body dynamics are expressed about that point.
+    e_mass = AE.AerialEnv("reveal", flat=True)
+    e_mass.reset(0)
+    want = float(e_mass.model.body_mass.sum())
+    check("body_subtreemass tracks body_mass as gas is spent",
+          abs(float(e_mass.model.body_subtreemass[e_mass.chassis]) - want)
+          < 1e-6,
+          f"subtreemass {float(e_mass.model.body_subtreemass[e_mass.chassis]):.1f} "
+          f"vs total {want:.1f}")
+    for _ in range(40):
+        e_mass.step(np.full(e_mass.act_dim, 0.8))
+    want2 = float(e_mass.model.body_mass.sum())
+    check("...and keeps tracking it after 40 steps of burning",
+          abs(float(e_mass.model.body_subtreemass[e_mass.chassis]) - want2)
+          < 1e-6 and want2 < want - 1.0,
+          f"{want:.1f} → {want2:.1f} kg")
+
     check("dry mass is the stated dry mass — the 24-slice loft is free",
           abs(float(model.body_mass.sum()) - TH.M_DRY) < 1.0,
           f"{float(model.body_mass.sum()):.1f} kg vs {TH.M_DRY:.0f}")
@@ -238,6 +364,9 @@ def main() -> int:
     # ------------------------------------------------------------------
     print("\n  The task")
     env = AE.AerialEnv("reveal", flat=True)
+    check("the integrator is RK4 — ballistic flight, not contact-rich",
+          int(env.model.opt.integrator) == 1,
+          f"mjtIntegrator {int(env.model.opt.integrator)}")
     check("observation width is DERIVED, not declared",
           env.obs_dim == len(env._obs()), f"{env.obs_dim}")
     check("action width is the nozzle count",

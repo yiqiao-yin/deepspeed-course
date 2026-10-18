@@ -94,7 +94,7 @@ def add_plumes(scene, env, mujoco) -> None:
         # than as a pole. The first version used 0.25 + 2.3u and
         # a full-open roof nozzle drew a 2.5 m grey column that
         # dominated the frame.
-        L = 0.15 + 0.62 * u
+        L = 0.12 + 0.46 * u
         mid = base_w + dir_w * (L * 0.5)
         # Orient a capsule along dir_w via the rotation taking +z to it.
         z = np.array([0.0, 0.0, 1.0])
@@ -113,75 +113,191 @@ def add_plumes(scene, env, mujoco) -> None:
         # 1:16 it rendered as a knitting needle.
         np.array([0.068 + 0.105 * u, L * 0.5, 0.0]),
             mid.astype(np.float64), M.flatten().astype(np.float64),
-            np.array([0.72, 0.88, 1.0, 0.13 + 0.34 * u], dtype=np.float32))
+            np.array([0.72, 0.88, 1.0, 0.10 + 0.22 * u], dtype=np.float32))
         scene.ngeom += 1
 
 
-def hud(img, env, step, n_steps, label: str):
+def _arrow(scene, mujoco, origin, vec, rgba, width=0.075):
+    """One arrow in the 3D scene, oriented along `vec`."""
+    L = float(np.linalg.norm(vec))
+    if L < 1e-6 or scene.ngeom >= scene.maxgeom:
+        return
+    d = np.asarray(vec) / L
+    z = np.array([0.0, 0.0, 1.0])
+    v = np.cross(z, d)
+    c = float(np.dot(z, d))
+    if np.linalg.norm(v) < 1e-8:
+        M = np.eye(3) if c > 0 else np.diag([1.0, -1.0, -1.0])
+    else:
+        vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        M = np.eye(3) + vx + vx @ vx / (1 + c)
+    g = scene.geoms[scene.ngeom]
+    mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_ARROW,
+                        np.array([width, width, L]),
+                        np.asarray(origin, dtype=np.float64),
+                        M.flatten().astype(np.float64),
+                        np.asarray(rgba, dtype=np.float32))
+    # EMISSIVE, or the scene lighting washes every arrow to the same
+    # white and a four-colour legend describes one colour.
+    g.emission = 0.65
+    g.specular = 0.0
+    g.shininess = 0.0
+    scene.ngeom += 1
+
+
+def add_vectors(scene, env, mujoco) -> None:
+    """
+    The physics, drawn to scale: net thrust, weight, angular
+    momentum, velocity.
+
+    Every arrow is a real quantity with a stated scale, not a
+    decoration. Thrust and weight share one scale so the picture
+    answers "is it climbing?" by inspection; H and v have their own.
+    """
+    import thrusters as TH
+
+    # Arrows start a little above the body so they are not buried
+    # inside the hull from every camera angle.
+    p = env.pos() + np.array([0.0, 0.0, 0.45])
+    R = env.rotmat()
+    W = env.model.body_mass.sum() * env.world.g
+    FN = 2.6 / max(W, 1.0)                     # metres per newton
+    # Net thrust in world, summed from the nozzles actually firing.
+    f_b = np.zeros(3)
+    for k, t in enumerate(env.rig):
+        f_b += np.asarray(t.direction) * (env.u_act[k] * t.fmax
+                                          * env.tank["frac"])
+    _arrow(scene, mujoco, p, (R @ f_b) * FN, (0.00, 0.62, 1.00, 1.0))
+    _arrow(scene, mujoco, p, np.array([0, 0, -W]) * FN,
+           (1.00, 0.30, 0.12, 1.0), width=0.060)
+    mujoco.mj_subtreeVel(env.model, env.data)
+    H = env.data.subtree_angmom[env.chassis]
+    _arrow(scene, mujoco, p, H * (2.2 / 3000.0), (1.00, 0.00, 0.85, 1.0),
+           width=0.065)
+    _arrow(scene, mujoco, p, env.vel() * (2.2 / 12.0),
+           (0.15, 1.00, 0.20, 1.0), width=0.060)
+
+
+def hud(img, env, step, n_steps, label: str, trace=None):
     """Draw the instrument panel. Same state, same instant."""
     from PIL import ImageDraw
+
+    import gas
 
     W, H = img.size
     d = ImageDraw.Draw(img, "RGBA")
     pad = 8
+    TH = __import__("thrusters")
+    tk = env.tank
 
-    # Top strip: who and when.
-    d.rectangle([0, 0, W, 40], fill=(8, 12, 18, 215))
+    d.rectangle([0, 0, W, 40], fill=(8, 12, 18, 220))
     d.text((pad, 5), label, fill=INK)
-    d.text((pad, 21), f"t {step / 100:5.2f} s", fill=DIM)
+    d.text((pad, 21), f"t {step / 100:5.2f} s   "
+                      f"{env.world.name}  g {env.world.g:.2f}", fill=DIM)
 
     tilt = env.tilt_deg()
-    alt = env.altitude()
     w = env.omega()
-    p_bar, t_k, avail = __import__("aerial_env").tank_state(env.m_gas,
-                                                            env.beta)
-    gas_f = env.m_gas / __import__("thrusters").M_GAS_0
-
+    rho = env.m_gas / TH.TANK_V
+    sup = gas.superheat(rho, tk["T"]) if rho > 1e-6 else None
     tilt_col = GOOD if tilt < 25 else (WARN if tilt < 60 else BAD)
-    rows = [("ALT", f"{alt:6.2f} m", INK),
-            ("TILT", f"{tilt:6.1f} deg", tilt_col),
-            ("SINK", f"{-env.vel()[2]:6.2f} m/s", INK),
-            ("SPIN", f"{np.linalg.norm(w):6.2f} rad/s", INK),
-            ("GAS", f"{env.m_gas:6.1f} kg", GOOD if gas_f > .3 else WARN),
-            ("TANK", f"{p_bar / 1e5:6.0f} bar", INK),
-            ("TEMP", f"{t_k - 273.15:6.0f} °C", INK)]
-    bw = 128
-    d.rectangle([W - bw - pad * 2, 48, W, 48 + 18 * len(rows) + 10],
-                fill=(8, 12, 18, 205))
+
+    # The state panel. Grouped: attitude, then propellant, then the
+    # two numbers that say whether the thruster is still a thruster.
+    rows = [("ATTITUDE", "", DIM),
+            ("tilt", f"{tilt:7.1f} deg", tilt_col),
+            ("|omega|", f"{np.linalg.norm(w):7.2f} rad/s", INK),
+            ("alt", f"{env.altitude():7.2f} m", INK),
+            ("sink", f"{-env.vel()[2]:7.2f} m/s", INK),
+            ("", "", DIM),
+            ("PROPELLANT", "", DIM),
+            ("gas", f"{env.m_gas:7.1f} kg", INK),
+            ("tank p", f"{tk['p'] / 1e5:7.0f} bar", INK),
+            ("tank T", f"{tk['T']:7.1f} K", INK),
+            ("Z", f"{gas.compressibility(rho, tk['T']):7.3f}"
+                  if rho > 1e-6 else "      -", INK),
+            ("superheat",
+             "  supercrit" if sup is None else f"{sup:7.1f} K",
+             INK if sup is None else (BAD if sup < 8 else INK)),
+            ("", "", DIM),
+            ("NOZZLE", "", DIM),
+            ("p_c", f"{tk['pc'] / 1e5:7.1f} bar", INK),
+            ("Isp", f"{tk['ce'] / TH.G0:7.1f} s", INK),
+            ("T exit", f"{tk['Te']:7.1f} K",
+             BAD if tk["Te"] < gas.T_TRIPLE + 5 else INK),
+            ("thrust", f"{tk['frac']:7.0%}",
+             WARN if tk["frac"] < 0.6 else INK)]
+    bw = 168
+    d.rectangle([W - bw - pad, 48, W, 48 + 15 * len(rows) + 10],
+                fill=(8, 12, 18, 215))
     for i, (k, v, col) in enumerate(rows):
-        y = 54 + 18 * i
-        d.text((W - bw - pad, y), k, fill=DIM)
-        d.text((W - bw + 40, y), v, fill=col)
+        y = 53 + 15 * i
+        if v == "":
+            d.text((W - bw - pad + 4, y), k, fill=(110, 140, 170))
+            continue
+        d.text((W - bw - pad + 10, y), k, fill=DIM)
+        d.text((W - bw + 58, y), v, fill=col)
 
-    # Horizon bubble: tilt, drawn rather than numbered.
-    cx, cy, rr = 56, H - 58, 30
-    d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=(8, 12, 18, 210),
-              outline=(70, 90, 110, 255))
-    bz = env.rotmat()[:, 2]
-    d.line([cx - rr * 0.8, cy, cx + rr * 0.8, cy], fill=(70, 90, 110, 255))
-    d.line([cx, cy, cx + rr * 0.85 * float(bz[1]) * -1,
-            cy - rr * 0.85 * float(bz[2])], fill=tilt_col, width=3)
-    d.text((cx - 16, cy + rr + 4), "UPRIGHT", fill=DIM)
+    # Impulse budget: how much of the tank this episode has spent.
+    used = env.gas_used
+    tot = TH.gas_mass()
+    bx, by, bwid = pad, H - 100, 250
+    d.rectangle([bx, by, bx + bwid, by + 14], outline=(70, 90, 110, 255))
+    d.rectangle([bx + 1, by + 1, bx + 1 + int((bwid - 2) * used / tot),
+                 by + 13], fill=(226, 150, 90, 240))
+    d.rectangle([bx - 2, by - 18, bx + bwid + 2, by + 16],
+                fill=(10, 14, 20, 0))
+    d.text((bx + 2, by - 15), f"PROPELLANT  {used:.0f} / {tot:.0f} kg",
+           fill=DIM)
 
-    # Nozzle strip: the policy's actual output, one bar per nozzle.
+    # Live trace: altitude and |omega| so far, the two things the
+    # policy is actually trading against each other.
+    if trace:
+        tx, ty, tw, th = pad, H - 78, 250, 68
+        d.rectangle([tx, ty, tx + tw, ty + th], fill=(12, 17, 24, 225))
+        n = len(trace)
+        amax = max(1.0, max(a for a, _ in trace))
+        wmax = max(0.5, max(b for _, b in trace))
+        for i in range(1, n):
+            x0 = tx + tw * (i - 1) / max(n - 1, 1)
+            x1 = tx + tw * i / max(n - 1, 1)
+            d.line([x0, ty + th - (th - 16) * trace[i - 1][0] / amax,
+                    x1, ty + th - (th - 16) * trace[i][0] / amax],
+                   fill=(126, 198, 248), width=2)
+            d.line([x0, ty + th - (th - 16) * trace[i - 1][1] / wmax,
+                    x1, ty + th - (th - 16) * trace[i][1] / wmax],
+                   fill=(226, 140, 200), width=2)
+        d.text((tx + 3, ty + 2), f"alt  max {amax:.1f} m",
+               fill=(126, 198, 248))
+        d.text((tx + 124, ty + 2), f"|omega|  max {wmax:.1f}",
+               fill=(226, 140, 200))
+
+    # Arrow legend, so the 3D overlay is readable.
+    lx = pad + 268
+    for i, (nm, col) in enumerate((("net thrust", (0, 158, 255)),
+                                   ("weight", (255, 77, 31)),
+                                   ("ang. momentum", (255, 0, 217)),
+                                   ("velocity", (38, 255, 51)))):
+        d.line([lx, H - 76 + 16 * i, lx + 16, H - 76 + 16 * i],
+               fill=col, width=3)
+        d.text((lx + 22, H - 83 + 16 * i), nm, fill=DIM)
+
+    # Nozzle strip: the policy's actual output.
     n = env.act_dim
-    sw, sh, x0 = 12, 46, 110
-    d.rectangle([x0 - 6, H - sh - 30, x0 + n * (sw + 3) + 6, H - 8],
-                fill=(8, 12, 18, 205))
-    d.text((x0 - 2, H - sh - 27), "NOZZLES", fill=DIM)
+    sw, sh, x0 = 11, 44, lx + 132
+    d.rectangle([x0 - 6, H - sh - 26, x0 + n * (sw + 3) + 8, H - 10],
+                fill=(8, 12, 18, 215))
+    d.text((x0 - 2, H - sh - 23), "NOZZLE VALVES", fill=DIM)
     for k in range(n):
         u = float(env.u_act[k])
         x = x0 + k * (sw + 3)
-        d.rectangle([x, H - sh + 2, x + sw, H - 14],
+        d.rectangle([x, H - sh + 2, x + sw, H - 16],
                     outline=(60, 78, 96, 255))
-        h = int((sh - 16) * min(u, 1.0))
-        if h > 0:
+        hh = int((sh - 18) * min(u, 1.0))
+        if hh > 0:
             role = env.rig[k].role
             col = JET if role == "lift" else (
                 (214, 160, 240) if role == "down" else (240, 200, 120))
-            d.rectangle([x + 1, H - 14 - h, x + sw - 1, H - 15], fill=col)
-    d.text((x0 + n * (sw + 3) + 12, H - sh + 2),
-           f"{avail:.0%} avail", fill=DIM)
+            d.rectangle([x + 1, H - 16 - hh, x + sw - 1, H - 17], fill=col)
 
     # Progress bar.
     d.rectangle([0, H - 5, int(W * step / max(n_steps, 1)), H],
@@ -190,14 +306,14 @@ def hud(img, env, step, n_steps, label: str):
 
 
 def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
-         classical, every, max_frames):
+         classical, every, max_frames, world="earth"):
     import mujoco
     import torch
     from PIL import Image
 
     from aerial_env import AerialEnv
 
-    env = AerialEnv(rig_name, preset, flat=flat)
+    env = AerialEnv(rig_name, preset, flat=flat, world=world)
     if classical:
         from classical import PDController
         net = norm = None
@@ -220,6 +336,7 @@ def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
         ctl = PDController(env) if classical else None
         k = 0
         shots = []
+        trace = []
         while True:
             if classical:
                 a = ctl.act()
@@ -230,15 +347,19 @@ def film(run_dir, rig_name, preset, flat, episodes, seed0, size,
                     a = net.distribution(x).mean.squeeze(0).numpy()
             o, _rw, done, _ = env.step(np.clip(a, 0.0, 1.0))
             k += 1
+            trace.append((max(env.altitude(), 0.0),
+                          float(np.linalg.norm(env.omega()))))
             if k % every == 0 or done:
                 p = env.pos()
                 cam.lookat[:] = [p[0], p[1], max(p[2] * 0.6, 0.4)]
                 cam.azimuth = 128.0 + 14.0 * math.sin(k / 150.0)
                 r.update_scene(env.data, cam)
                 add_plumes(r.scene, env, mujoco)
+                add_vectors(r.scene, env, mujoco)
                 img = Image.fromarray(r.render()).convert("RGB")
                 shots.append(hud(img, env, k, env.max_steps,
-                                 f"{label_kind}   |   throw {ep + 1}"))
+                                 f"{label_kind}   |   throw {ep + 1}",
+                                 trace=trace))
             if done:
                 break
         # Hold the last frame so the outcome is readable.
@@ -278,6 +399,8 @@ def main() -> int:
     ap.add_argument("--rig", default="reveal")
     ap.add_argument("--preset", default="rolling")
     ap.add_argument("--flat", action="store_true")
+    ap.add_argument("--world", default="earth",
+                    choices=("earth", "mars"))
     ap.add_argument("--episodes", type=int, default=4)
     ap.add_argument("--seed0", type=int, default=900_000)
     ap.add_argument("--width", type=int, default=760)
@@ -301,7 +424,7 @@ def main() -> int:
 
     frames, res = film(a.run, rig, preset, flat, a.episodes, a.seed0,
                        (a.width, a.height), a.classical, a.every,
-                       a.max_frames)
+                       a.max_frames, a.world)
     save_gif(frames, OUT / f"{a.out}.gif", a.frame_ms, a.colors)
     ok = sum(r == "landed_ok" for r in res)
     print(f"  {ok}/{len(res)} of the filmed throws landed cleanly "

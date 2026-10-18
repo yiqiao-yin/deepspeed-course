@@ -282,17 +282,37 @@ def model_xml(rig_: list[TH.Thruster],
               extent: float = 64.0,
               rocks=(),
               start_z: float = 1.0,
-              integrator: str = "implicitfast") -> str:
+              integrator: str = "RK4",
+              world: TH.World | None = None) -> str:
     """
     One MuJoCo model: ground, the car, and one actuator per thruster.
 
-    `integrator` defaults to `implicitfast` rather than `RK4`. Topic 7
-    measured that swap at 3.9x on a contact-rich body, which beat what
-    eight rented GPUs would have bought -- and it is the documented
-    recommendation for contact-rich models, with RK4 reserved for
-    energy-conserving systems. The default is written here once so no
-    caller has to remember it.
+    `integrator` defaults to RK4, which REVERSES topic 7's choice,
+    and the reason is the vehicle rather than a preference.
+
+    Topic 7 measured `implicitfast` at 3.9x the speed of RK4 on a
+    legged robot and adopted it. That robot has feet on the ground
+    almost every step, which is the contact-rich case MuJoCo
+    recommends `implicitfast` for and the case where RK4 injects
+    contact vibration.
+
+    This vehicle is BALLISTIC for most of its episode, which is the
+    energy-conserving case MuJoCo reserves RK4 for. Measured here on
+    a 4 s tumble in vacuum with no contacts at all:
+
+        integrator      dH/H        dE/E        steps/s
+        implicitfast    1.07e-02    8.74e-05    137,000
+        Euler           1.07e-02    8.74e-05    144,000
+        implicit        1.00e-02    1.09e-04    105,000
+        RK4             4.19e-07    1.84e-10     39,000
+
+    A 1% drift in angular momentum per four seconds is not a rounding
+    error on a task whose entire content is arresting a tumble -- the
+    policy would spend its budget cancelling an artifact of the
+    integrator. RK4 costs 3.6x per physics step and buys four orders
+    of magnitude. `verify.py --integrators` reproduces the table.
     """
+    world = world or TH.EARTH
     fmax_ref = max(t.fmax for t in rig_)
     noz = "\n".join(_nozzle(t, fmax_ref) for t in rig_)
     wheels = "\n".join(
@@ -325,11 +345,14 @@ def model_xml(rig_: list[TH.Thruster],
 
     return f"""<mujoco model="aerial_roadster">
   <compiler angle="degree" autolimits="true"/>
-  <option timestep="0.002" integrator="{integrator}" gravity="0 0 -9.80665"
-          density="0.02" viscosity="0"/>
-  <!-- density 0.02 kg/m^3: thin Martian air. It is not zero, so the
-       car is not in vacuum, but it is 1/60th of Earth's and nothing
-       aerodynamic saves a bad landing. -->
+  <option timestep="0.002" integrator="{integrator}"
+          gravity="0 0 -{world.g:.5f}" density="{world.rho_air:.4f}"
+          viscosity="0"/>
+  <!-- Gravity and air density come from the SAME World object, so
+       they cannot drift apart. The first version of this lab ran
+       Earth gravity with Martian air density, which is not any
+       planet. Ambient pressure travels with them too, into the
+       nozzle model: it is worth 9% of specific impulse. -->
   <visual>
     <headlight ambient="0.42 0.40 0.39" diffuse="0.62 0.58 0.55"
                specular="0.35 0.35 0.35"/>
@@ -385,7 +408,8 @@ def model_xml(rig_: list[TH.Thruster],
 
 def build(rig_name: str = "default", preset: str = "rolling", seed: int = 0,
           flat: bool = False, start_z: float = 1.0,
-          integrator: str = "implicitfast", tmpdir=None, **rig_kw):
+          integrator: str = "RK4", tmpdir=None,
+          world: TH.World | None = None, **rig_kw):
     """Compile a model. Returns `(model, rig, surface)`."""
     import tempfile
 
@@ -395,7 +419,8 @@ def build(rig_name: str = "default", preset: str = "rolling", seed: int = 0,
 
     r = TH.rig(rig_name, **rig_kw)
     if flat:
-        xml = model_xml(r, None, start_z=start_z, integrator=integrator)
+        xml = model_xml(r, None, start_z=start_z,
+                        integrator=integrator, world=world)
         return mujoco.MjModel.from_xml_string(xml), r, None
 
     s = terrain.generate(seed, preset)
@@ -403,7 +428,8 @@ def build(rig_name: str = "default", preset: str = "rolling", seed: int = 0,
     png = tmp / "terrain.png"
     terrain.hfield_png(s.heights, png)
     xml = model_xml(r, "terrain.png", relief=s.relief, extent=s.extent,
-                    rocks=s.rocks, start_z=start_z, integrator=integrator)
+                    rocks=s.rocks, start_z=start_z, integrator=integrator,
+                    world=world)
     m = mujoco.MjModel.from_xml_string(xml, {"terrain.png": png.read_bytes()})
     return m, r, s
 
@@ -443,12 +469,14 @@ def main() -> int:
     ap.add_argument("--preset", default="rolling")
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--xml", default="")
+    ap.add_argument("--world", default="earth", choices=sorted(TH.WORLDS))
     ap.add_argument("--check", action="store_true")
     a, _ = ap.parse_known_args()
 
     import mujoco
 
-    m, r, s = build(a.rig, a.preset, flat=a.flat)
+    m, r, s = build(a.rig, a.preset, flat=a.flat,
+                    world=TH.WORLDS[a.world])
     ids = resolve(m, r)
 
     print("=" * 74)
@@ -456,8 +484,8 @@ def main() -> int:
     print("=" * 74)
     print(f"  bodies {m.nbody}   geoms {m.ngeom}   actuators {m.nu}   "
           f"dof {m.nv}")
-    print(f"  mass   {m.body_mass.sum():.1f} kg "
-          f"(target {TH.M_DRY + TH.M_GAS_0:.0f} with gas)")
+    print(f"  mass   {m.body_mass.sum():.1f} kg dry "
+          f"({TH.wet_mass():.0f} with gas)")
     print(f"  names  resolved {len(ids)}/{len(r)} by name, ids {ids.tolist()}")
 
     # The check that actually bites: push one nozzle and confirm the

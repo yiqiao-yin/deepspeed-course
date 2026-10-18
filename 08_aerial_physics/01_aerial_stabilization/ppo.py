@@ -194,7 +194,7 @@ class ActorCritic(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
 
-def hover_bias(rig) -> np.ndarray:
+def hover_bias(rig, world=None) -> np.ndarray:
     """
     The valve opening at which the lift nozzles cancel weight.
 
@@ -205,11 +205,12 @@ def hover_bias(rig) -> np.ndarray:
     """
     import thrusters as TH
 
+    world = world or TH.DESIGN_WORLD
     lift_z = sum(t.fmax * t.direction[2] for t in rig if t.role == "lift")
     if lift_z <= 1e-9:
         raise ValueError("rig has no upward thrust — it cannot hover, "
                          "and a hover bias is meaningless for it")
-    u = (TH.M_DRY + TH.M_GAS_0) * TH.G / lift_z
+    u = TH.wet_mass() * world.g / lift_z
     return np.array([u if t.role == "lift" else 0.0 for t in rig])
 
 
@@ -298,7 +299,7 @@ def main() -> int:
     b = hover_bias(rig)
     lift = sum(t.fmax * t.direction[2] * bi
                for t, bi in zip(rig, b) if t.role == "lift")
-    w = (TH.M_DRY + TH.M_GAS_0) * TH.G
+    w = TH.wet_mass() * TH.DESIGN_WORLD.g
     ck("the hover bias actually cancels weight",
        abs(lift - w) < 1.0, f"{lift:,.0f} N vs {w:,.0f} N")
     ck("and non-lift nozzles start SHUT",

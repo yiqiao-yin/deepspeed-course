@@ -162,16 +162,17 @@ class PDController:
         # two compete.
         vh = e.vel()[:2]
         f_w = np.array([-0.9 * mass * vh[0], -0.9 * mass * vh[1],
-                        mass * (9.80665 + az)])
+                        mass * (e.world.g + az)])
         f_b = R.T @ f_w
 
-        _p, _t, avail = __import__("aerial_env").tank_state(e.m_gas, e.beta)
-        return self.alloc.solve(np.concatenate([f_b, tau]), avail)
+        tk = __import__("aerial_env").tank_state(e.m_gas, e.beta,
+                                                 e.world.name)
+        return self.alloc.solve(np.concatenate([f_b, tau]), tk["frac"])
 
 
 def run(rig_name="default", preset="rolling", flat=False, episodes=48,
-        wn=8.0, seed0=0, verbose=False) -> dict:
-    env = AerialEnv(rig_name, preset, flat=flat)
+        wn=8.0, seed0=0, verbose=False, world="earth") -> dict:
+    env = AerialEnv(rig_name, preset, flat=flat, world=world)
     tally: dict[str, int] = {}
     sinks, tilts, gas, ok = [], [], [], 0
     for ep in range(episodes):
@@ -207,6 +208,7 @@ def main() -> int:
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--episodes", type=int, default=48)
     ap.add_argument("--wn", type=float, default=8.0)
+    ap.add_argument("--world", default="earth", choices=("earth", "mars"))
     ap.add_argument("--sweep-gain", action="store_true")
     ap.add_argument("--gains", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -230,7 +232,8 @@ def main() -> int:
         print("=" * 74)
         print(f"  {'wn':>5} {'landed ok':>10} {'sink':>7} {'tilt':>7} {'gas':>7}")
         for wn in (4, 6, 8, 10, 12, 16, 22):
-            d = run(a.rig, a.preset, a.flat, a.episodes, wn)
+            d = run(a.rig, a.preset, a.flat, a.episodes, wn,
+                    world=a.world)
             print(f"  {wn:>5} {d['rate']:>9.0%} {d['sink']:>6.2f}m/s "
                   f"{d['tilt']:>6.1f}° {d['gas']:>6.1f}kg")
         print("\n  The loop has 35 ms of actuator phase in it. Raising the")
@@ -241,14 +244,15 @@ def main() -> int:
     print(f"  CLASSICAL BASELINE — rig {a.rig}, "
           f"terrain {'flat' if a.flat else a.preset}, wn {a.wn}")
     print("=" * 74)
-    d = run(a.rig, a.preset, a.flat, a.episodes, a.wn, verbose=a.verbose)
+    d = run(a.rig, a.preset, a.flat, a.episodes, a.wn,
+            verbose=a.verbose, world=a.world)
     print(f"\n  landed cleanly  {d['landed_ok']}/{d['episodes']}  "
           f"({d['rate']:.0%})")
     for k in sorted(d["tally"]):
         print(f"    {k:<14} {d['tally'][k]:>3}")
     print(f"\n  touchdown sink  {d['sink']:.2f} m/s")
     print(f"  touchdown tilt  {d['tilt']:.1f}°")
-    print(f"  gas used        {d['gas']:.1f} kg of {TH.M_GAS_0:.0f}")
+    print(f"  gas used        {d['gas']:.1f} kg of {TH.gas_mass():.0f}")
     return 0
 
 

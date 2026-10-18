@@ -363,7 +363,10 @@ EXAMPLES = {
                                          "not a card: the worker pool is 4.70x "
                                          "on 20 of them. The GPU in this entry "
                                          "exists only so the flight GIF has an "
-                                         "OpenGL context."),
+                                         "OpenGL context. Run `verify.py` "
+                                         "first: it audits conservation "
+                                         "residuals, and it found five "
+                                         "defects a learning curve cannot."),
     "07_physical_ai/01_obstacle_hopper": dict(min_vram=16, gpus=1, disk=15,
                                     script="train_ppo.py",
                                     launcher="python",

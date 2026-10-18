@@ -7,12 +7,17 @@ The rig zoo: every nozzle layout, turning, with its authority printed.
 
 WHAT THE PICTURE IS FOR
 ------------------------
-The sweep's result is that placement beats count, and a table of
-clean-landing rates states it without showing it. Side by side and
-turning, `waisted` and `minimal` are visibly the same six nozzles in
-different places -- and the caption under each is the thing that
-actually decides the outcome: the rank of its control effectiveness
-matrix, and what it can and cannot torque about.
+The sweep's result is that neither nozzle COUNT nor full RANK
+predicts whether a rig can land, and a table states that without
+showing it. Side by side, `reveal` (10 nozzles, rank 6) and `dense8`
+(18 nozzles, rank 6) look like healthy rigs and neither can produce
+any backward force at all: every horizontal nozzle pushes the same
+way. `fore10` has twelve and can.
+
+So the caption is the REACH -- what the rig cannot produce at any
+command -- not the rank. Captioning rank would print the same green
+"6/6" on the rig that lands 75% and the one that lands 98%, which is
+exactly the mistake this lab made.
 
 Each tile is the real compiled model with its real nozzle bells, lit
 and rotating on the spot. Rendered one at a time and composited --
@@ -144,18 +149,25 @@ def main() -> int:
             dr.rectangle([0, 0, W, 34], fill=(8, 12, 18, 220))
             dr.text((8, 4), f"{nm}", fill=INK)
             dr.text((8, 19), f"{d_aud['n_thrusters']} nozzles", fill=DIM)
-            dr.rectangle([0, H - 48, W, H], fill=(8, 12, 18, 220))
-            rank_col = GOOD if d_aud["rank"] == 6 else BAD
-            dr.text((8, H - 45), f"rank {d_aud['rank']}/6", fill=rank_col)
-            dr.text((84, H - 45),
-                    "all six axes" if d_aud["rank"] == 6
-                    else "an axis is UNREACHABLE", fill=rank_col)
-            dr.text((8, H - 31),
-                    f"pure roll  {d_aud['roll_pure_Nm']:>7,.0f} N·m",
+            dr.rectangle([0, H - 52, W, H], fill=(8, 12, 18, 225))
+            # The caption is the REACH, not the rank. `reveal` is
+            # rank 6 and cannot brake; captioning rank would put the
+            # same green "6/6" on the rig that lands 75% and the one
+            # that lands 98%, which is the error this lab made.
+            dead = TH.dead_axes(TH.effectiveness(rig))
+            can_brake = "-Fx" not in dead
+            bcol = GOOD if can_brake else BAD
+            dr.text((8, H - 49), f"rank {d_aud['rank']}/6", fill=DIM)
+            dr.text((78, H - 49),
+                    "brake: YES" if can_brake else "brake: NO",
+                    fill=bcol)
+            dr.text((8, H - 35),
+                    f"pure roll {d_aud['roll_pure_Nm']:>7,.0f} N·m",
                     fill=INK if d_aud["roll_pure_Nm"] > 0 else BAD)
-            dr.text((8, H - 17),
-                    f"pure pitch {d_aud['pitch_pure_Nm']:>7,.0f} N·m",
-                    fill=INK if d_aud["pitch_pure_Nm"] > 0 else BAD)
+            dr.text((8, H - 21),
+                    "cannot produce: " + (", ".join(dead) if dead
+                                          else "nothing"),
+                    fill=BAD if dead else GOOD)
             shots.append(img)
         r.close()
         strips.append(shots)

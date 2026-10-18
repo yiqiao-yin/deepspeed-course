@@ -20,6 +20,12 @@ dependencies = [
     "torch==2.11.0",
 ]
 
+[project.optional-dependencies]
+# Build-time only. `gen_tables.py` uses CoolProp's reference equation
+# of state to write n2_tables.npz, which IS committed -- a learner
+# runs the lab from the lock without this.
+tables = ["CoolProp>=6.6"]
+
 [tool.uv]
 package = false
 
