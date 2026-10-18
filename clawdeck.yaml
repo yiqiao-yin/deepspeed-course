@@ -394,6 +394,28 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/01_aerial_stabilization
+    title: "Aerial Stabilization: cold-gas car"
+    summary: "A tumbling 2-tonne car and 7 seconds of gas. Full rank is not reachability."
+    est_minutes: 15
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the first five, and that is
+      # CORRECT rather than an oversight: the rig audit is a linear
+      # program, the PPO checks import no simulator, and training is a
+      # 13k-parameter MLP against MuJoCo on the CPU -- measured FASTER
+      # than a card. Clawdeck is right to advertise these as "Runs now".
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "Why RK4, measured (CPU)", cmd: "uv run verify.py --only integrators" }
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "The propellant, real gas (CPU, instant)", cmd: "uv run gas.py" }
+      - { label: "What the tank can buy (CPU, instant)", cmd: "uv run aerial_env.py --budget" }
+      - { label: "PPO properties, no simulator (CPU)", cmd: "uv run ppo.py" }
+      - { label: "The baseline that does not learn (CPU, ~3 min)", cmd: "uv run classical.py --episodes 24" }
+      - { label: "Train it (CPU, ~6 min)", cmd: "uv run train_aerial.py --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_aerial.py --dry-run" }
+      - { label: "Film the landing", cmd: "uv run render_flight.py runs/run", needs_gpu: true }
+
   - id: 07_physical_ai/01_obstacle_hopper
     title: "Obstacle Hopper: learning to climb"
     summary: "Real MuJoCo physics, PPO from scratch, and why one seed proves nothing."

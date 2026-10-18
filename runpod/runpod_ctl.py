@@ -348,6 +348,25 @@ EXAMPLES = {
                                          "for ZeRO to shard. The 2x2 is twelve "
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
+    # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/01_aerial_stabilization": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_aerial.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="SIXTEENTH launcher=python exception. "
+                                         "A 13,013-parameter PPO policy has "
+                                         "nothing for ZeRO to shard, and the "
+                                         "bottleneck is MuJoCo on the CPU -- "
+                                         "topic 7 measured a policy this size "
+                                         "1.7x SLOWER on a GPU. Rent CORES, "
+                                         "not a card: the worker pool is 4.70x "
+                                         "on 20 of them. The GPU in this entry "
+                                         "exists only so the flight GIF has an "
+                                         "OpenGL context. Run `verify.py` "
+                                         "first: it audits conservation "
+                                         "residuals, and it found five "
+                                         "defects a learning curve cannot."),
     "07_physical_ai/01_obstacle_hopper": dict(min_vram=16, gpus=1, disk=15,
                                     script="train_ppo.py",
                                     launcher="python",

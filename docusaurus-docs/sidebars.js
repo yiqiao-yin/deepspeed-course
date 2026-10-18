@@ -125,6 +125,16 @@ const sidebars = {
               'tutorials/physical/perception-pays',
             ],
           },
+          {
+            type: 'category',
+            label: '08 · Aerial Physics',
+            items: [
+              // Topic 7 ended with the machine as the constraint. This
+              // topic changes the machine: a vehicle that leaves the
+              // ground, where the budget is propellant rather than time.
+              'tutorials/aerial/aerial-stabilization',
+            ],
+          },
       ],
     },
     {
