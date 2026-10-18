@@ -220,7 +220,12 @@ whole game. The classical controller holds a commanded descent rate the
 whole way down, which means firing continuously; the learned policy
 coasts, then catches itself late.
 
-![PPO landing a tumbling car, with the physics drawn to scale](/img/aerial/aerial-flight.gif)
+:::note Watch the full film (39 MB)
+**[All four landings, one continuous film →](/img/aerial/aerial-flight.gif)**
+(1000 x 560, 197 frames.) It is linked rather than embedded because it is
+the right artefact for studying a policy frame by frame and the wrong one
+to load into a page. The four short clips below are inline.
+:::
 
 Every frame is MuJoCo rendering the same state the policy acted on. The
 arrows are real quantities at a stated scale — net thrust, weight, angular
@@ -235,20 +240,24 @@ case one is easier to watch than four. Each is a different random tumble
 off the ramp, and the policy has never seen any of them.
 
 **Throw 1** — 0.93 s, 24 kg of gas.
+[Higher resolution →](/img/aerial/aerial-flight-1.gif)
 
 ![Throw 1](/img/aerial/aerial-throw-1.gif)
 
 **Throw 2** — 1.81 s, 60 kg. The hardest of the four: it arrives higher and
 has to come a long way down.
+[Higher resolution →](/img/aerial/aerial-flight-2.gif)
 
 ![Throw 2](/img/aerial/aerial-throw-2.gif)
 
 **Throw 3** — 1.05 s, 29 kg.
+[Higher resolution →](/img/aerial/aerial-flight-3.gif)
 
 ![Throw 3](/img/aerial/aerial-throw-3.gif)
 
 **Throw 4** — 0.89 s, 25 kg. The cheapest: it starts nearly level, so there
 is little to undo.
+[Higher resolution →](/img/aerial/aerial-flight-4.gif)
 
 ![Throw 4](/img/aerial/aerial-throw-4.gif)
 
@@ -373,7 +382,11 @@ that can brake lands ≥ 98%; every rig that cannot tops out at 83%. A
 monotonicity was an artifact: the two rigs that happened to carry fore
 nozzles sat at counts 12 and 20, and 20 was the largest in the table.
 
-![Every rig, turning, with what it cannot produce](/img/aerial/aerial-rigs.gif)
+:::note The rig zoo (8.4 MB)
+**[Every layout, turning, captioned with what it cannot produce →](/img/aerial/aerial-rigs.gif)**
+Side by side, `reveal` and `dense8` look like healthy rigs and neither can
+produce any backward force at all.
+:::
 
 ### Why the standard engineering check fails
 
