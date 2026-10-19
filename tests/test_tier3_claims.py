@@ -81,6 +81,10 @@ TIER3 = {
     "07_physical_ai/04_terrain_navigation": "claims terrain information beats blind navigation",
     "07_physical_ai/06_mars_mjx": "claims a CPU worker pool beats GPU physics on this model",
     "07_physical_ai/08_long_traverse": "claims more legs beat two on the same task and budget",
+    "08_aerial_physics/02_barrel_roll":
+        "claims PPO completes the barrel roll more reliably than a "
+        "scheduled controller, and that curriculum ORDER decides whether "
+        "the roll is learnable at all",
     "08_aerial_physics/01_aerial_stabilization":
         "claims PPO beats a classical PD+allocator baseline, and that "
         "thruster placement beats thruster count at equal installed thrust",

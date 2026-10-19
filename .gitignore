@@ -58,3 +58,5 @@ runpod/results/
 # history. The published numbers live in the README and the docs page.
 08_aerial_physics/*/runs/
 08_aerial_physics/*/*.log
+08_aerial_physics/*/logs_*.txt
+08_aerial_physics/*/*.log
