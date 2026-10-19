@@ -156,6 +156,8 @@ jobs:
         run: uv run tests/test_perception_pays.py
       - name: "Aerial stabilization: the rig is parameters, the gas is real"
         run: uv run tests/test_aerial_stabilization.py
+      - name: "Barrel roll: a roll must be a roll, shaping must not pay to stall"
+        run: uv run tests/test_barrel_roll.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

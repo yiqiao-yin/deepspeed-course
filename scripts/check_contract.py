@@ -63,6 +63,8 @@ NO_DEEPSPEED = {
     # Nothing trains: the lab replays lab 5's policies and compares
     # five bodies. 15-22k-parameter policies, physics-bound on CPU,
     # so there is no optimizer a DeepSpeed config could configure.
+    "08_aerial_physics/02_barrel_roll":
+        "a 13k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
     "08_aerial_physics/01_aerial_stabilization":
         "a 13k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
     "07_physical_ai/10_perception_pays":

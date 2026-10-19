@@ -349,6 +349,21 @@ EXAMPLES = {
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
     # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/02_barrel_roll": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_roll.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="SEVENTEENTH launcher=python "
+                                         "exception. 13,397 parameters, "
+                                         "nothing for ZeRO to shard, and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. Note the "
+                                         "CURRICULUM ORDER: stage A learns "
+                                         "the roll, stage B adds the "
+                                         "landing. Reversed, the policy "
+                                         "reaches 0% roll completion and "
+                                         "stays there."),
     "08_aerial_physics/01_aerial_stabilization": dict(
                                     min_vram=8, gpus=1, disk=16,
                                     script="train_aerial.py",

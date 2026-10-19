@@ -133,6 +133,7 @@ const sidebars = {
               // topic changes the machine: a vehicle that leaves the
               // ground, where the budget is propellant rather than time.
               'tutorials/aerial/aerial-stabilization',
+              'tutorials/aerial/barrel-roll',
             ],
           },
       ],
