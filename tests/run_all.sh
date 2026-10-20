@@ -64,6 +64,7 @@ TESTS=(
     tests/test_perception_pays.py
     tests/test_aerial_stabilization.py
     tests/test_barrel_roll.py
+    tests/test_land_on_target.py
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py

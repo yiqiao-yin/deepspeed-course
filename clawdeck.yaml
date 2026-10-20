@@ -394,6 +394,24 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/03_land_on_target
+    title: "Land on Target: put it on the mark"
+    summary: "PPO lands the cold-gas car on a 4 m mark in boulder country, from a tumbling launch."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the rig audit is a linear program, the decidability report is
+      # geometry, and training is a ~13k-parameter MLP against MuJoCo
+      # on the CPU -- measured faster than a card.
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "Is there a DECISION in this ground? (CPU, ~1 min)", cmd: "uv run target_env.py --decidable" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "The engineered baseline (CPU, ~8 min)", cmd: "uv run classical.py --episodes 32" }
+      - { label: "Train the blind arm (CPU, ~25 min)", cmd: "uv run train_target.py --sense blind --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_target.py --dry-run" }
+      - { label: "Film a landing", cmd: "uv run render_target.py runs/run --episodes 3", needs_gpu: true }
+
   - id: 08_aerial_physics/02_barrel_roll
     title: "Barrel Roll: a full 360 in mid-air"
     summary: "PPO rolls the car 95% of the time vs 68% for the engineered controller, on 40% less gas."

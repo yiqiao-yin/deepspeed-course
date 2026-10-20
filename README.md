@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 66 pages with
+The documentation site is the primary way to read this material: 67 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -262,7 +262,8 @@ deepspeed-course/
 │
 └── 08_aerial_physics/     # Leaving the ground. The budget is propellant, not time
     ├── 01_aerial_stabilization/ # A tumbling cold-gas car. PPO lands it on a third of the gas
-    └── 02_barrel_roll/          # A full 360 in mid-air. Curriculum ORDER decides if it rolls at all
+    ├── 02_barrel_roll/          # A full 360 in mid-air. Curriculum ORDER decides if it rolls at all
+    └── 03_land_on_target/       # Lands on a 4 m mark. Seeing the ground makes it WORSE
 ```
 
 **Every example folder has the same six files** (the contract in

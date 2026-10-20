@@ -5,10 +5,11 @@ sidebar_position: 1
 # Aerial Stabilization
 
 <!--chain-->
-:::info **Lab 1 of 1** in Aerial Physics — a new topic. Topic 7 ended with the
+:::info **Lab 1 of 3** in Aerial Physics — a new topic. Topic 7 ended with the
 machine as the constraint; this one changes the machine to one that leaves
 the ground, where the budget is propellant rather than time.
 ← previous topic: [Physical AI](../physical/overview)
+· next: [Barrel Roll](./barrel-roll) →
 :::
 
 :::info Reading this without a physics background

@@ -349,6 +349,21 @@ EXAMPLES = {
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
     # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/03_land_on_target": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_target.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="EIGHTEENTH launcher=python "
+                                         "exception, same reason as labs 1 "
+                                         "and 2: a 13k-parameter MLP has "
+                                         "nothing for ZeRO to shard and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. The "
+                                         "three arms differ ONLY in "
+                                         "--sense (blind / slope / patch); "
+                                         "anything else that moves "
+                                         "invalidates the comparison."),
     "08_aerial_physics/02_barrel_roll": dict(
                                     min_vram=8, gpus=1, disk=16,
                                     script="train_roll.py",

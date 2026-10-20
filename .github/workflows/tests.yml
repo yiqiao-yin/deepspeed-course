@@ -158,6 +158,8 @@ jobs:
         run: uv run tests/test_aerial_stabilization.py
       - name: "Barrel roll: a roll must be a roll, shaping must not pay to stall"
         run: uv run tests/test_barrel_roll.py
+      - name: Topic 8 Lab 3 — land on target
+        run: uv run tests/test_land_on_target.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py
