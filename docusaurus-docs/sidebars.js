@@ -134,6 +134,7 @@ const sidebars = {
               // ground, where the budget is propellant rather than time.
               'tutorials/aerial/aerial-stabilization',
               'tutorials/aerial/barrel-roll',
+              'tutorials/aerial/land-on-target',
             ],
           },
       ],
