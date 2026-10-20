@@ -193,7 +193,128 @@ target offset in body frame, propellant fraction and thrust availability,
 time remaining, and the previous action. The terrain arms add 2 or 25 more.
 
 **Reward.** Terminal-dominated, with potential-based shaping and a per-step
-time cost. The shaping was where all the difficulty lived — see below.
+time cost, in full below. The shaping was where all the difficulty lived.
+
+### The reward function, in full
+
+> **In plain words**
+> Below is the exact scoring rule, written in maths. If that is not your
+> language, here it is in one paragraph: **every moment that passes costs the
+> car a small fixed amount**, so dithering is never free. Spinning and burning
+> gas cost a little more. On top of that there is a running "how well is this
+> going" score — closer to the mark, lower down, right way up — and the car is
+> paid the *improvement* in that score each moment rather than the score
+> itself. Then at the very end it gets one big number: a large bonus for
+> landing on the mark, a small one for landing safely elsewhere, and
+> penalties of increasing size for landing hard, crashing, and never landing
+> at all.
+
+
+**Per step.** At each of the 600 control steps the car receives
+
+$$
+r_t = r^{\text{time}} + r^{\text{spin}} + r^{\text{gas}} + F_t
+$$
+
+$$
+r^{\text{time}} = -0.15, \qquad r^{\text{spin}} = -0.05\,\lVert \boldsymbol\omega_t \rVert^2 \Delta t
+$$
+
+$$
+r^{\text{gas}} = -0.004 \sum_{i=1}^{20} u_{t,i}\, \Delta t, \qquad \Delta t = 0.01\ \text{s}
+$$
+
+where $\boldsymbol\omega_t$ is the body angular rate and $u_{t,i} \in [0,1]$
+is the commanded opening of nozzle $i$. The spin and gas terms are
+deliberately tiny — about $10^{-2}$ per step against a time cost of
+$1.5 \times 10^{-1}$ — because they are preferences, not objectives.
+
+**Shaping.** $F_t$ is a potential-based shaping term in the sense of Ng,
+Harada and Russell (1999):
+
+$$
+F_t = \gamma\,\Phi(s_{t+1}) - \Phi(s_t), \qquad \gamma = 0.999
+$$
+
+$$
+\Phi(s) = \Phi_{\text{near}} + \Phi_{\text{low}} + \Phi_{\text{up}}
+$$
+
+with, writing $d$ for the horizontal miss distance in metres, $h$ for height
+above ground, and $\hat{\mathbf{z}}\cdot\hat{\mathbf{u}}$ for the cosine
+between the car's own up-axis and the world vertical,
+
+$$
+\Phi_{\text{near}} = 3\max\!\left(0,\ 1 - \tfrac{d}{40}\right) \in [0, 3]
+$$
+
+$$
+\Phi_{\text{low}} = 2\left(1 - \tfrac{\min(h,\,10)}{10}\right) \in [0, 2]
+$$
+
+$$
+\Phi_{\text{up}} = \tfrac{1}{2}\left(\hat{\mathbf{z}}\cdot\hat{\mathbf{u}} + 1\right) \in [0, 1]
+$$
+
+> **In plain words**
+> The shaping term is a trick for giving hints without changing what counts as
+> winning. You define a "warmth" score — warmer when the car is near the mark,
+> low down and the right way up — and pay the car the *change* in warmth at
+> each step. Because the payments are differences, they cancel out over a whole
+> flight, so the hints steer the search without quietly inventing a different
+> goal. The ranges on the right are the deliberate part: the whole warmth score
+> can never exceed 6, and the next paragraph explains why that ceiling matters
+> more than it looks.
+
+
+**Why $\Phi$ is capped at 6.** Telescoping the shaping over an episode that
+ends at step $T$ leaves
+
+$$
+\sum_{t=0}^{T-1} F_t = \gamma^{T}\Phi(s_T) - \Phi(s_0) + (\gamma - 1)\sum_{t=1}^{T-1}\gamma^{t-1}\Phi(s_t)
+$$
+
+The last term is the one that bites. With $\gamma$ below 1 it is a *toll* on
+occupying high-potential states, worth roughly $(1-\gamma)\,\Phi_{\max}\,T$
+over an episode. At $\Phi_{\max} = 6$, $\gamma = 0.999$ and $T = 600$ that is
+about 3.6 — negligible against a terminal prize near 100. The first version
+of this lab had $\Phi_{\max} = 31$ at $\gamma = 0.995$, a toll of about 93,
+and the policy duly learned to run away from good states. See
+[Reward design](#reward-design) below.
+
+**Terminal.** One of five mutually exclusive outcomes is added on the final
+step. Writing $v_\downarrow$ for sink rate in m/s and $\theta$ for tilt in
+degrees, and calling a touchdown *gentle* when
+$v_\downarrow \le 2.5$, $\theta \le 25$ and $\lVert\boldsymbol\omega\rVert \le 1.2$:
+
+$$
+R_T =
+\begin{cases}
+70 + 20\left(1 - \tfrac{d}{4}\right) + 10\left(1 - \tfrac{\theta}{25}\right)
+  & \text{gentle},\ d \le 4 \\[4pt]
+\max\!\left(5,\ 25 - 3(d - 4)\right) & \text{gentle},\ d > 4 \\[4pt]
+-5 & \text{landed, not gentle} \\[4pt]
+-40 - 4\min(v_\downarrow,\, 8) & \text{crash} \\[4pt]
+-90 & \text{never landed}
+\end{cases}
+$$
+
+> **In plain words**
+> Every line of that table is graded rather than pass/fail, and that is the
+> point. Landing dead centre pays more than landing at the edge of the circle;
+> arriving at walking pace pays more than arriving at speed; and even a crash
+> is scored by how fast the car hit, so "slow down" is something the computer
+> can discover one small improvement at a time. A rule that just said "crash =
+> bad" would be a cliff with nothing to climb.
+
+
+Two properties of this ladder are load-bearing and the test suite pins both.
+It is **monotone** — every outcome scores strictly above the one below it, so
+no failure is ever worth choosing — and the worst outcome is **never
+landing**, not crashing. The reason that ordering has to be enforced rather
+than assumed is the discounting argument in
+[Reward design](#reward-design) below: a penalty arriving later is cheaper, and
+the policy will exploit that unless something charges for delay.
 
 ## Hardware check
 

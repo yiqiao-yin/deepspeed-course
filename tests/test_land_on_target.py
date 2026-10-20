@@ -265,6 +265,57 @@ def main() -> int:
           med > 2.5, f"median {med:.1f} m — the `hazard` preset managed "
           f"1.5 m and the arms could not separate")
 
+    # ------------------------------------------------------------------
+    # 6. The PUBLISHED reward function must be the shipped one.
+    # ------------------------------------------------------------------
+    print("\n  The documented reward is the implemented reward")
+    pub = TE.TargetEnv("dense", sense="blind", seed=2)
+    pub.reset(2)
+
+    def page_phi(en) -> float:
+        """Phi exactly as written on the lab page, independently coded."""
+        d, h, c = en.miss(), en.altitude(), en.up_dot()
+        return (3.0 * max(0.0, 1.0 - d / 40.0)
+                + 2.0 * (1.0 - min(h, 10.0) / 10.0)
+                + 0.5 * (c + 1.0))
+
+    worst_phi = 0.0
+    worst_step = 0.0
+    for k in range(60):
+        worst_phi = max(worst_phi, abs(page_phi(pub) - pub._potential()))
+        before = pub._prev_phi
+        act = np.random.default_rng(k).uniform(0.0, 0.7, pub.act_dim)
+        _o, rew, done, _ = pub.step(act)
+        w = pub.omega()
+        recon = (-TE.TIME_COST
+                 - 0.05 * float(w @ w) * 0.01
+                 - 0.004 * float(np.sum(pub.u_act)) * 0.01
+                 + pub.gamma * pub._potential() - before)
+        if not done:
+            worst_step = max(worst_step, abs(recon - rew))
+        else:
+            pub.reset(k + 100)
+    check("the page's Phi equals the shipped potential",
+          worst_phi < 1e-12, f"max |diff| {worst_phi:.1e}")
+    check("the page's per-step reward equals the shipped reward",
+          worst_step < 1e-9, f"max |diff| {worst_step:.1e}")
+
+    pub.reset(5)
+    pub.outcome = "timeout"
+    check("the page's timeout terminal is the shipped one",
+          abs(pub._terminal() - (-90.0)) < 1e-12)
+    pub.outcome = "crash"
+    pub.data.qvel[2] = -5.0
+    mujoco.mj_forward(pub.model, pub.data)
+    check("the page's crash terminal is the shipped one",
+          abs(pub._terminal() - (-40.0 - 4.0 * 5.0)) < 1e-9,
+          f"{pub._terminal():.1f} vs -60.0 at 5 m/s")
+
+    # The toll figure quoted on the page, recomputed rather than copied.
+    toll = (1.0 - TE.GAMMA) * 6.0 * TE.MAX_STEPS
+    check("the published shaping toll of ~3.6 is what the constants give",
+          abs(toll - 3.6) < 0.05, f"{toll:.2f}")
+
     print("\n" + "=" * 76)
     print(f"  {'FAILED: ' + ', '.join(FAILURES) if FAILURES else 'all checks passed'}")
     print("=" * 76)
