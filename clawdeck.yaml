@@ -394,6 +394,24 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/04_fly_on_mars
+    title: "Fly on Mars: a gate course"
+    summary: "On Mars the car weighs 62% less and pushes 8.6% harder. PPO flies a three-gate course."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the budget table is arithmetic, the rig audit is a linear
+      # program, and training is a ~15k-parameter MLP against MuJoCo
+      # on the CPU -- measured faster than a card.
+      - { label: "Can the tank afford the course? (CPU, instant)", cmd: "uv run flight_env.py --budget" }
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "The scheduled guidance law (CPU, ~6 min)", cmd: "uv run classical.py --world mars --episodes 32" }
+      - { label: "Train the Mars arm (CPU, ~25 min)", cmd: "uv run train_flight.py --world mars --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_flight.py --dry-run" }
+      - { label: "Film the course", cmd: "uv run render_flight.py runs/run --episodes 3", needs_gpu: true }
+
   - id: 08_aerial_physics/03_land_on_target
     title: "Land on Target: put it on the mark"
     summary: "PPO lands the cold-gas car on a 4 m mark in boulder country, from a tumbling launch."

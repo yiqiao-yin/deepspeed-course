@@ -61,11 +61,20 @@ runpod/results/
 08_aerial_physics/*/logs_*.txt
 08_aerial_physics/*/logs/
 08_aerial_physics/*/logs_sweep.txt
+# Paired-comparison and sweep outputs: reproducible from the
+# committed compare.py, so they are results rather than source.
+08_aerial_physics/*/cmp_*.json
+08_aerial_physics/*/long16.json
+08_aerial_physics/*/logs_cmp_*.txt
+08_aerial_physics/*/logs_render*.txt
+08_aerial_physics/*/logs_probe*.txt
 # the sweep is launched from a COPY so that editing the
 # original cannot corrupt a running script (bash reads by
 # byte offset); the copy is scratch.
 08_aerial_physics/*/.run_arms_live.sh
 08_aerial_physics/*/.run_long_live.sh
-08_aerial_physics/*/.watch_arms.sh
+08_aerial_physics/*/.watch*.sh
+08_aerial_physics/*/.chain*.sh
+08_aerial_physics/*/.run_live.sh
 08_aerial_physics/*/logs_long.txt
 08_aerial_physics/*/*.log

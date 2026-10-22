@@ -81,6 +81,10 @@ TIER3 = {
     "07_physical_ai/04_terrain_navigation": "claims terrain information beats blind navigation",
     "07_physical_ai/06_mars_mjx": "claims a CPU worker pool beats GPU physics on this model",
     "07_physical_ai/08_long_traverse": "claims more legs beat two on the same task and budget",
+    "08_aerial_physics/04_fly_on_mars":
+        "claims PPO flies a three-gate course on Mars and lands, and that "
+        "Mars buys the course through thrust-to-weight rather than gravity "
+        "alone",
     "08_aerial_physics/03_land_on_target":
         "claims PPO lands the car on a marked spot, and that seeing the "
         "terrain does not improve on being blind to it",
