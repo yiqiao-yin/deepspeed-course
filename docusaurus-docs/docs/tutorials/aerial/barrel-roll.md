@@ -5,7 +5,7 @@ sidebar_position: 2
 # Barrel Roll
 
 <!--chain-->
-:::info **Lab 2 of 3** in Aerial Physics. Lab 1 landed a tumbling car; this
+:::info **Lab 2 of 4** in Aerial Physics. Lab 1 landed a tumbling car; this
 one makes it turn all the way over first.
 ← previous: [Aerial Stabilization](./aerial-stabilization)
 · next: [Land on Target](./land-on-target) →

@@ -160,6 +160,8 @@ jobs:
         run: uv run tests/test_barrel_roll.py
       - name: Topic 8 Lab 3 — land on target
         run: uv run tests/test_land_on_target.py
+      - name: Topic 8 Lab 4 — fly on Mars
+        run: uv run tests/test_fly_on_mars.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

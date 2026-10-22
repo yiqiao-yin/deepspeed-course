@@ -522,6 +522,26 @@ def inertia(m_gas: float | None = None) -> np.ndarray:
     return I_DRY + m_gas * Y_TANK ** 2 * np.array([1.0, 0.0, 1.0])
 
 
+def thrust_scale(world=None) -> float:
+    """
+    Thrust multiplier for `world` against the design point, full tank.
+
+    A nozzle pushes harder in thinner air: the pressure term
+    (p_e - p_amb) * A_e grows as ambient falls. Mars at 610 Pa gives
+    about 8.6% more thrust from the same hardware than Earth at
+    101 kPa -- and that is on TOP of weighing 62% less.
+
+    This is the same ratio the environment applies at runtime as
+    `tank_state(...)["frac"]`, evaluated at a full tank, so the audit
+    and the simulator agree about the vehicle by construction rather
+    than by coincidence.
+    """
+    world = world or DESIGN_WORLD
+    g_d, ce_d = design_point(DESIGN_WORLD)
+    g_w, ce_w = design_point(world)
+    return float((g_w * ce_w) / (g_d * ce_d))
+
+
 def audit(name: str, rig_: list[Thruster], mass: float | None = None,
           world=None) -> dict:
     """
@@ -538,7 +558,18 @@ def audit(name: str, rig_: list[Thruster], mass: float | None = None,
     I = inertia()
     w = m * world.g
 
-    lift = max_wrench(B, 2)
+    # Thrust is WORLD-DEPENDENT and this used the design point.
+    #
+    # `fmax` is Earth-at-full-tank by definition (see Thruster), and
+    # the environment scales commands by the ratio of current to
+    # design conditions. The audit did not, so `audit(world=MARS)`
+    # divided Earth thrust by MARS weight and reported a
+    # lift-to-weight 8.6% low -- 6.33 where the vehicle really has
+    # 6.87. On Earth the factor is exactly 1.000, which is why no
+    # published number in labs 1-3 moved, and why the defect could
+    # sit here until a Mars lab needed it.
+    t_scale = thrust_scale(world)
+    lift = max_wrench(B, 2) * t_scale
     roll_free = max_wrench(B, 3)
     roll_pure, _u = max_pure_couple(B, 0)
     pitch_pure, _ = max_pure_couple(B, 1)
@@ -567,8 +598,8 @@ def audit(name: str, rig_: list[Thruster], mass: float | None = None,
         "world": world.name,
         "throat_mm2": [t.throat_area * 1e6 for t in rig_],
         "rank": int(np.linalg.matrix_rank(B, tol=1e-6)),
-        "brake_N": float(-reach(B)[0, 0]),
-        "brake_per_w": float(-reach(B)[0, 0]) / w,
+        "brake_N": float(-reach(B)[0, 0]) * t_scale,
+        "brake_per_w": float(-reach(B)[0, 0]) * t_scale / w,
         "dead_axes": dead_axes(B),
         "names": [t.name for t in rig_],
     }
