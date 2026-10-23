@@ -394,6 +394,28 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/06_learned_dynamics
+    title: "Learned Dynamics: does size help?"
+    summary: "29,000x the parameters, no better prediction. The first lab here that wants a GPU."
+    est_minutes: 30
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # The ladder and the null are arithmetic and run anywhere; the
+      # large rungs want the card, which is why this lab has topic 8's
+      # first real require_gpu().
+      - { label: "The size ladder and its memory (CPU, instant)", cmd: "uv run dynamics.py" }
+      - { label: "What 'learned nothing' scores (CPU, ~1 min)", cmd: "uv run baseline.py" }
+      - { label: "Collect trajectories (CPU, ~10 min)", cmd: "uv run collect.py --episodes 300 --out data/train.npz" }
+      # NO --size HERE, deliberately. The guard is gated on --size and
+      # the checker -- correctly conservative -- treats any command
+      # passing that flag as able to reach it, since it cannot know
+      # which values are safe. The DEFAULT size is `small`, which is
+      # CPU-runnable, so omitting the flag is both honest and
+      # provably safe. Verified: exits 0 with CUDA_VISIBLE_DEVICES="".
+      - { label: "Train the default rung (CPU, ~1 min)", cmd: "uv run train_dyn.py --kind mlp --epochs 4" }
+      - { label: "Train a large rung (GPU, ~12 min)", cmd: "uv run train_dyn.py --kind mlp --size xl --epochs 4", primary: true, needs_gpu: true }
+      - { label: "Collate and judge against the bar", cmd: "uv run ladder.py" }
+
   - id: 08_aerial_physics/05_thruster_failure
     title: "Thruster Failure: landing broken"
     summary: "A nozzle jams mid-flight. Training with failures lifts survival from 72% to 89%."

@@ -5,7 +5,7 @@ sidebar_position: 3
 # Land on Target
 
 <!--chain-->
-:::info **Lab 3 of 5** in Aerial Physics. Lab 1 landed a tumbling car; lab 2
+:::info **Lab 3 of 6** in Aerial Physics. Lab 1 landed a tumbling car; lab 2
 made it roll all the way over first; this one makes it land somewhere
 specific.
 ← previous: [Barrel Roll](./barrel-roll)

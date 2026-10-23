@@ -81,6 +81,10 @@ TIER3 = {
     "07_physical_ai/04_terrain_navigation": "claims terrain information beats blind navigation",
     "07_physical_ai/06_mars_mjx": "claims a CPU worker pool beats GPU physics on this model",
     "07_physical_ai/08_long_traverse": "claims more legs beat two on the same task and budget",
+    "08_aerial_physics/06_learned_dynamics":
+        "claims a dynamics model for this vehicle does not improve with "
+        "size, so the one model in topic 8 big enough to need ZeRO does "
+        "not deserve it",
     "08_aerial_physics/05_thruster_failure":
         "claims a policy trained with in-flight thruster failures survives "
         "them better than one that never saw a failure, and that no cheap "

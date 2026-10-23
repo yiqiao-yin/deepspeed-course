@@ -74,6 +74,12 @@ runpod/results/
 08_aerial_physics/*/.run_arms_live.sh
 08_aerial_physics/*/.run_long_live.sh
 08_aerial_physics/*/.watch*.sh
+08_aerial_physics/*/.ladder_live.sh
+08_aerial_physics/*/.lr_live.sh
+# Lab 6's dataset is 67 MB and fully reproducible from the
+# committed collect.py. n2_tables.npz stays tracked -- that
+# one needs CoolProp, which is a build-time-only dependency.
+08_aerial_physics/06_learned_dynamics/data/
 08_aerial_physics/*/.chain*.sh
 08_aerial_physics/*/.run_live.sh
 08_aerial_physics/*/logs_long.txt

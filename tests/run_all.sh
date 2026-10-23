@@ -67,6 +67,7 @@ TESTS=(
     tests/test_land_on_target.py
     tests/test_fly_on_mars.py
     tests/test_thruster_failure.py
+    tests/test_learned_dynamics.py
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py
