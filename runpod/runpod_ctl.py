@@ -349,6 +349,24 @@ EXAMPLES = {
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
     # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/06_learned_dynamics": dict(
+                                    min_vram=24, gpus=1, disk=24,
+                                    script="train_dyn.py",
+                                    launcher="python",
+                                    args="--kind mlp --size xl --epochs 4",
+                                    note="THE FIRST LAB IN TOPIC 8 THAT "
+                                         "WANTS A CARD, and the first with "
+                                         "a real require_gpu(). Labs 1-5 "
+                                         "train a ~14k-parameter policy "
+                                         "against MuJoCo and are faster on "
+                                         "CPU. Here the largest rung is "
+                                         "705M parameters, measured at "
+                                         "15.97 GB of a 16 GB card. "
+                                         "launcher=python because the "
+                                         "measured answer is that ZeRO at "
+                                         "world size 1 costs 1.81x the "
+                                         "memory and buys nothing -- which "
+                                         "IS the lab's finding."),
     "08_aerial_physics/05_thruster_failure": dict(
                                     min_vram=8, gpus=1, disk=16,
                                     script="train_fail.py",

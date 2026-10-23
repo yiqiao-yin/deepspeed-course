@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 69 pages with
+The documentation site is the primary way to read this material: 70 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -265,7 +265,8 @@ deepspeed-course/
     ├── 02_barrel_roll/          # A full 360 in mid-air. Curriculum ORDER decides if it rolls at all
     ├── 03_land_on_target/       # Lands on a 4 m mark. Seeing the ground makes it WORSE
     ├── 04_fly_on_mars/          # A 3-gate course on Mars. Thrust-to-weight, not gravity
-    └── 05_thruster_failure/     # A nozzle breaks mid-air. Static authority checks do not predict it
+    ├── 05_thruster_failure/     # A nozzle breaks mid-air. Static authority checks do not predict it
+    └── 06_learned_dynamics/     # Can a big model learn the physics? 29,000x the params, no better
 ```
 
 **Every example folder has the same six files** (the contract in
