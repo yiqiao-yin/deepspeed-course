@@ -162,6 +162,8 @@ jobs:
         run: uv run tests/test_land_on_target.py
       - name: Topic 8 Lab 4 — fly on Mars
         run: uv run tests/test_fly_on_mars.py
+      - name: Topic 8 Lab 5 — thruster failure
+        run: uv run tests/test_thruster_failure.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py
