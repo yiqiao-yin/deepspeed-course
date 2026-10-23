@@ -349,6 +349,23 @@ EXAMPLES = {
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
     # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/05_thruster_failure": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_fail.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="TWENTIETH launcher=python "
+                                         "exception, same reason as labs 1 "
+                                         "to 4: a ~14k-parameter MLP has "
+                                         "nothing for ZeRO to shard and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. Note the "
+                                         "CURRICULUM: --fail-p 0 first, "
+                                         "then warm start at 1.0. Trained "
+                                         "from scratch with a failure every "
+                                         "episode the policy never learns "
+                                         "to land -- half the draws leave "
+                                         "no hover reachable."),
     "08_aerial_physics/04_fly_on_mars": dict(
                                     min_vram=8, gpus=1, disk=16,
                                     script="train_flight.py",

@@ -136,6 +136,7 @@ const sidebars = {
               'tutorials/aerial/barrel-roll',
               'tutorials/aerial/land-on-target',
               'tutorials/aerial/fly-on-mars',
+              'tutorials/aerial/thruster-failure',
             ],
           },
       ],

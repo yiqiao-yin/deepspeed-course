@@ -394,6 +394,24 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/05_thruster_failure
+    title: "Thruster Failure: landing broken"
+    summary: "A nozzle jams mid-flight. Training with failures lifts survival from 72% to 89%."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the survivability audit is a linear program and training is a
+      # ~14k-parameter MLP against MuJoCo on the CPU -- measured
+      # faster than a card.
+      - { label: "Which failures are survivable? (CPU, ~1 min)", cmd: "uv run fault.py" }
+      - { label: "How many at once? (CPU, ~2 min)", cmd: "uv run fault.py --simultaneous" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "Random policy on a broken rig (CPU, ~2 min)", cmd: "uv run fail_env.py --episodes 12" }
+      - { label: "Learn the clean landing first (CPU, ~25 min)", cmd: "uv run train_fail.py --fail-p 0.0 --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_fail.py --dry-run" }
+      - { label: "Film a failure", cmd: "uv run render_fail.py runs/run --episodes 3", needs_gpu: true }
+
   - id: 08_aerial_physics/04_fly_on_mars
     title: "Fly on Mars: a gate course"
     summary: "On Mars the car weighs 62% less and pushes 8.6% harder. PPO flies a three-gate course."
