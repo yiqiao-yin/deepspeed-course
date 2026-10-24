@@ -51,16 +51,39 @@ CHANNELS = [(6, "uprightness", ""), (15, "altitude", " (norm)"),
             (12, "vertical speed", " (norm)"), (7, "roll rate", " (norm)")]
 
 
-def save_gif(frames, path, ms=70, colors=128):
+def save_gif(frames, path, ms=70, colors=128, hold_ms=1200):
+    """
+    Write a GIF that actually animates.
+
+    optimize=True MERGES consecutive identical frames and rolls their
+    durations together. A progressive chart reveal over 11 data
+    points produces ~11 distinct images in 70 requested frames, so
+    the first version of this collapsed 92 frames into 7 at 1610 ms
+    each -- a file that loads, reports a frame count, and looks like
+    a still picture. Verified by reading the saved file back rather
+    than trusting the frame list handed to save().
+    """
     from PIL import Image
 
     path.parent.mkdir(parents=True, exist_ok=True)
     pil = [f.convert("P", palette=Image.ADAPTIVE, colors=colors,
                      dither=Image.Dither.NONE) for f in frames]
+    # A pause at the end is ONE frame with a long duration, not a
+    # run of duplicates. Duplicates are exactly what the optimiser
+    # merges, and then the frame count no longer describes the file.
+    durations = [ms] * (len(pil) - 1) + [hold_ms]
     pil[0].save(path, save_all=True, append_images=pil[1:],
-                duration=ms, loop=0, optimize=True)
-    print(f"  {path.name}  ({len(frames)} frames, "
-          f"{path.stat().st_size / 1024 / 1024:.1f} MB)")
+                duration=durations, loop=0, optimize=False)
+    back = Image.open(path)
+    kept = getattr(back, "n_frames", 1)
+    if kept != len(frames):
+        raise RuntimeError(
+            f"{path.name}: asked for {len(frames)} frames, the file has "
+            f"{kept}. Consecutive frames were identical enough to be "
+            f"merged -- the animation would look frozen. Verified by "
+            f"reading the file back, not by trusting the frame list.")
+    print(f"  {path.name}  ({kept} frames @ {ms} ms + {hold_ms} ms hold, "
+          f"{path.stat().st_size / 1024 / 1024:.2f} MB)")
 
 
 def load_runs(lr_filter=1e-3):
@@ -76,7 +99,7 @@ def load_runs(lr_filter=1e-3):
     return rows
 
 
-def fig_scaling(width=880, height=470, frames=70, hold=22):
+def fig_scaling(width=880, height=470, frames=70, hold=0):
     """50-step error against parameter count, drawn progressively."""
     from PIL import Image, ImageDraw
 
@@ -133,17 +156,31 @@ def fig_scaling(width=880, height=470, frames=70, hold=22):
             d.line([xx, yn, xx + 5, yn], fill=WARN)
         d.text((L + 10, yn - 16), "predict no change  1.63", fill=WARN)
 
+        # Interpolate ALONG the polyline rather than stepping point to
+        # point. With 6 rungs a point-wise reveal changes the picture
+        # six times in seventy frames and the rest are duplicates,
+        # which is what collapsed the first version to a still.
         for kind, col in (("mlp", SERIES[0]), ("gru", SERIES[1])):
             ks = [r for r in runs if r["kind"] == kind]
             pts = [px(math.log10(r["params"]), r["rollout_err"]) for r in ks]
-            n = max(2, int(len(pts) * t))
-            if len(pts[:n]) > 1:
-                d.line(pts[:n], fill=col, width=3, joint="curve")
-            for (cx, cy), r in zip(pts[:n], ks[:n]):
+            if len(pts) < 2:
+                continue
+            span = (len(pts) - 1) * t
+            whole = int(span)
+            frac = span - whole
+            drawn = pts[:whole + 1]
+            if whole < len(pts) - 1:
+                x0_, y0_ = pts[whole]
+                x1_, y1_ = pts[whole + 1]
+                drawn = drawn + [(x0_ + (x1_ - x0_) * frac,
+                                  y0_ + (y1_ - y0_) * frac)]
+            if len(drawn) > 1:
+                d.line(drawn, fill=col, width=3, joint="curve")
+            for (cx, cy), r in zip(pts[:whole + 1], ks):
                 d.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=col)
-            if pts[:n]:
-                lx, ly = pts[n - 1]
-                d.text((R + 10, ly - 6), kind, fill=col)
+            hx, hy = drawn[-1]
+            d.ellipse([hx - 5, hy - 5, hx + 5, hy + 5], fill=INK)
+            d.text((R + 10, hy - 6), kind, fill=col)
 
         best = min(runs, key=lambda r: r["rollout_err"])
         if t >= 1.0:
@@ -224,7 +261,6 @@ def fig_drift(kind="mlp", size="small", horizon=50, width=880, height=470):
                     d.line(pts, fill=col, width=2)
             d.text((cx + 6, cy + 4), label + unit, fill=DIM)
         out.append(img)
-    out += [out[-1]] * 18
     save_gif(out, OUT / f"dyn-drift-{size}.gif", ms=80)
 
 

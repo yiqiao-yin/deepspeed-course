@@ -94,6 +94,22 @@ The 50-step number is a different story because the model is fed **its own
 prediction**, so error compounds. That is the metric any downstream use would
 actually depend on, and it is where every model collapses toward the null.
 
+### Film: the car and its own prediction
+
+**[▶ Watch the best model's ghost drift away (13 MB)](/img/aerial/dyn-ghost-small.gif)**
+
+**[▶ The same flight under the 118M model (13 MB)](/img/aerial/dyn-ghost-xxl.gif)**
+
+One MuJoCo scene, two vehicles. The solid car is the real physics; the
+translucent one is where the dynamics model thinks the car is, having been
+given the true starting state and then nothing but the valve commands. They
+start on top of each other and come apart. The HUD carries the live drift and
+both altitudes.
+
+The ghost's *position* is not predicted directly — it is integrated from the
+model's predicted velocity, which is exactly what a planner asking "where will
+I be" would have to do, and it compounds accordingly.
+
 ![What the model thinks will happen](/img/aerial/dyn-drift-small.gif)
 
 *The best model, run open-loop from a real state. The traces sit on top of each
