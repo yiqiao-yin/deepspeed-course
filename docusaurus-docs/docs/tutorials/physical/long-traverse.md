@@ -5,9 +5,17 @@ sidebar_position: 8
 # Long Traverse
 
 <!--chain-->
-:::info **Lab 8 of 8** in [Physical AI](./overview) — eight labs that build one argument.
-← previous: [Terrain VLM](./terrain-vlm)
+:::info **Lab 8 of 10** in [Physical AI](./overview) — ten labs that build one argument.
+← previous: [Terrain VLM](./terrain-vlm) · next: [Body Search](./body-search) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we gave the robot more legs for a long walk across Mars. Four legs go three and a half times further than two. Six legs never fall over at all — and still lose.
+:::
+
 
 
 ## Abstract
@@ -33,7 +41,42 @@ trainer's own evaluation is 12 episodes where 8.3% is a single run.
 **Falsifier:** more legs should mean fewer falls and more distance. If
 9 actuators beat 25 at equal budget, the limbs bought nothing.
 
+## How this lab works
+
+Five bodies, one long Martian traverse, identical budget. Does adding legs
+buy distance?
+
+```mermaid
+flowchart LR
+  E["Mars relief, long traverse<br/>1.5M steps per body, seed 0"] --> B2["2 legs<br/>the baseline from labs 5-7"]
+  E --> B4["4 legs"]
+  E --> B6["6 legs"]
+  B2 --> R1["baseline distance"]
+  B4 --> R2["3.5x further"]
+  B6 --> R3["falls 0% of 36 episodes<br/>and still loses"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class B2,B4,B6 steel
+  class R1 dark
+  class R2 bright
+  class R3 dark
+```
+
+Four legs walk **3.5× further** than two. Six legs never fall over — zero
+falls in 36 episodes — and are still beaten, which is the result worth
+keeping: **stability is not the thing that was limiting the biped.** That
+sets up lab 9, which asks whether the gain was really about leg count at
+all.
+
 ## The result
+
+:::info In plain words
+Five robot bodies walking the same stretch of Mars with the same training budget. Four legs get three and a half times further than two. Six legs never fall over once in 36 attempts — and still do not win.
+:::
 
 | body | legs | actuators | arrived | falls | **walked** |
 |---|---|---|---|---|---|
@@ -104,6 +147,10 @@ interpretation was too simple.
 :::
 
 ## Morphological computation
+
+:::info In plain words
+The idea that a body can do work a brain would otherwise have to. A toy that walks down a gentle slope with no motors and no software is the classic example: the shape alone is doing the walking. Extra legs may be buying stability the controller would otherwise have to think about.
+:::
 
 [Pfeifer and Bongard's term](https://www.researchgate.net/publication/247161863_Morphological_Computation_-_Connecting_Brain_Body_and_Environment)
 for a body doing work a controller would otherwise do. The canonical
@@ -253,6 +300,10 @@ which is what the morphological-computation claim predicted and what
 the broken model could not have told us.
 
 ## The metric was broken, and that is the real lesson
+
+:::info In plain words
+The way we were measuring 'how far did it get' was itself wrong, and it flattered the wrong bodies. The number looked sensible the whole time. Finding that was worth more than the ranking it overturned.
+:::
 
 None of the above meant anything until a measurement bug was found,
 and it is the most instructive thing in the lab.

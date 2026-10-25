@@ -5,9 +5,17 @@ sidebar_position: 6
 # Mars on GPU Physics
 
 <!--chain-->
-:::info **Lab 6 of 6** in [Physical AI](./overview) — six labs that build one argument.
-← previous: [Mars Terrain](./mars-terrain)
+:::info **Lab 6 of 10** in [Physical AI](./overview) — ten labs that build one argument.
+← previous: [Mars Terrain](./mars-terrain) · next: [Terrain VLM](./terrain-vlm) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we asked whether renting a GPU would speed up the simulation. We wrote down the bar first — it has to be five times faster — and measured 1.5. So no.
+:::
+
 
 
 ## Abstract
@@ -36,7 +44,45 @@ reported; 64 → 4096 envs; one RTX 3080 Ti Laptop (16 GB), 20 cores.
 **Falsifier:** a GPU backend must reach **≥ 5×** the CPU pool. Result
 **1.50× — FAILS.**
 
+## How this lab works
+
+Not a policy — a **procurement decision**. Is a GPU worth renting for this
+simulation? The bar was written down first: *at least 5× the CPU worker
+pool, or it is not worth it.*
+
+```mermaid
+flowchart LR
+  E["the same Mars scene<br/>each backend in its OWN process"] --> C["CPU, 16-process pool<br/>9,337 steps/s<br/>THE BASELINE"]
+  E --> M["MJX"]
+  E --> W["MuJoCo Warp"]
+  M --> R1["0.14x, then ABORTS<br/>at 4096 envs"]
+  W --> R2["1.50x — bar was 5x<br/>FAILS"]
+  C --> R3["physics is only 33-34%<br/>of a training step, so any<br/>physics win caps at 1.5x"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class C bright
+  class M,W steel
+  class R1,R2 dark
+  class R3 bright
+```
+
+Three things that generalise. **Baseline against the pool, not one
+environment** — dividing by a single CPU env would have reported Warp at
+2.5× instead of 1.50×. **A backend that `abort()`s is a data point**, which
+is why each measurement runs in its own process. And **Warp falls back to
+CPU silently**, reporting throughput that looks like GPU throughput, so
+every backend is asked whether it can see the card before any number is
+printed.
+
 ## Sixteen Mars rollouts at once
+
+:::info In plain words
+Running many copies of the simulation side by side is how you make training fast. The question is whether a graphics card does that better than sixteen ordinary processor cores.
+:::
 
 ![Sixteen independent Mars episodes rendered as a grid](/img/physical/mjx-swarm.gif)
 
@@ -57,6 +103,10 @@ means sixteen OpenGL contexts, which corrupts the heap under GLFW; one
 context, reused, is both safer and indistinguishable in the output.
 
 ## What the three backends do
+
+:::info In plain words
+Three different pieces of software that can run the same physics: one on the processor, two on the graphics card. They are timed against each other on identical work.
+:::
 
 ```mermaid
 flowchart LR
@@ -111,6 +161,10 @@ about MJX on this hardware, and it belongs in the table.
 environments merely to draw level with sixteen CPU processes.
 
 ## The explanation this lab had to withdraw
+
+:::info In plain words
+We first concluded the Martian terrain was what made the graphics card slow. That was wrong — the comparison had changed two things at once. Re-run properly with only one thing changing, the terrain costs almost nothing.
+:::
 
 The first pass concluded that the height-field collider costs **8.6×**
 of all GPU throughput. That number was wrong, and how it was wrong is
@@ -219,6 +273,10 @@ methods bracket the physics share at **55–67%**, and both say the
 simulator is still the thing to beat.
 
 ## Amdahl: 1.50× would not have been enough anyway
+
+:::info In plain words
+Physics is only about a third of the work in a training step. Even if the graphics card made physics instant, the whole thing could only get about 1.5 times faster. The ceiling was there before we measured anything.
+:::
 
 Physics is not the whole training step. Measured on lab 5's own
 `v3_flat_blind` run, at **that run's own configuration** (16 workers,

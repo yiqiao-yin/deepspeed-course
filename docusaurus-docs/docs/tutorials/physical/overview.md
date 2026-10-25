@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # Start Here: How These Labs Fit Together
 
-![One clip from each of the seven labs, in order](/img/physical/physical-reel.gif)
+![One clip from each of the first seven labs, in order](/img/physical/physical-reel.gif)
 
 ## Abstract
 
@@ -80,6 +80,12 @@ flowchart TB
 
 The escalation is not "harder terrain". Each lab adds a *capability*,
 and each capability exposes the next missing one.
+
+This diagram covers **labs 1 to 5**, where the body and the world grow
+together. From lab 6 the body stops escalating and the questions start —
+is a GPU worth renting, can a model that *reads* beat one that feels, how
+many legs, what proportions, and does perception pay at all. See the
+table above for those.
 
 ```mermaid
 flowchart LR

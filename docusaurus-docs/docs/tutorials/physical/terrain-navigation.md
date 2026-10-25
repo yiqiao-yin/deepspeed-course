@@ -5,9 +5,17 @@ sidebar_position: 4
 # Terrain Navigation
 
 <!--chain-->
-:::info **Lab 4 of 5** in [Physical AI](./overview) — five labs that build one argument.
+:::info **Lab 4 of 10** in [Physical AI](./overview) — ten labs that build one argument.
 ← previous: [Terrain Vision](./terrain-vision) · next: [Mars Terrain](./mars-terrain) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** the robot has to get from A to B with hills in the way, so it can climb them or walk around. Giving it terrain information made it worse — and so did giving it the same number of extra inputs filled with nothing but zeros.
+:::
+
 
 
 ## Abstract
@@ -26,7 +34,43 @@ same damage. This page walks through the task, the result, the three
 bugs we had to fix before the result meant anything, and the limits of
 what nine random seeds can actually establish.
 
+## How this lab works
+
+A 20 m arena, A to B, with landforms in between — the first lab in the
+topic where the robot has a **routing choice**: climb it, or go around.
+
+```mermaid
+flowchart LR
+  E["20 m arena, A to B<br/>ridges in the way"] --> A["BLIND<br/>proprioception + goal bearing"]
+  E --> B["SEEING<br/>+ terrain information"]
+  E --> C["PADDED<br/>+ the same WIDTH<br/>of pure zeros"]
+  A --> R["1.5M steps x 9 seeds x 3 arms<br/>= 27 runs"]
+  B --> R
+  C --> R
+  R --> O["observation WIDTH alone<br/>destabilises a small policy,<br/>carrying no information at all"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A,B steel
+  class C bright
+  class R steel
+  class O bright
+```
+
+The third arm is the point. Padding the observation with **zeros** — no
+information whatsoever, just more inputs — degrades the policy on its own.
+Without that control, "seeing is worse than blind" would have been
+attributed to the terrain data rather than to the width of the vector
+carrying it.
+
 ## Problem Statement
+
+:::info In plain words
+The robot has to cross a 20 m arena with hills in the way. It can climb over them or walk around — the first task in this topic where there is genuinely a choice to make.
+:::
 
 ### Labs 1–3 could not ask this question
 

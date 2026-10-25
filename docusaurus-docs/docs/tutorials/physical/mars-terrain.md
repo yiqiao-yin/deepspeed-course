@@ -5,9 +5,17 @@ sidebar_position: 5
 # Mars Terrain
 
 <!--chain-->
-:::info **Lab 5 of 5** in [Physical AI](./overview) — five labs that build one argument.
-← previous: [Terrain Navigation](./terrain-navigation)
+:::info **Lab 5 of 10** in [Physical AI](./overview) — ten labs that build one argument.
+← previous: [Terrain Navigation](./terrain-navigation) · next: [Mars on GPU Physics](./mars-gpu-physics) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we built a Martian landscape first, with no robot in it at all, and only then put a walker on it. The walker does avoid obstacles — but it turns out it is feeling them, not seeing them, because a robot given no information at all avoids them just as well.
+:::
+
 
 
 ## Abstract
@@ -49,7 +57,44 @@ walking into one.
 
 ![The 60 m rover patch, at eye level](/img/physical/mars-rover-ground.gif)
 
+## How this lab works
+
+A generated planet, built in **two separate parts on purpose**: a world
+first, with no robot in it at all, and only then a policy to walk on it.
+
+```mermaid
+flowchart LR
+  P1["PART 1 — the world<br/>terrain, renderer, metric<br/>NO ROBOT"] --> P2["PART 2-4 — a policy on it<br/>free the torso, walk, measure"]
+  P2 --> Q["replay checkpoints:<br/>for each landform near the path,<br/>did it go OVER or AROUND?"]
+  Q --> R1["the robot discriminates ~3:1"]
+  Q --> R2["so does an arm fed<br/>SIX CONSTANT ZEROS"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class P1 base
+  class P2 steel
+  class Q steel
+  class R1 dark
+  class R2 bright
+```
+
+The split exists because lab 4 published a result that was wrong, and the
+faults were in its world, its renderer and its metric rather than in
+anything a policy had learned. Terrain and policy are different problems;
+mixing them leaves you unable to say which one broke.
+
+The finding: **the robot avoids obstacles by contact, not by seeing them.**
+A policy given constant zeros discriminates just as well — you learn a
+scarp is impassable by walking into one. Arrival rate alone could never
+have told these apart.
+
 ## Problem Statement
+
+:::info In plain words
+Build a stretch of Mars, then teach a robot to walk across it. The landscape is built and checked completely separately from the robot, so that if something goes wrong we know which half broke.
+:::
 
 Procedural noise will give you something that looks like a planet in
 about twenty lines. The hard question is different:

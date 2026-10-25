@@ -9,6 +9,14 @@ sidebar_position: 10
 ← previous: [Body Search](./body-search)
 :::
 
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** the question the whole topic has been circling. We gave the robot *perfect* knowledge of the ground — better than any real sensor could provide — and it did no better than a robot with none. The realistic, noisy version did worse than none.
+:::
+
+
 Lab 7 built a model that reads terrain and could not say whether it
 was useful. Lab 8 tried to find out and could not run the experiment.
 This lab finally runs it.
@@ -26,7 +34,48 @@ separated intervals. It does not.
 
 ---
 
+## How this lab works
+
+The question the whole topic has been circling, asked directly on lab 9's
+best body — and asked with a **perfect** version of perception, not just a
+realistic one.
+
+```mermaid
+flowchart LR
+  E["lab 9's best body, bs_m2<br/>16 belief-sensitive seeds"] --> A["BLIND<br/>no perception"]
+  E --> B["ORACLE<br/>PERFECT terrain knowledge"]
+  E --> C["REALISTIC<br/>noisy, partial perception"]
+  A --> R1["the baseline"]
+  B --> R2["TIES the blind arm"]
+  C --> R3["WORSE than blind"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A,B,C steel
+  class R1 bright
+  class R2 dark
+  class R3 dark
+```
+
+**Perfect terrain knowledge ties no knowledge at all, and the realistic
+version is worse than none.** The oracle arm is what makes this
+interpretable: if only the noisy version had been tested, the result would
+read as a sensor-quality problem. It is not. On this task, with this body,
+there is nothing for perception to buy — and biased perception actively
+costs.
+
+This is the topic's closing answer, and topic 8 lab 7 is the counterpoint:
+there, the same question on a *falling* vehicle with three seconds to
+commit gives the opposite result.
+
 ## The result
+
+:::info In plain words
+Seven versions of the robot, from one that knows the ground perfectly to one that is completely blind. They all arrive about as often as each other, and the error bars overlap. The one with realistic, slightly-wrong perception does **worst** of all — it arrives half as often as the blind one and walks 27% further to do it.
+:::
 
 | arm | waypoints | arrived | detour |
 |---|---|---|---|
@@ -59,6 +108,10 @@ agree. The biased router's seven false AROUNDs inflate the plan to
 **26.4 m — 2.26×** — and it reaches 3 of 7 waypoints instead of 3 of 3.
 
 ## Why it does not pay
+
+:::info In plain words
+Walking into a hill tells you it is there. By the time seeing it in advance would have helped, the robot has already felt it and started going around. The information arrives too late to change anything.
+:::
 
 The detour column is the mechanism. The oracle's careful 1.09×
 avoidance buys nothing because **75% of runs stall regardless of
@@ -114,6 +167,10 @@ one. A curriculum effect, and the reason the sweep uses
 course-trained bodies.
 
 ## A trap worth knowing
+
+:::info In plain words
+Perception that is *slightly* wrong is worse than none at all. A blind robot treats every hill the same way and that strategy works. A robot told the wrong thing confidently commits to the wrong route.
+:::
 
 The task pool was a single `task_pool.pkl` regardless of
 `MARS_POOL_SCALE`, so building a pool for this lab's preset would
