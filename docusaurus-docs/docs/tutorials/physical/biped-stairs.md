@@ -5,9 +5,17 @@ sidebar_position: 2
 # A limb, or a constraint?
 
 <!--chain-->
-:::info **Lab 2 of 5** in [Physical AI](./overview) — five labs that build one argument.
+:::info **Lab 2 of 10** in [Physical AI](./overview) — ten labs that build one argument.
 ← previous: [Obstacle Hopper](./obstacle-hopper) · next: [Terrain Vision](./terrain-vision) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we gave the robot a second leg and a staircase, and measured exactly how deep a step it can climb before it cannot. Every later lab in this topic uses that number.
+:::
+
 
 
 [Lab 1](./obstacle-hopper) built a one-legged hopper with its torso locked
@@ -30,7 +38,44 @@ Everything else is byte-identical — link lengths, gear ratios, friction,
 reward, episode length, and the staircase itself. A test asserts that,
 because a 2×2 whose cells differ in some uncontrolled way is not a 2×2.
 
+## How this lab works
+
+Four bodies, one staircase, and a sweep over **tread depth** — how deep
+each step is. The question is where a two-legged walker stops being able
+to climb.
+
+```mermaid
+flowchart LR
+  E["a staircase<br/>tread depth swept"] --> B1["1 leg"]
+  E --> B2["2 legs"]
+  E --> B3["2 legs + yaw"]
+  E --> B4["2 legs + pitch/roll"]
+  B1 --> R["800k steps each,<br/>3 seeds per cell"]
+  B2 --> R
+  B3 --> R
+  B4 --> R
+  R --> O["climbs reliably at<br/>0.04 - 0.10 m treads<br/>above that, it does not"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class B1,B2,B3,B4 steel
+  class R steel
+  class O bright
+```
+
+That ceiling is the most reused number in the topic: **every later lab's
+`STEP_MAX = 0.12` comes from here.** A limb is not automatically a
+capability — the lab's title asks whether a second leg is a limb or a
+constraint, and the answer depends on the terrain it is asked to cross.
+
 ## The staircase
+
+:::info In plain words
+A flight of stairs where we can dial how deep each step is. Deep shallow steps are easy; short steep ones are not. We sweep across the range to find where the robot stops coping.
+:::
 
 ![The staircase at three steepnesses](/img/physical/stairs-world.png)
 

@@ -9,6 +9,14 @@ sidebar_position: 9
 ← previous: [Long Traverse](./long-traverse) · next: [Does Perception Pay?](./perception-pays) →
 :::
 
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** lab 8 said more legs walk further. Here we searched over body shapes as well as leg counts, and a short, wide two-legged body beat everything. The extra legs were standing in for a better shape.
+:::
+
+
 
 ## Abstract
 
@@ -28,7 +36,40 @@ comparison stays inside this lab's physics.
 **Falsifier:** if leg count explains the result, bodies rank by leg
 count and proportion does not matter. It does not, and it does.
 
+## How this lab works
+
+Lab 8 found that more legs walk further. This lab asks whether that was
+really about **legs** — by searching over body *proportions* as well as
+limb count, on the same task and budget.
+
+```mermaid
+flowchart LR
+  E["same traverse, same 1.5M steps<br/>search over BODIES"] --> A["lab 8's five<br/>hand-written bodies,<br/>retrained here"]
+  E --> B["a search over<br/>torso length, width,<br/>leg count"]
+  A --> R1["4 and 6 legs lead"]
+  B --> R2["a SHORT, WIDE BIPED<br/>beats every multi-legged body"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A,B steel
+  class R1 dark
+  class R2 bright
+```
+
+**Proportion, not leg count.** Lab 8's conclusion survives as a
+measurement and dies as an explanation: the extra legs were a proxy for a
+wider, lower body, and once you search proportions directly, two legs in
+the right shape win. A hand-picked set of bodies can only tell you which
+of *those* is best.
+
 ## Fifteen bodies, ranked
+
+:::info In plain words
+Instead of hand-picking a few robot shapes, we generated fifteen — varying how long the torso is, how wide, and how many legs — and trained each one identically.
+:::
 
 | body | legs | posture | act | **displaced** | eff | path | falls |
 |---|---|---|---|---|---|---|---|
@@ -54,6 +95,10 @@ Same terrain, same seed, same task, same budget. Only the machine
 changes, and the tiles are ordered by how far it actually got.
 
 ## Proportion, not leg count
+
+:::info In plain words
+The winner has two legs. Lab 8 concluded that more legs walk further, and that was a true measurement of the bodies it happened to test — but the extra legs were standing in for a wider, lower body. Get the proportions right and two legs beat six.
+:::
 
 `bs_m2` and `if_biped` are both two-legged with nine actuators. The
 only difference between them is shape:
@@ -110,6 +155,10 @@ flowchart LR
 ```
 
 ## The metric that nearly published a lie
+
+:::info In plain words
+A measurement error almost put out the opposite ranking. It is described here rather than quietly fixed, because the version that was wrong looked entirely reasonable.
+:::
 
 The first ranking used **distance walked** and crowned `if_biped` at
 17.7 m. It ends **1.4 m from where it started**.

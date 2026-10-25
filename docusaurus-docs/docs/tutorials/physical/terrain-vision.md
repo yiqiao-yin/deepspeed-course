@@ -5,9 +5,17 @@ sidebar_position: 3
 # Terrain Vision
 
 <!--chain-->
-:::info **Lab 3 of 5** in [Physical AI](./overview) — five labs that build one argument.
+:::info **Lab 3 of 10** in [Physical AI](./overview) — ten labs that build one argument.
 ← previous: [Biped Stairs](./biped-stairs) · next: [Terrain Navigation](./terrain-navigation) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we gave the robot a depth camera. It helps going uphill and not at all going downhill, because coming down a slope is something you feel through your legs rather than something you look at.
+:::
+
 
 
 ## Abstract
@@ -37,7 +45,39 @@ The original claim, the error, and the corrected numbers are all below.
 Nothing has been quietly edited.
 :::
 
+## How this lab works
+
+A depth camera against no depth camera, on the same terrain, with the
+**teacher held fixed** so only the student's eyes change.
+
+```mermaid
+flowchart LR
+  T["teacher<br/>privileged terrain state<br/>1.5M steps x 3 seeds"] --> S1["BLIND student<br/>proprioception only"]
+  T --> S2["SEEING student<br/>+ depth camera"]
+  S1 --> R1["ascent: baseline<br/>descent: already solved"]
+  S2 --> R2["ascent: +43 points<br/>descent: no gain"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class T base
+  class S1,S2 steel
+  class R1 dark
+  class R2 bright
+```
+
+The camera pays **on the way up and nowhere else.** Descent is solved
+perfectly blind, because falling correctly is a matter of what you feel
+through your legs rather than what you can see ahead. The first version of
+this comparison varied two things at once and had to be withdrawn — see
+the page for what that cost.
+
 ## Problem Statement
+
+:::info In plain words
+Can a robot climb better if it can see the ground ahead? We give one version a depth camera, keep everything else identical, and compare.
+:::
 
 ### The task
 

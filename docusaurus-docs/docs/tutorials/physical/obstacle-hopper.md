@@ -5,9 +5,17 @@ sidebar_position: 1
 # A robot learns to climb a step
 
 <!--chain-->
-:::info **Lab 1 of 5** in [Physical AI](./overview) — five labs that build one argument.
+:::info **Lab 1 of 10** in [Physical AI](./overview) — ten labs that build one argument.
 next: [Biped Stairs](./biped-stairs) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we taught a one-legged robot to hop over a box, and found that paying it a bonus for *being* past the box rather than for *crossing* it made the best strategy to climb on top and stand there.
+:::
+
 
 
 The first lab in `07_physical_ai`, and the first in this course where the
@@ -23,7 +31,42 @@ file.
 The headline result is that **the experiment this lab was designed around
 failed**, and that turned out to be the most useful thing in it.
 
+## How this lab works
+
+A one-legged hopper, a box on the floor, and a reward that pays for
+crossing it. The lab is about **how easy it is to write a reward that pays
+for the wrong thing.**
+
+```mermaid
+flowchart LR
+  E["one leg, 2 base joints<br/>a box on a floor"] --> P["PPO<br/>600k steps, 3 seeds"]
+  P --> A["bonus paid EVERY step<br/>the robot is past the box"]
+  P --> B["bonus paid ONCE,<br/>the first time it crosses"]
+  A --> R1["stands ON the box<br/>and farms the bonus"]
+  B --> R2["crosses it"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class P steel
+  class A,B steel
+  class R1 dark
+  class R2 bright
+```
+
+Same physics, same algorithm, same budget. The only change is whether the
+crossing bonus repeats — and with a repeating bonus the optimal policy is
+to climb on top of the obstacle and stay there, which scores beautifully
+and is not the task. Every later lab in this topic inherits the one-off
+rule.
+
 ## The world
+
+:::info In plain words
+A one-legged hopping robot, a flat floor, and a box in the way. It gets a reward for getting past the box.
+:::
 
 ![The same world at three obstacle heights](/img/physical/hopper-world.png)
 

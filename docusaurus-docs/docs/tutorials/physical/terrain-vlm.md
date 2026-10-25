@@ -5,9 +5,17 @@ sidebar_position: 7
 # Terrain VLM
 
 <!--chain-->
-:::info **Lab 7 of 7** in [Physical AI](./overview) — seven labs that build one argument.
-← previous: [Mars on GPU Physics](./mars-gpu-physics)
+:::info **Lab 7 of 10** in [Physical AI](./overview) — ten labs that build one argument.
+← previous: [Mars on GPU Physics](./mars-gpu-physics) · next: [Long Traverse](./long-traverse) →
 :::
+
+:::info Reading this without a background in machine learning
+The plain words boxes like this one carry the whole story; the technical
+detail around them is there if you want it.
+
+**The one line version:** we showed an AI that understands images and language a picture of the ground and asked it, in words, whether to climb over or walk around. It scores 52.9%. A one-line rule that ignores the picture entirely scores 55%.
+:::
+
 
 
 ## Abstract
@@ -36,7 +44,46 @@ training**.
 **Falsifier:** a model that sees should beat lab 5's contact-only 3:1.
 Result **52.9% — FAILS**.
 
+## How this lab works
+
+A vision-language model is shown the terrain ahead and asked, in words,
+whether to go over or around. **Three baselines**, because one would not
+have been readable.
+
+```mermaid
+flowchart LR
+  E["429 terrain images<br/>+ the question in words"] --> A["SIGHTED VLM<br/>Qwen2.5-VL-3B, LoRA r=16"]
+  E --> B["BLIND control<br/>same model, GREY image,<br/>same token count"]
+  E --> C["majority class<br/>a one-line heuristic"]
+  A --> R1["52.9%"]
+  B --> R2["45.0%"]
+  C --> R3["55.0%"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A,B,C steel
+  class R1 dark
+  class R2 dark
+  class R3 bright
+```
+
+Sight helps — McNemar **p = 0.006** against the blind arm — **and still
+loses to the one-line heuristic.** Reporting only the first comparison
+would have been a true sentence and a false impression. Meanwhile the
+robot that only *feels* scores around 75%.
+
+A working no-information control emits **one constant**: the blind arm
+answered AROUND for all 429 items, which is what licenses the comparison.
+A blind control with varied answers means information is leaking.
+
 ## The result
+
+:::info In plain words
+The model that can see the ground scores 52.9%. A one-line rule that always gives the same answer and never looks at the picture scores 55%. Seeing genuinely helps compared to a blindfolded version of the same model — and still loses to the rule.
+:::
 
 | arm | accuracy | 95% CI |
 |---|---|---|
@@ -88,6 +135,10 @@ flowchart TB
 
 ## The control, drawn
 
+:::info In plain words
+To prove the model is really using the picture, we ran it again with the picture replaced by a blank grey rectangle. If the score had stayed the same, the model was never looking.
+:::
+
 ![The sighted arm and the blind control judging the same held-out views](/img/physical/vlm-verdicts.gif)
 
 Each frame is one view neither model saw in training. Left badge is the
@@ -102,6 +153,10 @@ watched the reel settle on a number contradicting the page would be
 right to distrust both.
 
 ## How you can tell the control worked
+
+:::info In plain words
+The blindfolded model gave the *same answer every single time* — all 429 of them. That is exactly what a model with no information should do, and it is what makes the comparison trustworthy. A blindfolded model that still varied its answers would mean information was leaking in somewhere.
+:::
 
 The blind arm answered **AROUND for all 429 items** — one constant, no
 variation. That is exactly what a model with no information must do
