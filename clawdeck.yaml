@@ -394,6 +394,28 @@ labs:
       - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
       - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
 
+  - id: 08_aerial_physics/07_teacher_student
+    title: "Teacher and Student: learning to see"
+    summary: "PPO reading 144 depth beams scores 2%. Distilled from a teacher, the same net scores 48%."
+    est_minutes: 35
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # The sensor, the information gap and the statistics are all
+      # arithmetic and run anywhere. Training a teacher is CPU work
+      # on a process pool, which is why this lab carries no
+      # unconditional require_gpu().
+      - { label: "The rangefinder's geometry (CPU, instant)", cmd: "uv run rangefinder.py" }
+      - { label: "Cast it against real terrain (CPU, ~20 s)", cmd: "uv run rangefinder.py --scene --cost" }
+      - { label: "What the beams can and cannot recover (CPU, ~6 min)", cmd: "uv run teach_env.py --gap --gap-samples 3000" }
+      # NO --size HERE, deliberately. distill.py's GPU guard is gated
+      # on --size and the contract checker -- correctly conservative --
+      # treats any command passing that flag as able to reach it. The
+      # DEFAULT size is `match`, which is 17k parameters and CPU-safe,
+      # so omitting the flag is both honest and provably so.
+      - { label: "Train a teacher (CPU pool, ~20 min)", cmd: "uv run train_policy.py --sense oracle --name oracle_s0 --total-steps 1500000" }
+      - { label: "Distil it into a student that only sees beams", cmd: "uv run distill.py --teacher runs/oracle_s0 --method dagger --episodes 200 --iters 6", primary: true }
+      - { label: "Score the arms, paired, against the falsifier", cmd: "uv run compare.py" }
+
   - id: 08_aerial_physics/06_learned_dynamics
     title: "Learned Dynamics: does size help?"
     summary: "29,000x the parameters, no better prediction. The first lab here that wants a GPU."

@@ -5,7 +5,7 @@ sidebar_position: 4
 # Fly on Mars
 
 <!--chain-->
-:::info **Lab 4 of 6** in Aerial Physics. Lab 1 landed a tumbling car, lab 2
+:::info **Lab 4 of 7** in Aerial Physics. Lab 1 landed a tumbling car, lab 2
 rolled it, lab 3 put it on a mark; this one flies it a route through the air —
 on another planet.
 ← previous: [Land on Target](./land-on-target)

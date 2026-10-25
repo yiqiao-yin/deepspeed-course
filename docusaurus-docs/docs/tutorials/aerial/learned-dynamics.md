@@ -5,10 +5,10 @@ sidebar_position: 6
 # Learned Dynamics
 
 <!--chain-->
-:::info **Lab 6 of 6** in Aerial Physics. Labs 1 to 5 taught a computer to fly
+:::info **Lab 6 of 7** in Aerial Physics. Labs 1 to 5 taught a computer to fly
 the car; this one asks whether a computer can learn to predict it — and
 whether that model is ever big enough to need sharding.
-← previous: [Thruster Failure](./thruster-failure)
+← previous: [Thruster Failure](./thruster-failure)  ·  next: [Teacher and Student](./teacher-student) →
 :::
 
 :::info Reading this without a background in machine learning
