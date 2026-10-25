@@ -41,6 +41,35 @@ fully on and cannot be switched off. We trained a computer to fly it, and
 asked whether practising with broken thrusters actually helps.
 :::
 
+## How this lab works
+
+Two policies on the identical broken-thruster task. One practised with
+failures; one never saw a failure until the day it was scored.
+
+```mermaid
+flowchart LR
+  E["car thrown in the air<br/>one of 10 nozzles breaks<br/>at 0.5-3.0 s"] --> A["TRAINED CLEAN<br/>2.5M steps,<br/>no failure ever"]
+  E --> B["TRAINED BROKEN<br/>2.5M clean, then 2.5M<br/>with a fault every episode"]
+  A --> R1["72% survive"]
+  B --> R2["89% survive"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A steel
+  class B steel
+  class R1 dark
+  class R2 bright
+```
+
+A nozzle either goes dead or **jams fully on and cannot be shut off**, which
+is the harder case. Both arms are scored on the same failures. Practice is
+worth 17 points — and a cheap static check of whether the remaining nozzles
+*could* hold the car up does **not** predict which flights survive, which is
+the lab's second and less comfortable finding.
+
 ## Result
 
 :::info In plain words

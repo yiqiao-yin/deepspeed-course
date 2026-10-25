@@ -34,6 +34,36 @@ A 2-tonne car is thrown into the air tumbling. It has about three seconds
 of flight, ten cold-gas nozzles, and a tank holding seven seconds of
 hover. It has to arrive on its wheels.
 
+## How this lab works
+
+One task, two controllers, scored on the same held-out throws. The
+comparison is the lab: a textbook controller written by hand against a
+policy that was told nothing but its score.
+
+```mermaid
+flowchart LR
+  E["tumbling car<br/>thrown in the air"] --> A["CLASSICAL<br/>PD + thrust allocator<br/>hand written, no learning"]
+  E --> B["PPO<br/>4M steps, reward only"]
+  A --> R1["75% clean landings<br/>147 kg of gas"]
+  B --> R2["89% clean landings<br/>36 kg of gas"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A steel
+  class B steel
+  class R1 dark
+  class R2 bright
+```
+
+Nobody writes down which nozzle to open. PPO starts from random weights,
+crashes four million times, and hears only a number saying how that attempt
+went. It ends up beating the engineered controller **on a quarter of the
+propellant** — which on a vehicle carrying seven seconds of hover is the
+whole game.
+
 ## Motivation
 
 :::info In plain words

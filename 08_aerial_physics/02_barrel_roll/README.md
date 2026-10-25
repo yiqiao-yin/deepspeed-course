@@ -49,6 +49,38 @@ Linked rather than embedded — 980 × 580, four throws, the roll dial filling
 to 360° on each. Selected throws: these are four of the policy's successes,
 and the rate is the table above, not the film.
 
+## How this lab works
+
+Two skills — complete a 360° roll, then land on the wheels — and the entire
+finding is that **the order you teach them in decides whether either is
+learnable at all.**
+
+```mermaid
+flowchart LR
+  subgraph W["WRONG ORDER"]
+    direction TB
+    L1["teach the landing<br/>2.5M steps"] --> L2["warm start,<br/>add the roll"] --> L3["0% roll<br/>never learns it"]
+  end
+  subgraph C["RIGHT ORDER"]
+    direction TB
+    R1["teach the roll<br/>2.5M steps"] --> R2["warm start,<br/>add the landing"] --> R3["95% roll<br/>26% roll AND land"]
+  end
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class W,C deep
+  class L1,L2,R1,R2 steel
+  class L3 dark
+  class R3 bright
+```
+
+Same algorithm, same budget, same reward — only the curriculum order moves,
+and it takes the roll from 0% to 95%. A landing reflex learned first makes
+the roll *unlearnable*, because a policy that has learned to stay upright
+will not initiate a tumble. **A prior can be worse than no prior.**
+
 ## Motivation
 
 :::info In plain words

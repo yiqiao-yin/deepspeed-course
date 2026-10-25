@@ -73,6 +73,77 @@ thing. Both distilled arms learned from `oracle_s0` only, so the student's
 retention is quoted against **55.8%**, the teacher actually used, and the
 per-seed column is published alongside every pooled figure.
 
+## Two stages, and where PPO sits
+
+This lab runs in sequence, not in parallel, and the two halves are trained by
+completely different algorithms. **PPO is how the teacher is created;
+distillation is how its knowledge is moved.** Nothing is adversarial and
+nothing co-evolves — the teacher is finished and frozen before the student
+exists.
+
+```mermaid
+flowchart LR
+  subgraph S1["STAGE 1 — reinforcement learning, 40 min"]
+    direction TB
+    R["reward only<br/>one number per step"] --> P["PPO<br/>4M steps, 16 envs"]
+    P --> T["TEACHER<br/>41 in, 20 out<br/>55.8% on target"]
+  end
+  subgraph S2["STAGE 2 — supervised, 35 min"]
+    direction TB
+    L["111,000 labelled rows<br/>X 183 wide, Y 20 wide"] --> F["least squares<br/>12 epochs x 10 rounds"]
+    F --> U["STUDENT<br/>183 in, 20 out<br/>50.0% on target"]
+  end
+  T -->|"frozen, then asked<br/>'what would you do here?'"| L
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class S1,S2 deep
+  class R,L base
+  class P,F steel
+  class T,U bright
+```
+
+Nobody ever writes down which valve to open. The simulator supplies *facts
+about the state* — the car's exact height — and never an action. The teacher
+has to discover the actions itself, by crashing four million times against a
+scalar reward. That discovery is stage 1, and without it there is no teacher
+to distil.
+
+**Three of the five arms are PPO**, and that is what makes the finding a
+statement about reinforcement learning rather than about imitation:
+
+| arm | trained by | signal it learns from | result |
+|---|---|---|---|
+| `oracle` | **PPO** | 1 scalar reward | 55.8% |
+| `direct` | **PPO** | 1 scalar reward | **2.5%** |
+| `deaf` | **PPO** | 1 scalar reward | 1.7% |
+| `bc` | regression | 20 numbers, every step | 47.5% |
+| `dagger` | regression | 20 numbers, every step | 50.0% |
+
+The teacher and the `direct` arm are the *same algorithm on the same budget*.
+Only the terrain channel differs — 2 exact numbers against 144 beams. So the
+failure at 2.5% is not that the control problem is too hard; PPO solved that
+with the 2 numbers. It is that one scalar arriving 600 steps later is too thin
+a signal to *also* teach perception.
+
+> :::info In plain words
+> First we train an expert the slow way: let it crash four million times and
+> keep what works. That takes about forty minutes and nobody ever tells it
+> what to do — it only hears a score. Then we freeze that expert and use it
+> as an answer key for a second network that has to work from a sensor
+> instead. The second stage is ordinary supervised learning, like fitting any
+> model to labelled data.
+> :::
+
+> A note on the obvious comparison: this is **not** a GAN. A discriminator
+> returns one number ("fake") and keeps learning as you train it; a teacher
+> here returns twenty ("open these valves this much") and never moves again.
+> A PPO critic is the structural analogue of a discriminator — also one
+> number, also moving. The gap between a 1-wide and a 20-wide training signal
+> is this lab's entire result.
+
 ## Motivation
 
 Lab 3 asked whether a lander benefits from seeing the ground and got an
