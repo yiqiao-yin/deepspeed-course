@@ -349,6 +349,31 @@ EXAMPLES = {
                                          "independent processes, so --jobs "
                                          "helps and a GPU does not."),
     # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/07_teacher_student": dict(
+                                    min_vram=16, gpus=1, disk=20,
+                                    script="distill.py",
+                                    launcher="python",
+                                    args="--teacher runs/oracle_s0 "
+                                         "--method dagger --episodes 200 "
+                                         "--iters 6",
+                                    note="TWENTY-SECOND launcher=python "
+                                         "entry, and the reason is the same "
+                                         "measurement labs 1-5 made: the "
+                                         "student at --size match is 17k "
+                                         "parameters and the cost is MuJoCo "
+                                         "rollouts with a torch forward per "
+                                         "step, which is CPU-bound. Rent "
+                                         "CORES. The card only earns its "
+                                         "place at --size deep or xl, where "
+                                         "distill.py's guard fires and "
+                                         "--deepspeed takes the ZeRO path; "
+                                         "that is the arm the ds_config is "
+                                         "for. NOTE this lab needs a "
+                                         "TEACHER on disk -- run "
+                                         "./run_arms.sh oracle first, or "
+                                         "the run exits with a message "
+                                         "saying so rather than distilling "
+                                         "from nothing."),
     "08_aerial_physics/06_learned_dynamics": dict(
                                     min_vram=24, gpus=1, disk=24,
                                     script="train_dyn.py",

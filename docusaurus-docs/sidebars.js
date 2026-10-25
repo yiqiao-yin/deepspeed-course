@@ -138,6 +138,7 @@ const sidebars = {
               'tutorials/aerial/fly-on-mars',
               'tutorials/aerial/thruster-failure',
               'tutorials/aerial/learned-dynamics',
+              'tutorials/aerial/teacher-student',
             ],
           },
       ],

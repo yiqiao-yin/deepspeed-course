@@ -1,0 +1,6 @@
+# Trained policies and their histories. Reproduce with ./run_arms.sh and
+# ./run_distill.sh; the published numbers live in the README and in
+# compare.json, which IS committed.
+runs/
+logs/
+__pycache__/

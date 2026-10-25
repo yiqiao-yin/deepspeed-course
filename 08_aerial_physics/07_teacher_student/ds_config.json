@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "The FIRST real DeepSpeed config in topic 8. Labs 1 to 5 carry none,",
+    "correctly: a ~14k-parameter policy has nothing for ZeRO to shard.",
+    "This lab's largest model is 705M parameters -- 11.3 GB of weights and",
+    "Adam state before a single activation -- so the question is live.",
+    "",
+    "NOTE WHAT IS ABSENT: there is no \"optimizer\" block. Naming one makes",
+    "DeepSpeed build its own FUSED Adam and JIT-compile it with nvcc, and",
+    "the PyPI CUDA wheels ship ptxas rather than nvcc. The compile dies",
+    "with 'CUDA_HOME environment variable is not set', which reads like a",
+    "misconfiguration and is really a missing toolchain. train_dyn.py hands",
+    "in a torch optimiser instead, which keeps ZeRO's partitioning and",
+    "skips the kernel build. Same lesson the repo carries for",
+    "DS4Sci_EvoformerAttention.",
+    "",
+    "train_batch_size is deliberately OMITTED so any --num_gpus works.",
+    "DeepSpeed asserts train_batch_size == micro x accum x world_size at",
+    "startup, and hardcoding it pins the GPU count."
+  ],
+  "train_micro_batch_size_per_gpu": 256,
+  "gradient_accumulation_steps": 1,
+  "zero_optimization": {
+    "stage": 2
+  },
+  "zero_force_ds_cpu_optimizer": false,
+  "fp16": { "enabled": false },
+  "bf16": { "enabled": false },
+  "wall_clock_breakdown": false
+}

@@ -5,7 +5,7 @@ sidebar_position: 5
 # Thruster Failure
 
 <!--chain-->
-:::info **Lab 5 of 6** in Aerial Physics. Labs 1 to 4 flew a working vehicle;
+:::info **Lab 5 of 7** in Aerial Physics. Labs 1 to 4 flew a working vehicle;
 this one breaks it mid-air and asks whether the policy can tell.
 ← previous: [Fly on Mars](./fly-on-mars)
 · next: [Learned Dynamics](./learned-dynamics) →
