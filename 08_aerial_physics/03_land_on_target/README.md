@@ -141,6 +141,37 @@ inputs nearly double the observation width for a ~13k-parameter policy, and
 every one of them is a dimension the network must learn to ignore. The
 information is not merely unhelpful, it is actively expensive to discount.
 
+## How this lab works
+
+One task, three policies, and the only thing that changes between them is
+**how much of the ground the policy is allowed to see.**
+
+```mermaid
+flowchart LR
+  E["marked spot on<br/>boulder terrain"] --> A["BLIND<br/>own state + altimeter"]
+  E --> B["SLOPE<br/>+ ground gradient"]
+  E --> C["PATCH<br/>+ 5x5 height map"]
+  A --> R1["56% on target"]
+  B --> R2["25% on target"]
+  C --> R3["0% on target"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A,B,C steel
+  class R1 bright
+  class R2 dark
+  class R3 dark
+```
+
+Everything else is held fixed — reward, terrain, rig, budget, seeds. The
+ordering is **the exact reverse** of what you would expect and it is
+monotone: more terrain information, worse landing. A hand-written controller
+reproduces it independently, and its best use of *perfect* terrain knowledge
+turns out to be ignoring it.
+
 ## Motivation
 
 Labs 1 and 2 asked whether the vehicle could control its attitude: arrest a

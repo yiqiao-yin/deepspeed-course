@@ -45,6 +45,37 @@ where the big-model machinery this course is named after might actually be
 needed. We checked. It isn't.
 :::
 
+## How this lab works
+
+Not a policy this time — a **world model**. Can a network learn to predict
+the car's physics, and does making it bigger help?
+
+```mermaid
+flowchart LR
+  E["228k transitions<br/>from 1,200 flights"] --> L["train 6 sizes<br/>4k to 118M params<br/>MLP and GRU"]
+  L --> M["feed each model<br/>ITS OWN prediction<br/>for 50 steps"]
+  M --> N["null model:<br/>predict no change<br/>error 1.633"]
+  M --> B["best model:<br/>18,281 params<br/>error 1.148"]
+  M --> X["118M params:<br/>error WORSE<br/>bar not met"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class L steel
+  class M steel
+  class N dark
+  class B bright
+  class X dark
+```
+
+The bar was written down first: *a model 1000× larger must halve the 50-step
+error.* It did not — the best rung on the whole ladder has **18,281
+parameters**, and scaling past it makes prediction worse. So the sharding
+machinery this course is named after has nothing to do here, now measured
+rather than assumed.
+
 ## Result
 
 :::info In plain words

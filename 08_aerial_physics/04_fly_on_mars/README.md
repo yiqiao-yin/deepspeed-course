@@ -21,6 +21,36 @@ taught a computer to fly it, and then asked whether the computer could beat a
 controller a human engineer wrote by hand.
 :::
 
+## How this lab works
+
+A three-gate course on Mars, flown twice: once by a guidance law a human
+wrote, once by a policy that **corrects** that guidance law rather than
+replacing it.
+
+```mermaid
+flowchart LR
+  E["3 gates, 3-8 m up<br/>9 s clock, 297 kg N2"] --> A["GUIDANCE LAW<br/>steer at the gate,<br/>tilt, flare"]
+  A --> B["PPO residual<br/>learns a CORRECTION<br/>to the law's command"]
+  A --> R1["73% of courses<br/>baseline propellant"]
+  B --> R2["same arrival rate<br/>5-8% less propellant"]
+  classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
+  classDef base   fill:#16324f,stroke:#3f6f9f,stroke-width:1.5px,color:#ffffff
+  classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
+  classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
+  class E base
+  class A steel
+  class B steel
+  class R1 dark
+  class R2 bright
+```
+
+The policy does not fly better — arrival rates are a coin toss between them,
+p = 0.65. What replicates across seeds is the **propellant**: the learner
+finds 5–8% of slack the hand-written law leaves on the table. Starting from
+a working controller rather than from nothing is what makes a 9-second
+course learnable at all.
+
 ## Result
 
 :::info In plain words
