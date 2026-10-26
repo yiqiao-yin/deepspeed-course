@@ -644,3 +644,17 @@ uv run runpod/runpod_ctl.py pods          # confirm nothing is left running
 - **`hop`.** Buildable, excluded, and the reason is measured rather than
   aesthetic. See above.
 - **Any claim about sim-to-real.** Nothing here has touched hardware.
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — privileged teacher, proprioceptive student
+- Kumar et al., [RMA: Rapid Motor Adaptation](https://arxiv.org/abs/2107.04034), 2021
+- Miki et al., [Learning robust perceptive locomotion](https://arxiv.org/abs/2201.08117),
+  Science Robotics 2022
+- Agarwal et al., [Legged locomotion in challenging terrains using egocentric vision](https://arxiv.org/abs/2211.07638), CoRL 2022
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018

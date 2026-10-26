@@ -260,3 +260,26 @@ moved: not the terrain, not compute, not perception, not leg count —
 the proportions of the machine. And the best body yet still wanders
 five metres for every one it gains, which is the next thing worth
 fixing.
+
+## References
+
+- Sims, [Evolving Virtual Creatures](https://doi.org/10.1145/192161.192167), SIGGRAPH 1994 —
+  morphology and controller evolved together, the origin of this question
+- Gupta et al., [Embodied intelligence via learning and evolution](https://doi.org/10.1038/s41467-021-25874-z),
+  Nature Communications 2021 — DERL, evolving morphologies that learn locomotion
+- Ha, [Reinforcement Learning for Improving Agent Design](https://arxiv.org/abs/1810.03779),
+  Artificial Life 2019 — learn the body jointly with the policy
+- Pfeifer & Bongard, *How the Body Shapes the Way We Think*, MIT Press 2006 —
+  morphological computation, the frame lab 8 argues in
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
+
+Body-and-controller co-design is thirty years old and this lab does a small, fixed
+search rather than evolution. What it contributes is a **correction to its own
+predecessor**: lab 8 concluded that more legs walk further, which was a true
+measurement of the five bodies it happened to test and a false explanation. Search
+over proportions as well as leg count and a **short, wide biped beats every
+multi-legged body**. The extra legs were standing in for a better shape.

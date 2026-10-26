@@ -228,3 +228,14 @@ in a `finally`, and the in-pod watchdog is a backstop, not a guarantee.
 - [MuJoCo](https://mujoco.readthedocs.io/) · [Gymnasium](https://gymnasium.farama.org/)
 - Schulman et al., [PPO](https://arxiv.org/abs/1707.06347) and
   [GAE](https://arxiv.org/abs/1506.02438)
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Ng, Harada & Russell, [Policy Invariance Under Reward Transformations](https://people.eecs.berkeley.edu/~russell/papers/ml99-shaping.pdf),
+  ICML 1999 — potential-based shaping, and why the crossing bonus must be ONE-OFF
+- Todorov, Erez & Tassa, [MuJoCo](https://doi.org/10.1109/IROS.2012.6386109), IROS 2012
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
