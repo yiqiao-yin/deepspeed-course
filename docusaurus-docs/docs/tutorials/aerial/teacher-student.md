@@ -497,6 +497,43 @@ test is the one to believe: McNemar on the 64 discordant episodes gives
 fails.** `compare.py` prints both, in that order, and does not quietly
 substitute the better-looking one.
 
+## Prior work — the method here is not ours
+
+**This lab is a reproduction.** Teacher–student distillation from privileged
+simulator state is an established paradigm with a substantial literature, and
+nothing in the *method* below originates here. The contribution is the
+reproduction itself, on a new system, with controls that are not always
+published.
+
+| | |
+|---|---|
+| **Lee, Hwangbo, Wellhausen, Koltun & Hutter (2020)**, *Learning Quadrupedal Locomotion over Challenging Terrain*, Science Robotics 5(47) · [arXiv:2010.11251](https://arxiv.org/abs/2010.11251) | The canonical privileged teacher–student framework. A teacher is trained on terrain state the robot cannot measure, then distilled into a student reading onboard sensors. Everything structural about this lab is theirs. |
+| **Chen, Zhou, Koltun & Krähenbühl (2019)**, *Learning by Cheating*, CoRL · [arXiv:1912.12294](https://arxiv.org/abs/1912.12294) | The closest match, and it is close: a privileged agent that sees ground-truth layout teaches a purely sensor-driven student. Swap their camera for our rangefinder and their car park for a boulder field and you have this page. |
+| **Ross, Gordon & Bagnell (2011)**, *A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning*, AISTATS · [arXiv:1011.0686](https://arxiv.org/abs/1011.0686) | DAgger, and the $O(\epsilon T)$ against $O(\epsilon T^2)$ bound quoted above. The `--method dagger` arm is their algorithm. |
+| **Gaudet, Linares & Furfaro (2018)**, *Deep Reinforcement Learning for Six Degree-of-Freedom Planetary Powered Descent and Landing* · [arXiv:1810.08719](https://arxiv.org/abs/1810.08719) | RL for powered descent, the task family this lab sits in. |
+| **Kumar, Fu, Pathak & Malik (2021)**, *RMA: Rapid Motor Adaptation for Legged Robots* · [arXiv:2107.04034](https://arxiv.org/abs/2107.04034) | The same two-phase shape, with the privileged channel compressed into a latent rather than dropped. |
+
+### What the reproduction adds, scoped honestly
+
+Two things, both modest, and neither a new method:
+
+**A no-information control on the RL arm.** Papers in this line reliably show
+that the distilled student works. They less often publish the arm proving the
+sensor bought *reinforcement learning* nothing: here direct PPO on 144 beams
+scores 2.5% against a blind control's 1.7%, **McNemar p = 0.75**. Without that
+row, "distillation helps" is compatible with "RL was nearly there anyway," and
+those are very different claims.
+
+**A case where DAgger does not beat behaviour cloning.** The compounding-error
+argument predicts it should; measured here it does not (p = 0.53). The
+mechanism we propose is that this task **terminates on error** — a crash ends
+the episode at the first serious mistake, so the quadratic term never gets 600
+steps to compound. That is a scoping observation about when the bound bites,
+not a new result; the limits of DAgger are themselves studied.
+
+Neither is a paper. If you want the method, read Lee and Chen; this page is
+for seeing it work at a scale you can run on a laptop.
+
 ## Limitations
 
 **DAgger did not earn its complexity here.** The compounding-error argument
