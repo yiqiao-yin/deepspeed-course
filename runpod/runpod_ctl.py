@@ -366,6 +366,16 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'{NTFY}/{topic} >/dev/null 2>&1 || true'
     ) if topic else 'true'
 
+    push_json = (
+        'if [ -f comparison.json ]; then '
+        f'curl -fsS -m 60 -T comparison.json '
+        f'-H "Filename: {example}/comparison.json" '
+        f'{NTFY}/{topic} >/dev/null '
+        f'&& report "[6/6] comparison.json uploaded" '
+        f'|| report "[6/6] comparison.json upload FAILED"; '
+        'else report "[6/6] comparison.json MISSING"; fi'
+    ) if topic else 'true'
+
     # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
     # pod gets shut down, but it dies with your laptop lid. This backstop kills
     # the container's main process after max_hours no matter what, so a hung run
@@ -457,6 +467,7 @@ def bootstrap(example: str, spec: dict, branch: str,
         "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
         "tail -40 /workspace/run.log",
         push_log,
+        push_json,
         'report "[6/6] DONE rc=$rc — log attached"',
     ]
     return "; ".join(steps)
