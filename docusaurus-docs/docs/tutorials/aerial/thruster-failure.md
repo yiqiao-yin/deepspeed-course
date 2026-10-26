@@ -377,6 +377,37 @@ came from episodes nothing could save and the base skill never formed.
 Learn to land, then break the vehicle. The robust arm warm-starts from the
 healthy one, which is also the control.
 
+## Prior work — the method here is not ours
+
+Fault-tolerant flight control is an old field, and the specific move of
+*training with the fault present* is standard sim-to-real practice.
+
+| | |
+|---|---|
+| **Tobin, Fong, Ray, Schneider, Zaremba & Abbeel (2017)**, *Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World*, IROS · [arXiv:1703.06907](https://arxiv.org/abs/1703.06907) | Randomise the thing you cannot model and the policy learns to be robust to it. Training with a random nozzle broken is domain randomisation over faults. |
+| **Sun, Wang, Chu & de Visser (2021)**, *Autonomous Quadrotor Flight Despite Rotor Failure With Onboard Vision Sensors*, IEEE RA-L 6(2) | Flight with a dead rotor, on real hardware. |
+| **A model-free deep RL approach to manoeuvre a quadrotor despite single rotor failure** · [arXiv:2109.10488](https://arxiv.org/abs/2109.10488) | The direct RL formulation of the same problem. |
+| **Mid-flight propeller failure detection and control of a propeller-deficient quadcopter using RL** · [arXiv:2002.11564](https://arxiv.org/abs/2002.11564) | Detection plus recovery, learned. |
+
+Classical fault-tolerant control — control reallocation after an actuator
+loss — predates all of it and is what `fault.py`'s reachability check is a toy
+version of.
+
+### What this lab adds
+
+Two things, and the second is the one worth keeping.
+
+A **budget-matched comparison**: a policy that practised with failures lands
+**89%** of broken-thruster descents against **72%** for an identical policy
+that never saw one, both scored on the same faults.
+
+And a **negative result about the obvious shortcut**. A cheap static check —
+can the remaining nozzles still hold the vehicle up? — does **not** predict
+which flights survive. Geometry and flight come apart, which means you cannot
+screen fault cases offline and must fly them. The lab also withdrew an
+overclaim along the way: a "4.6× spin signature" from a single nozzle draw
+measured at **1.32× across ten**, with 4 of 10 reversed.
+
 ## Limitations
 
 - **The healthy arm's seeds spread widely** — 59% and 85%. Two seeds is enough
