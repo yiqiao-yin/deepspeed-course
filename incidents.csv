@@ -14,3 +14,6 @@ The RunPod harness lies less than it used to,false-green,c21d192,19b2b80 c87f49f
 Watch a checker fail before trusting it,false-green,,0cef32b 3ff738a c5bc807,tests/test_clawdeck_manifest.py,,5
 A measured claim is scoped to the configuration it was measured in,doc-drift,d9cc6bf,f21f153 79fe97c,tests/test_published_protein_numbers.py,0,0
 A script with no end-to-end run makes its derivations the only testable surface,silent-wrong,3ed103f,12c45c8,tests/test_kimi_k3_plan.py,0,
+A permutation of the inputs is a different random seed,silent-wrong,,07b3a4b,tests/test_teacher_student.py,,
+"A hold is a duration, not a repeated frame",silent-wrong,a934a84,d5ce70c,08_aerial_physics/06_learned_dynamics/render_figs.py,0,
+A counterexample that cannot reach the bug is not a counterexample,false-green,,baa9e61,tests/test_rl_trading.py,,

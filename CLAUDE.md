@@ -235,6 +235,76 @@ forced-detour task from part 4, and `regional` (20 km) exists only to
 be looked at. **New presets are ADDED, never substituted**, so
 published numbers keep describing the surface they were measured on.
 
+### `08_aerial_physics` asks the same question seven times and keeps changing the answer
+
+Topic 7 walked a robot over terrain. Topic 8 throws a two-tonne
+cold-gas car into the air and gives it **seven seconds of
+propellant**, which removes the one luxury every walking lab had:
+you cannot stop and think. A falling vehicle must commit.
+
+| Folder | Adds | What it measured |
+|---|---|---|
+| `01_aerial_stabilization` | a body | PPO beats a textbook PD controller 89% to 75% **on a quarter of the gas** |
+| `02_barrel_roll` | a manoeuvre | teach the landing first and the roll is **never learned** (0% vs 95%) — curriculum ORDER decides everything |
+| `03_land_on_target` | a mark to hit | a 5x5 height patch takes PPO from 56% to **0%**; terrain knowledge makes it worse, monotonically |
+| `04_fly_on_mars` | a planet and a course | residual PPO on a guidance law: same arrivals, **5-8% less propellant** |
+| `05_thruster_failure` | a broken nozzle | practising with faults lifts survival **72% to 89%**; a static authority check does not predict which flights survive |
+| `06_learned_dynamics` | a world model | **29,000x the parameters, no better prediction** — the best rung has 18,281 |
+| `07_teacher_student` | a sensor and no altimeter | PPO on 144 depth beams scores **2.5%**, no better than blind; distilled from a teacher it scores **50%** |
+
+Three things are load-bearing across the topic and easy to undo:
+
+- **The worst terminal must be the outcome reachable by doing
+  nothing.** Labs 3 and 5 are landings, so inaction IS a hover and
+  the timeout must be worse than a crash. Lab 4 is a gate course
+  where the bonus pulls the policy out of a hover, so there the
+  crash must be worst. Lab 5 shipped lab 4's ladder once and taught
+  the policy never to try.
+- **Every lab after 2 inherits `STEP_MAX = 0.12`** and the reward
+  shape from lab 3, whose Φ is capped near 6. Lab 3 shipped Φ ≈ 31
+  and the `(γ−1)Φ` toll outweighed the prize: the policy fled, miss
+  distance climbing 12 m → 86 m with every episode timing out.
+- **A graded terminal, never a flat one.** A flat crash penalty
+  scores a 10 m/s dive and a 2.6 m/s arrival identically, so there
+  is no gradient from crashing toward landing.
+
+Labs 1-6 carry **no `deepspeed` launcher and no `require_gpu()`**,
+deliberately: a ~14k-parameter policy stepped against MuJoCo is
+faster on a CPU, measured. Lab 6 is the first to want a card and
+lab 7 the first with a real supervised phase.
+
+### `02_intermediate/02` and `05` are a matched pair, like `03` and `04`
+
+| Folder | Scored by | Asks |
+|---|---|---|
+| `02_rnn_stock_data` | Theil's U, directional accuracy | can a model **predict** a price series? |
+| `05_rl_trading` | money after costs, drawdown | is a prediction **worth acting on**? |
+
+The second exists because the first cannot answer its own
+follow-up. A forecast at **51.1% directional accuracy** — better
+than chance, with a real +0.031 correlation — **loses 2.2% a year**
+once it pays 5 bps a side. Three things decide that and none is
+expressible as a squared error: holding is free and flipping is
+not, a small edge is correct and unprofitable, and the objective
+is a path (one return series shuffled 400 ways has an identical
+mean and drawdowns from −23% to −71%).
+
+Two rules there that look like fussiness and are not:
+
+- **The universe is all nine SPDR sectors, and that IS the
+  survivorship-bias fix.** Twelve hand-picked large caps liquid
+  today return +23.70%/yr against the equal-weight index's
+  +13.80%. Buy-and-hold is the control every RL arm must beat, so
+  on that basket the control starts ten points ahead and RL
+  "loses" for reasons unrelated to RL. Taking ALL nine sectors
+  means there is no selection decision to be biased by. The
+  biased basket is kept as a labelled second arm so `--bias` can
+  reproduce the gap.
+- **The price panel is COMMITTED.** Vendor history is not
+  immutable — splits are applied retroactively and adjustments
+  revised — so a lab that pins numbers to a live feed publishes
+  figures nobody can check.
+
 ### The geometry lesson both navigation labs had to learn separately
 
 What makes terrain a DECISION is not obstacle size or route length. It
@@ -869,7 +939,7 @@ Two things that are easy to get wrong here:
   finding nothing to check. It detects the shallow case and fails instead.
 
 What the corpus currently supports, as measurements rather than impressions:
-**10 of 13 defects did not crash**, and latency ranges from same-day to 367
+**13 of 16 defects did not crash**, and latency ranges from same-day to 367
 days. That asymmetry — the quiet ones survive a year — is the argument for
 every property-based test in `tests/`.
 
