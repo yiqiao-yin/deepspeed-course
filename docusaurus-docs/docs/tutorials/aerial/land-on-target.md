@@ -500,6 +500,31 @@ with a permanent counterexample for each of the four defects:
 timeout −90  <  crash −64  <  hard landing −5  <  landed off +5…+25  <  on target +70…+100
 ```
 
+## Prior work — the method here is not ours
+
+| | |
+|---|---|
+| **Ng, Harada & Russell (1999)**, *Policy Invariance Under Reward Transformations: Theory and Application to Reward Shaping*, ICML, pp. 278–287 · [paper](https://people.eecs.berkeley.edu/~russell/papers/ml99-shaping.pdf) | Potential-based shaping, and the proof that $\gamma\Phi(s') - \Phi(s)$ leaves the optimal policy unchanged. Everything this lab says about Φ — including the $(\gamma-1)\Phi$ leak that made the first version flee — is their result applied carefully. The page named them; it now cites them. |
+| **Gaudet, Linares & Furfaro (2018)**, *Deep RL for Six Degree-of-Freedom Planetary Powered Descent and Landing* · [arXiv:1810.08719](https://arxiv.org/abs/1810.08719) | Pinpoint powered descent by RL, targeting a sub-5 m landing ellipse. The task. |
+| **Schulman et al. (2017)**, *PPO* · [arXiv:1707.06347](https://arxiv.org/abs/1707.06347) | The algorithm. |
+
+Hazard detection and avoidance for planetary landing is a large aerospace
+literature in its own right, and this lab's "the mark is often on a boulder"
+premise is a toy version of it.
+
+### What this lab adds
+
+A **negative result with a second, independent confirmation**: giving PPO a
+5×5 height patch takes it from 56% to **0%** on target, monotonically worse
+with more terrain information. A hand-written controller then reproduces the
+ordering from the other direction — sweeping its divert budget shows the best
+use of *perfect* terrain knowledge is to ignore it.
+
+That two-method agreement is what makes it a finding about the task rather
+than about PPO. Topic 8 lab 7 is the follow-up that explains it, and also
+inherits the warning: the patch was never the problem, the training signal
+was.
+
 ## Limitations
 
 - **Nothing here is at convergence.** Every arm was still improving at 4M,

@@ -249,6 +249,31 @@ landings. Any landing without the roll is now one flat price.
 The measured breakdown of where reward actually comes from is in lab 1;
 the same `--reward-audit` tooling applies here.
 
+## Prior work — the method here is not ours
+
+Curriculum learning and learned aerobatics are both well-covered, and the
+flip in particular has been done on real hardware.
+
+| | |
+|---|---|
+| **Bengio, Louradour, Collobert & Weston (2009)**, *Curriculum Learning*, ICML · [doi:10.1145/1553374.1553380](https://doi.org/10.1145/1553374.1553380) | The original argument that presentation **order** changes what a learner can reach at all. This lab's entire finding is a sharp instance of their claim. |
+| **Narvekar, Peng, Leonetti, Sinapov, Taylor & Stone (2020)**, *Curriculum Learning for Reinforcement Learning Domains: A Framework and Survey*, JMLR · [arXiv:2003.04960](https://arxiv.org/abs/2003.04960) | The RL-specific treatment, including transfer between curriculum stages. |
+| **Lupashin, Schöllig, Sherback & D'Andrea (2010)**, *A Simple Learning Strategy for High-Speed Quadrocopter Multi-Flips*, ICRA | A real quadrotor learns a **triple** flip at 1,600°/s in about 40 iterations, by policy-gradient refinement of a first-principles model. The manoeuvre predates this lab by fifteen years. |
+| **Kaufmann, Bauersfeld, Loquercio, Müller, Koltun & Scaramuzza (2023)**, *Champion-level drone racing using deep reinforcement learning*, Nature 620 · [doi:10.1038/s41586-023-06419-4](https://doi.org/10.1038/s41586-023-06419-4) | Aggressive learned flight at the limit, against human world champions. |
+
+### What this lab adds
+
+A clean **order ablation with the budget held fixed**. Teaching the landing
+first and warm-starting the roll gives **0%** across two seeds and 3M steps;
+teaching the roll first and warm-starting the landing gives **95%**. Same
+algorithm, same reward, same total steps — only the order moves.
+
+The mechanism is worth the page: a landing reflex learned first makes the roll
+*unlearnable*, because a policy that has learned to stay upright will not
+initiate a tumble. **A prior can be worse than no prior**, and from-scratch
+beat warm-started 95% to 0% on the roll. That is a concrete counterexample to
+the intuition that pre-training is free, not a new method.
+
 ## Limitations
 
 :::info In plain words

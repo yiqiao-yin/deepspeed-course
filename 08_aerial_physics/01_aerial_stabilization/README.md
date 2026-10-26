@@ -497,6 +497,33 @@ efficiency, tank wall heat transfer as anything but the β blend,
 structural loads, suspension travel beyond MuJoCo's contact solver, and
 two-phase flow anywhere.
 
+## Prior work — the method here is not ours
+
+Reinforcement learning for attitude control of a thrust-vectored vehicle is
+established, and one of these papers describes almost exactly this lab's
+opening scene.
+
+| | |
+|---|---|
+| **Hwangbo, Sa, Siegwart & Hutter (2017)**, *Control of a Quadrotor with Reinforcement Learning* · [arXiv:1707.05110](https://arxiv.org/abs/1707.05110) | A neural policy maps state straight to actuator commands with no predefined control structure, and stabilises a quadrotor **thrown upside-down into the air at 5 m/s**. That is this lab's task with rotors instead of nozzles. |
+| **Schulman, Wolski, Dhariwal, Radford & Klimov (2017)**, *Proximal Policy Optimization Algorithms* · [arXiv:1707.06347](https://arxiv.org/abs/1707.06347) | The algorithm every arm in topic 8 optimises. |
+| **Schulman, Moritz, Levine, Jordan & Abbeel (2015)**, *High-Dimensional Continuous Control Using GAE* · [arXiv:1506.02438](https://arxiv.org/abs/1506.02438) | GAE(λ), which supplies the advantage. |
+| **Gaudet, Linares & Furfaro (2018)**, *Deep RL for Six Degree-of-Freedom Planetary Powered Descent and Landing* · [arXiv:1810.08719](https://arxiv.org/abs/1810.08719) | RL for powered descent — the task family topic 8 sits in. |
+
+**Control allocation** — turning a desired wrench into individual actuator
+commands — is classical aerospace engineering and long predates any of this.
+The `thrusters.py` rig audit solves it as a linear program, which is textbook.
+
+### What this lab adds
+
+A **propellant** comparison against a tuned classical controller on the same
+hardware: PPO lands 89% against the PD controller's 75% and uses **36 kg of
+gas against 147**. The policy was never rewarded for efficiency — it falls out
+of "land soon and land softly", which the reward audit in `evaluate.py`
+confirms by integrating each reward term over real episodes. The
+one-quarter-the-fuel result is the part worth carrying; the method is
+Hwangbo's.
+
 ## Running it
 
 ```bash

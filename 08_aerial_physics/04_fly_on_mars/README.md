@@ -337,6 +337,31 @@ destruction the bottom of the ladder turns the cheapest available improvement
 into "stop crashing" rather than "crash sooner".
 :::
 
+## Prior work — the method here is not ours
+
+Learning a **correction to a working controller** rather than a policy from
+scratch is a named technique with two near-simultaneous papers, and this lab
+is an instance of it.
+
+| | |
+|---|---|
+| **Johannink, Bahl, Nair, Luo, Kumar, Loskyll, Ojea, Solowjow & Levine (2019)**, *Residual Reinforcement Learning for Robot Control*, ICRA · [arXiv:1812.03201](https://arxiv.org/abs/1812.03201) | Decompose control into a conventional feedback part and a residual learned by RL; the command is the superposition. That is exactly `--method residual`. |
+| **Silver, Allen, Tenenbaum & Kaelbling (2018)**, *Residual Policy Learning* · [arXiv:1812.06298](https://arxiv.org/abs/1812.06298) | The concurrent formulation: start from a good-but-imperfect controller and learn a residual on top. Shown to beat both RL from scratch and the initial controller alone. |
+| **Kaufmann et al. (2023)**, *Champion-level drone racing using deep reinforcement learning*, Nature 620 · [doi:10.1038/s41586-023-06419-4](https://doi.org/10.1038/s41586-023-06419-4) | Gate-sequence flight at speed, learned. |
+| **Gaudet, Linares & Furfaro (2018)** · [arXiv:1810.08719](https://arxiv.org/abs/1810.08719) | Powered descent on Mars by RL. |
+
+### What this lab adds
+
+A case where the residual policy **does not fly better and is measurably
+thriftier**. Arrival rates against the hand-written guidance law are a coin
+toss (p = 0.65); what replicates across seeds is **5–8% less propellant**.
+
+The useful part is the pairing: both arms fly the *identical* held-out
+courses, asserted in `compare.py`, so the propellant difference is a matched
+comparison rather than two independent averages. Residual RL finding slack a
+human law left on the table is Johannink's result; measuring that the slack is
+in *fuel* rather than *time* is this lab's contribution, and it is a small one.
+
 ## Limitations
 
 - **The completion difference is not significant** (p = 0.60 and 0.65). The

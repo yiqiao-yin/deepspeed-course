@@ -301,6 +301,31 @@ Note the $\hat{o}$ on both sides: the model is fed its **own** prediction, which
 is what makes the error compound and what separates this from the one-step
 number.
 
+## Prior work — the method here is not ours
+
+Learning a dynamics model and rolling it out open-loop is model-based RL's
+oldest idea, and the failure mode this lab measures has its own paper.
+
+| | |
+|---|---|
+| **Lambert, Pister & Calandra (2022)**, *Investigating Compounding Prediction Errors in Learned Dynamics Models* · [arXiv:2203.09637](https://arxiv.org/abs/2203.09637) | The compounding-error problem stated and studied directly: one-step predictions that are accurate become useless over a composed horizon, and the **system's own dynamics**, not the model, are the strongest factor in the error's shape. This lab's headline metric is their subject. |
+| **Ha & Schmidhuber (2018)**, *World Models* · [arXiv:1803.10122](https://arxiv.org/abs/1803.10122) | Learn a compressed model of the environment and train a policy inside it. |
+| **Chua, Calandra, McAllister & Levine (2018)**, *Deep Reinforcement Learning in a Handful of Trials using Probabilistic Dynamics Models* (PETS) · [arXiv:1805.12114](https://arxiv.org/abs/1805.12114) | Ensembles and uncertainty propagation, the standard answer to model error. |
+| **Kaplan et al. (2020)**, *Scaling Laws for Neural Language Models* · [arXiv:2001.08361](https://arxiv.org/abs/2001.08361) | The scaling intuition this lab tests and fails to reproduce in its domain. |
+
+### What this lab adds
+
+A **scaling ladder with the bar written down first**: a model 1000× larger
+must halve the 50-step error, or the sharding machinery this course is named
+after has nothing to do here. Across 4k to 118M parameters and both an MLP and
+a GRU, the bar is **not met** — the best rung on the whole ladder has **18,281
+parameters** and bigger is worse.
+
+Lambert et al. predict the shape of this; what the lab contributes is the
+*systems* conclusion drawn from it, which is that there was never a model here
+worth sharding. That is a measurement about this vehicle at this budget, not a
+general claim about dynamics models, and the page scopes it that way.
+
 ## Limitations
 
 - **One system, one horizon.** A flat scaling curve here is a fact about a
