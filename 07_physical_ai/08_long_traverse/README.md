@@ -260,3 +260,24 @@ earns its place.
 | **Check the metric before believing the comparison** | the broken detector made more legs look *worse* |
 | **Compare against more than the baseline** | the posture trade-off was invisible against a biped that loses to everything |
 | **Write the prediction so it can fail** | mine did, and the script said so before I did |
+
+## References
+
+- Pfeifer & Bongard, *How the Body Shapes the Way We Think*, MIT Press 2006 —
+  morphological computation: a body doing work a controller would otherwise do
+- McGeer, [Passive Dynamic Walking](https://doi.org/10.1177/027836499000900206),
+  IJRR 1990 — a walker with no actuators and no software, the canonical demonstration
+- Hoffmann & Müller, [What Is Morphological Computation?](https://doi.org/10.1162/ARTL_a_00219),
+  Artificial Life 2017 — the sceptical reading, which this lab's result supports
+- Sims, [Evolving Virtual Creatures](https://doi.org/10.1145/192161.192167), SIGGRAPH 1994
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
+
+The framing is Pfeifer and Bongard's and the canonical example is McGeer's. What
+this lab contributes is a budget-matched measurement — four legs walk **3.5x
+further** than two, six legs fall **0%** of 36 episodes and still lose — and, more
+usefully, the discovery that the distance metric itself was broken and flattering
+the wrong bodies. Lab 9 then overturns the explanation.

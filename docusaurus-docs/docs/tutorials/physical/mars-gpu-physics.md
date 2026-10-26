@@ -371,3 +371,24 @@ update and found 3.9× sitting unclaimed in a serial loop and a
 too-frequent evaluation. This lab measures GPU physics at 1.50× against
 a 5× bar. Both times the machine was answerable in minutes, and both
 times the answer was no.
+
+## References
+
+- Todorov, Erez & Tassa, [MuJoCo: A physics engine for model-based control](https://doi.org/10.1109/IROS.2012.6386109),
+  IROS 2012 — the simulator this topic runs on
+- Makoviychuk et al., [Isaac Gym: High Performance GPU-Based Physics Simulation](https://arxiv.org/abs/2108.10470),
+  2021 — physics and policy both resident on the GPU, no CPU round trip
+- Freeman et al., [Brax: A Differentiable Physics Engine for Large Scale Rigid Body Simulation](https://arxiv.org/abs/2106.13281),
+  2021 — the JAX lineage MJX belongs to
+- Rudin et al., [Learning to Walk in Minutes Using Massively Parallel Deep RL](https://arxiv.org/abs/2109.11978),
+  CoRL 2021 — thousands of parallel environments on one GPU
+- Amdahl, [Validity of the single processor approach to achieving large scale computing capabilities](https://doi.org/10.1145/1465482.1465560),
+  AFIPS 1967 — why a 1.50x physics win caps the whole step at 1.5x
+
+GPU physics for RL is thoroughly established and the papers above are why people
+expect it to pay. This lab's contribution is a **negative procurement result with
+the bar written down first** — at least 5x the CPU worker pool or it is not worth
+renting — measured at **1.50x**, with three findings that generalise: baseline
+against the POOL and not one environment; a backend that `abort()`s is a data
+point, so each measurement runs in its own process; and Warp falls back to CPU
+**silently**, reporting throughput that looks like GPU throughput.

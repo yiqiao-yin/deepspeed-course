@@ -414,3 +414,15 @@ Note `--wait-seconds` defaults to 1800, which is shorter than a full
 | Disk | ~20 GB (torch + MuJoCo); no downloads, the world is generated |
 | Wall clock | ~25 min a run; ~11 h for the full 27-run sweep |
 
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — privileged teacher, proprioceptive student
+- Miki et al., [Learning robust perceptive locomotion](https://arxiv.org/abs/2201.08117),
+  Science Robotics 2022
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018

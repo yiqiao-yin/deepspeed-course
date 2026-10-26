@@ -160,3 +160,17 @@ in a `finally`, and the in-pod watchdog is a backstop, not a guarantee.
 | Download | none — the world is generated from XML in the source |
 | Rendering | optional; training never opens a graphics context |
 | Runtime | ~4 min a run, ~10 min for the full 2×2 at `--jobs 6` |
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — privileged teacher, proprioceptive student
+- Siekmann et al., [Blind Bipedal Stair Traversal via Sim-to-Real RL](https://arxiv.org/abs/2105.08328),
+  RSS 2021 — stair climbing from proprioception alone, the arm this lab's ceiling describes
+- Rudin et al., [Learning to Walk in Minutes Using Massively Parallel Deep RL](https://arxiv.org/abs/2109.11978),
+  CoRL 2021 — thousands of parallel environments on one GPU
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018

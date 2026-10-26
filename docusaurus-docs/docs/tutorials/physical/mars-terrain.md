@@ -816,3 +816,27 @@ There is no `deepspeed` call in this lab's launcher and no GPU is
 requested for the generator. It trains nothing — no parameters, no
 gradients, nothing for ZeRO to shard — so a distributed launcher would
 be cargo cult. Only the renderer needs an OpenGL context.
+
+## References
+
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — privileged teacher, proprioceptive student
+- Rudin et al., [Learning to Walk in Minutes Using Massively Parallel Deep RL](https://arxiv.org/abs/2109.11978),
+  CoRL 2021 — thousands of parallel environments on one GPU
+- Miki et al., [Learning robust perceptive locomotion](https://arxiv.org/abs/2201.08117),
+  Science Robotics 2022 — proprioception and exteroception fused, in the wild
+- Perlin, [An Image Synthesizer](https://doi.org/10.1145/325165.325247), SIGGRAPH 1985 —
+  gradient noise, which is what `terrain.py` generates relief with
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
+
+The terrain generator, the walker and the sim-to-real framing are all standard.
+What this lab contributes is the **split**: part 1 builds and validates a world with
+no robot in it, because lab 4 published a result whose faults were in its terrain,
+its renderer and its metric rather than in anything a policy learned. And the
+decision analysis in part 3 — replaying checkpoints to ask whether the robot went
+OVER or AROUND each landform — which found that an arm fed six constant zeros
+discriminates about as well as the policy does.

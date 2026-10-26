@@ -165,3 +165,29 @@ It replays lab 9's policies and varies a router.
 | **A null result needs a working control** | blind ties oracle, so the ceiling and the floor are the same number |
 | **Report power, not just significance** | 75% stalling may mask any effect, and the page says so |
 | **Train where it is easier, test where it is hard** | course-trained transferred; traverse-trained collapsed |
+
+## References
+
+- Lee et al., [Learning quadrupedal locomotion over challenging terrain](https://arxiv.org/abs/2010.11251),
+  Science Robotics 2020 — privileged teacher, proprioceptive student
+- Siekmann et al., [Blind Bipedal Stair Traversal via Sim-to-Real RL](https://arxiv.org/abs/2105.08328),
+  RSS 2021 — robust stair climbing on Cassie from proprioception **alone**
+- Miki et al., [Learning robust perceptive locomotion](https://arxiv.org/abs/2201.08117),
+  Science Robotics 2022 — the case that exteroception DOES pay, and the foil for this lab
+- Agarwal et al., [Legged locomotion in challenging terrains using egocentric vision](https://arxiv.org/abs/2211.07638),
+  CoRL 2022
+- Kumar et al., [RMA: Rapid Motor Adaptation](https://arxiv.org/abs/2107.04034), 2021
+- Schulman et al., [PPO](https://arxiv.org/abs/1707.06347), 2017 ·
+  [GAE](https://arxiv.org/abs/1506.02438), 2015
+- Agarwal et al., [Deep RL at the Edge of the Statistical Precipice](https://arxiv.org/abs/2108.13264),
+  NeurIPS 2021 — why a handful of seeds and a mean are not enough
+- Henderson et al., [Deep Reinforcement Learning that Matters](https://arxiv.org/abs/1709.06560), 2018
+
+Whether perception pays for a legged robot is an open and actively argued question:
+Siekmann et al. climb stairs blind, Miki et al. show exteroception helping in the
+wild. This lab's contribution is an **oracle arm** — perfect, noise-free terrain
+knowledge, better than any sensor could supply — which **ties** the blind baseline,
+while the realistic noisy version is **worse than none**. Testing only the noisy
+version would have read as a sensor-quality problem. It is not. The result is scoped
+to this body, this task and this budget, and topic 8 lab 7 is the counterpoint where
+the same question on a falling vehicle gives the opposite answer.

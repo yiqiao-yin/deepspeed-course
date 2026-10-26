@@ -241,3 +241,23 @@ Three things that cost time and are worth knowing:
 | **Split by surface, not by sample** | two views of one surface share its landforms; a sample split leaks the answer |
 | **Check whether the hardware is needed** | the capacity table is why ZeRO-3 is here, and why LoRA runs without it |
 | **Never report the arm you did not run** | the 7B ZeRO-3 arm has no number on this page |
+
+## References
+
+- Driess et al., [PaLM-E: An Embodied Multimodal Language Model](https://arxiv.org/abs/2303.03378), ICML 2023 —
+  continuous sensor data folded into a language model for embodied reasoning
+- Brohan et al., [RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818),
+  2023 — actions as text tokens, trained alongside web-scale vision-language data
+- Bai et al., [Qwen2.5-VL Technical Report](https://arxiv.org/abs/2502.13923), 2025 — the model this lab fine-tunes
+- Hu et al., [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685), ICLR 2022 —
+  the r=16 adapter that lets the 3B arm fit on one card
+- Rajbhandari et al., [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054),
+  SC 2020 — and the measurement showing only the full fine-tune arm needs it
+
+Using a vision-language model for embodied decisions is the subject of a large and
+fast-moving literature. What this lab adds is the **control structure**: a blind arm
+(same model, grey image, same token count) and a majority-class heuristic, measured
+alongside. The sighted model scores 52.9%, beats the blind arm at p = 0.006, and
+**still loses to the one-line heuristic at 55.0%** — reporting only the first
+comparison would have been true and misleading. A working no-information control
+emits ONE constant, which is what licenses the comparison at all.
