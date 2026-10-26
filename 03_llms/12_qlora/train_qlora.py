@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 MODEL_ID = "Qwen/Qwen3-4B"
@@ -313,6 +314,10 @@ def main():
             model=model,
             model_parameters=[p for p in model.parameters() if p.requires_grad],
             config=config)
+
+        torch.cuda.synchronize(device)
+        training_start = time.perf_counter()
+
         losses = []
         for step in range(steps):
             # Cycle through identical examples; padding tokens do not affect loss.
@@ -329,11 +334,14 @@ def main():
                 print(f"{arm} step {step + 1}/{steps}: "
                       f"loss {losses[-1]:.4f}", flush=True)
         torch.cuda.synchronize(device)
+        training_seconds = time.perf_counter() - training_start
+
         # Store per-arm evidence for the later cross-arm validation.
         window = min(5, steps)
         results[arm] = dict(
             arm=arm, representation="nf4" if arm == "qlora" else "bf16",
             zero_stage=2, rank=rank, steps=steps,
+            training_seconds=training_seconds,
             start_allocated_bytes=start_allocated_bytes,
             loaded_allocated_bytes=loaded_bytes,
             load_peak_allocated_bytes=load_peak_bytes,
@@ -350,6 +358,7 @@ def main():
                   f"overall peak={results[arm]['peak_allocated_bytes'] / 2**30:.2f} GiB; "
                   f"stored tensors={counts['stored_tensor_bytes'] / 2**30:.2f} GiB",
                   flush=True)
+            print(f"{arm} training time: {training_seconds:.2f} seconds", flush=True)
         del engine, model
         gc.collect()
         torch.cuda.empty_cache()
