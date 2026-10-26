@@ -807,3 +807,153 @@ counterexample in the suite permanently. `test_config_kwargs.py` found 20 broken
 call sites that way when only 3 had been reported;
 `test_synthetic_data_is_learnable.py` carries the old random-label generator and
 asserts it fails.
+
+## A permutation of the inputs is a different random seed
+
+> **Incident record** · class `silent-wrong` ·
+> fixed [`07b3a4b`](https://github.com/yiqiao-yin/deepspeed-course/commit/07b3a4b) ·
+> detector [`tests/test_teacher_student.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_teacher_student.py)
+
+Topic 8 lab 7 needed a teacher: a PPO policy told its exact height above the
+ground. Lab 3 had already measured that exact observation at **56% on
+target**, so the new lab's teacher should have reproduced it.
+
+It scored **4%**, then **2%** on a second seed.
+
+Everything that could be compared matched. Same 15,081 parameters. Same
+`dense` rig, same `badlands` terrain, same seed, same 3,997,696 steps, same
+trainer — an AST diff of the two training scripts showed only the `--sense`
+flag and a line writing `episodes.json`. The observations were the **same 41
+numbers**: `np.allclose(np.sort(a), np.sort(b))` passed.
+
+The difference was that two of them sat at index 19 instead of index 13.
+
+When altitude and clearance became the teacher's *privileged channel* they
+moved from the shared prefix to the terrain slot, which had been placed after
+the clock. That is a permutation — and with a fixed `torch.manual_seed` a
+permutation of the inputs is a **different draw of the first layer's weights**,
+which is to say a different seed. On a task whose seed spread lab 3 had
+already published as 40% against 10%, that was enough.
+
+The learning curves are the tell, and they only help if you plot both:
+
+| step | lab 3 `blind` | the new `oracle` |
+|---|---|---|
+| 2.0M | 16.5% | 3.2% |
+| 3.0M | 49.8% | 9.2% |
+| 4.0M | **62.3%** | **16.0%** |
+
+Same shape, a million steps late, still climbing at the cutoff. Not broken —
+unlucky, and indistinguishable from broken without the reference curve.
+
+The fix was to move the terrain channel back to index 13, making the teacher's
+observation **byte-identical** to lab 3's `blind` arm, and to assert exactly
+that:
+
+```python
+check("the ORACLE view is byte-identical to lab 3's BLIND view",
+      bool(np.array_equal(np.asarray(o3), np.asarray(o7))))
+```
+
+It then scored 55.8%, against lab 3's 56%.
+
+Two things generalise. **A reproduction control is worth more than a plausible
+number** — without lab 3's published 56% there was nothing to be suspicious
+of, and 4% would have been written up as "direct RL is hard here." And
+**feature order is not cosmetic when the seed is fixed**: two runs that differ
+only by a permutation are two seeds, not one experiment run twice.
+
+## A hold is a duration, not a repeated frame
+
+> **Incident record** · class `silent-wrong` ·
+> introduced [`a934a84`](https://github.com/yiqiao-yin/deepspeed-course/commit/a934a84) ·
+> fixed [`d5ce70c`](https://github.com/yiqiao-yin/deepspeed-course/commit/d5ce70c) ·
+> detector [`08_aerial_physics/06_learned_dynamics/render_figs.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/08_aerial_physics/06_learned_dynamics/render_figs.py)
+
+Lab 6 shipped three animated figures to the documentation site. They were
+embedded correctly, served 200, reported a frame count, and were **still
+pictures**.
+
+| file | frames requested | frames in the file | duration |
+|---|---|---|---|
+| `dyn-scaling` | 92 | **7** | 1610 ms |
+| `dyn-drift-small` | 68 | 50 | 1520 ms |
+
+PIL's `optimize=True` **merges consecutive identical frames** and rolls their
+durations together. A progressive chart reveal over six data points produces
+only a handful of distinct images in seventy frames, and the 22 deliberate
+"hold" frames at the end — duplicates by construction — collapsed into one
+1.6-second frame.
+
+Every available check passed. The file existed, had the right name, served
+over HTTPS, and `Image.open(...).n_frames` returned a number greater than one.
+Only looking at it would have caught it, and nobody looks at a GIF they just
+generated.
+
+The fix has three parts, and the third is the one that matters:
+
+- write with `optimize=False`;
+- express a pause as a **long duration on one frame** rather than a run of
+  duplicates;
+- **read the file back** and raise if the kept frame count disagrees with the
+  list handed to `save()`.
+
+```python
+kept = getattr(Image.open(path), "n_frames", 1)
+if kept != len(frames):
+    raise RuntimeError(f"asked for {len(frames)} frames, the file has {kept}")
+```
+
+That guard then caught its author twice more. Lab 7's `render_arms.py`
+appended six copies of a final frame to let an outcome linger, and the
+read-back rejected its own output — correctly. The same lab's `render_ghost.py`
+had earlier accepted a non-working `osmesa` backend because `pick_backend()`
+probed with `MjModel.from_xml_string`, which touches no OpenGL at all; it now
+builds an 8x8 `Renderer` and calls `render()`.
+
+The general rule: **verify the artifact, not the call that produced it.** A
+function that returns without raising has told you nothing about the file on
+disk.
+
+## A counterexample that cannot reach the bug is not a counterexample
+
+> **Incident record** · class `false-green` ·
+> fixed [`baa9e61`](https://github.com/yiqiao-yin/deepspeed-course/commit/baa9e61) ·
+> detector [`tests/test_rl_trading.py`](https://github.com/yiqiao-yin/deepspeed-course/blob/main/tests/test_rl_trading.py)
+
+`02_intermediate/05_rl_trading` lives or dies on one property: nothing may
+read forward in time. Look-ahead is the defining bug of trading research — it
+raises nothing, looks normal in every chart, and turns noise into a perfect
+strategy.
+
+So the lab checks it by construction. Corrupt every price after a cut point,
+recompute the features before it, and assert none moved. And — following
+[watch a checker fail before trusting it](#watch-a-checker-fail-before-trusting-it)
+— assert that a deliberately forward-looking feature **is** caught.
+
+The honest features passed. The deliberate cheat passed too.
+
+```python
+cheat = c.shift(-1).iloc[:cut - 1]     # reads at most c[cut - 1]
+tampered.iloc[cut:] = noise            # corrupts from c[cut]
+```
+
+The slice stopped **one row short** of the first corrupted price. The cheating
+feature never touched the tampered region, so it came back clean, and the
+suite printed PASS on a check that had just failed to validate itself.
+
+The same mistake appeared independently in the same lab's `assert_causal`,
+which compared positions only up to `cut - n_check` with `n_check = 40`. That
+made it blind to any peek shorter than 40 days — **including the one-day peek
+that is by far the most likely bug.** A policy built to break it sailed
+through.
+
+Both are now tightest-possible: the counterexample reaches the tamper point,
+and `assert_causal` compares every row before the cut, so a one-day peek is
+rejected.
+
+The lesson is narrower than "test your tests" and more useful. A
+counterexample has a **reach**, and the check has a **window**, and if the
+reach does not extend into the window the check is decoration. When you write
+a deliberately broken input, ask what it would take for the check to notice —
+and then make it marginally worse than that.
