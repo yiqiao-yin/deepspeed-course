@@ -261,6 +261,39 @@ Perfect foresight survives any cost; a coin flip is destroyed by the smallest.
 **A method that only wins at 0 bps has not been shown to win**, which is why
 no number on this page is quoted without its cost.
 
+## Prior work — the algorithms here are not ours
+
+Neither method originates in this lab, and reinforcement learning for trading
+is a large and old literature. What is assembled here is the comparison and
+its controls.
+
+| | |
+|---|---|
+| **Schulman, Wolski, Dhariwal, Radford & Klimov (2017)**, *Proximal Policy Optimization Algorithms* · [arXiv:1707.06347](https://arxiv.org/abs/1707.06347) | The clipped surrogate every arm optimises. |
+| **Schulman, Moritz, Levine, Jordan & Abbeel (2015)**, *High-Dimensional Continuous Control Using Generalized Advantage Estimation* · [arXiv:1506.02438](https://arxiv.org/abs/1506.02438) | GAE($\lambda$), which supplies PPO's advantage here. |
+| **Shao et al. (2024)**, *DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models* · [arXiv:2402.03300](https://arxiv.org/abs/2402.03300) | **GRPO.** The group-relative baseline that replaces the critic. Introduced for language models, where a group is several sampled answers to one prompt; this lab's only move is to make the group *every sector on the same day*, which turns the baseline into the equal-weight market return. |
+| **Moody & Saffell (2001)**, *Learning to Trade via Direct Reinforcement*, IEEE Trans. Neural Networks 12(4) | The original argument that a trading policy should optimise a financial objective directly rather than forecast and then act, including transaction costs and the position as state. This lab's premise is theirs, restated. |
+| **Deng, Bao, Kong, Ren & Dai (2017)**, *Deep Direct Reinforcement Learning for Financial Signal Representation and Trading*, IEEE Trans. Neural Networks and Learning Systems 28(3) | The deep-network successor to Moody & Saffell. |
+| **Politis & Romano (1994)**, *The Stationary Bootstrap*, JASA 89(428) | The block bootstrap behind every confidence interval on this page. |
+
+### What this lab adds, scoped honestly
+
+**A survivorship-bias control with a number attached.** Most RL-for-trading
+results are reported on a basket of names that exist today. Measured here,
+that choice is worth **+9.91%/yr** against an unbiased index — larger than any
+effect in the table above, and it accrues to *buy-and-hold*, the control every
+RL arm must beat. `uv run data.py --bias` reproduces it.
+
+**A dollar-neutral arm that refutes the obvious story about GRPO.** The group
+baseline looks like it should produce long-short selection for free. Strip the
+market exposure out and the book returns **−1.5%/yr, CI [−2.9%, −0.2%]**. The
+gain is market timing. We know of no paper making that specific negative
+claim, and we are not confident none exists.
+
+Neither is a paper. The method is Schulman's and Shao's; the premise is Moody
+and Saffell's; this page is for watching all of it fail to beat buy-and-hold
+on a dataset you can re-run in two minutes.
+
 ## Limitations
 
 **One market, one decade, three seeds.** The test window is 2016–2025 US
