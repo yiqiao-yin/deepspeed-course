@@ -37,6 +37,7 @@ const sidebars = {
             // Ranking: 03 varies the OBJECTIVE, 04 varies the ARCHITECTURE.
             'tutorials/intermediate/learning-to-rank',
             'tutorials/intermediate/groupwise-ranking',
+            'tutorials/intermediate/rl-trading',
           ],
         },
         {

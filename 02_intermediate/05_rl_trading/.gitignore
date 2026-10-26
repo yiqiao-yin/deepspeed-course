@@ -1,0 +1,5 @@
+# Trained policies and logs. Reproduce with ./run_arms.sh; every
+# published number lives in README.md and results.json, both committed.
+runs/
+logs/
+__pycache__/

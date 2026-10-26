@@ -134,6 +134,24 @@ labs:
       - { label: "Objectives + metrics (CPU)", cmd: "uv run ranking_losses.py" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_learning_to_rank.py --method all --max-steps 20" }
 
+  - id: 02_intermediate/05_rl_trading
+    title: "RL for trading: reward or loss?"
+    summary: "A 51% accurate forecast loses money. The same net on P&L halves the drawdown."
+    est_minutes: 12
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # Everything here is CPU-only and needs no network: the price
+      # panel is committed. No --width is passed, so the default 64
+      # is used and train_rl.py's GPU guard (which fires above 512)
+      # is unreachable -- honest, and provably so.
+      - { label: "The frozen panel and its drawdowns", cmd: "uv run data.py" }
+      - { label: "What survivorship bias is worth", cmd: "uv run data.py --bias" }
+      - { label: "Prove no feature reads forward", cmd: "uv run data.py --leakage" }
+      - { label: "The cost model, and where an edge dies", cmd: "uv run market.py --cost-curve" }
+      - { label: "Everything the learned arms must beat", cmd: "uv run baselines.py" }
+      - { label: "Train GRPO on P&L after costs", cmd: "uv run train_rl.py --method grpo --iters 120", primary: true }
+      - { label: "What ZeRO can and cannot shard here", cmd: "uv run capacity.py" }
+
   - id: 02_intermediate/04_groupwise_ranking
     title: "Groupwise ranking"
     summary: "GSF and SetRank — scoring documents in context, not alone."

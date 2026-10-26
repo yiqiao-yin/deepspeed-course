@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 71 pages with
+The documentation site is the primary way to read this material: 72 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -211,7 +211,8 @@ deepspeed-course/
 │   ├── 01_bayesian_neuralnet/   # Parallel-tempering MCMC — uncertainty, not point estimates
 │   ├── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
 │   ├── 03_learning_to_rank/     # RankNet / LambdaRank / ListNet — ranking lives in the LOSS
-│   └── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
+│   ├── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
+│   └── 05_rl_trading/           # A 51%-accurate forecast loses money. PPO/GRPO halve the drawdown
 │
 ├── 03_llms/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
 │   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point

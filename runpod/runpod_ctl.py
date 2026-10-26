@@ -87,6 +87,27 @@ EXAMPLES = {
                                            note="Four LTR objectives, one scorer. "
                                                 "Tiny model; 2 GPUs is to exercise "
                                                 "QUERY-level sharding, not memory."),
+    "02_intermediate/05_rl_trading": dict(
+                                    min_vram=8, gpus=1, disk=8,
+                                    script="train_rl.py",
+                                    launcher="python",
+                                    args="--method grpo --iters 120",
+                                    note="launcher=python, and capacity.py "
+                                         "is the argument rather than an "
+                                         "assertion: the policies are 4,866 "
+                                         "and 9,731 parameters, so ZeRO "
+                                         "would shard 0.08 MB across the "
+                                         "cards and pay an all-gather every "
+                                         "step. The real bottleneck is a "
+                                         "SEQUENTIAL rollout over 2,992 "
+                                         "trading days -- the position on "
+                                         "day t depends on the action on "
+                                         "day t-1 -- which does not shard "
+                                         "at all. Rent CORES. Needs no "
+                                         "network: the price panel is "
+                                         "committed, 659 KB, because vendor "
+                                         "history is not immutable and this "
+                                         "lab publishes numbers."),
     "02_intermediate/04_groupwise_ranking": dict(min_vram=8, gpus=2, disk=20,
                                            script="train_groupwise_ranking.py",
                                            note="GSF / SetRank vs a pointwise "
