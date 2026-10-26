@@ -168,6 +168,8 @@ jobs:
         run: uv run tests/test_learned_dynamics.py
       - name: Topic 8 Lab 7 — teacher and student
         run: uv run tests/test_teacher_student.py
+      - name: "RL trading: no look-ahead, costs bite, universe unbiased"
+        run: uv run tests/test_rl_trading.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

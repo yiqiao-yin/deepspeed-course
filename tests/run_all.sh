@@ -69,6 +69,7 @@ TESTS=(
     tests/test_thruster_failure.py
     tests/test_learned_dynamics.py
     tests/test_teacher_student.py
+    tests/test_rl_trading.py
     tests/test_evoformer.py
     tests/test_evoformer_data_is_learnable.py
     tests/test_pairformer.py
