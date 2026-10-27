@@ -315,6 +315,8 @@ def main():
             model_parameters=[p for p in model.parameters() if p.requires_grad],
             config=config)
 
+        # Measure training time separately from model loading and DeepSpeed setup.
+        # Synchronize CUDA so earlier GPU operations finish before timing begins.
         torch.cuda.synchronize(device)
         training_start = time.perf_counter()
 
@@ -333,6 +335,9 @@ def main():
             if rank == 0 and (step == 0 or (step + 1) % 10 == 0):
                 print(f"{arm} step {step + 1}/{steps}: "
                       f"loss {losses[-1]:.4f}", flush=True)
+
+        # Wait for the final GPU operations to finish before stopping the timer.
+        # Subtract the start time to calculate the complete training-loop duration.
         torch.cuda.synchronize(device)
         training_seconds = time.perf_counter() - training_start
 
@@ -341,6 +346,7 @@ def main():
         results[arm] = dict(
             arm=arm, representation="nf4" if arm == "qlora" else "bf16",
             zero_stage=2, rank=rank, steps=steps,
+            # Save training duration with the memory and loss metrics for later comparisons.
             training_seconds=training_seconds,
             start_allocated_bytes=start_allocated_bytes,
             loaded_allocated_bytes=loaded_bytes,

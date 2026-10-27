@@ -366,6 +366,9 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'{NTFY}/{topic} >/dev/null 2>&1 || true'
     ) if topic else 'true'
 
+    # Preserve structured benchmark results before the GPU instance is terminated.
+    # Upload comparison.json alongside the training log for reproducibility.
+    # Report missing files or upload failures so incomplete results are detectable.
     push_json = (
         'if [ -f comparison.json ]; then '
         f'curl -fsS -m 60 -T comparison.json '
@@ -466,6 +469,7 @@ def bootstrap(example: str, spec: dict, branch: str,
         # exactly what --dry-run asks for. Anything else non-zero is real.
         "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
         "tail -40 /workspace/run.log",
+        # Collect the training log and structured results before pod termination.
         push_log,
         push_json,
         'report "[6/6] DONE rc=$rc — log attached"',
