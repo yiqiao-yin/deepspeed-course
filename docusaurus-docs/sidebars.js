@@ -37,6 +37,7 @@ const sidebars = {
             // Ranking: 03 varies the OBJECTIVE, 04 varies the ARCHITECTURE.
             'tutorials/intermediate/learning-to-rank',
             'tutorials/intermediate/groupwise-ranking',
+            'tutorials/intermediate/rl-trading',
           ],
         },
         {
@@ -64,6 +65,7 @@ const sidebars = {
             'tutorials/llms/gpt-oss-finetuning',
             'tutorials/llms/qlora-memory',
             'tutorials/llms/multi-agent',
+            'tutorials/llms/prefill-decode-scheduling',
           ],
         },
         {
@@ -90,6 +92,57 @@ const sidebars = {
               'tutorials/multimodal/omni-evaluation',       // 04_omni_eval
             ],
         },
+          {
+            type: 'category',
+            label: '06 · Protein Folding',
+            items: [
+              // Orientation first -- the I/O contract, which the four
+              // architecture pages all assume. Then reading order: sequence,
+              // pairs (AF2), pairs (AF3), coordinates.
+              'tutorials/protein/shapes',
+              'tutorials/protein/esm2',
+              'tutorials/protein/evoformer',
+              'tutorials/protein/pairformer',
+              'tutorials/protein/structure-module',
+            ],
+          },
+          {
+            type: 'category',
+            label: '07 · Physical AI',
+            items: [
+              // Lab 1 is deliberately the simplest thing that is still
+              // real: MuJoCo contact physics and PPO written out. The
+              // category escalates toward vision-language-action models,
+              // where the sharding this course is about becomes necessary.
+              'tutorials/physical/overview',
+              'tutorials/physical/obstacle-hopper',
+              'tutorials/physical/biped-stairs',
+              'tutorials/physical/terrain-vision',
+              'tutorials/physical/terrain-navigation',
+              'tutorials/physical/mars-terrain',
+              'tutorials/physical/mars-gpu-physics',
+              'tutorials/physical/terrain-vlm',
+              'tutorials/physical/long-traverse',
+              'tutorials/physical/body-search',
+              'tutorials/physical/perception-pays',
+            ],
+          },
+          {
+            type: 'category',
+            label: '08 · Aerial Physics',
+            items: [
+              // Topic 7 ended with the machine as the constraint. This
+              // topic changes the machine: a vehicle that leaves the
+              // ground, where the budget is propellant rather than time.
+              'tutorials/aerial/aerial-stabilization',
+              'tutorials/aerial/barrel-roll',
+              'tutorials/aerial/land-on-target',
+              'tutorials/aerial/fly-on-mars',
+              'tutorials/aerial/thruster-failure',
+              'tutorials/aerial/learned-dynamics',
+              'tutorials/aerial/teacher-student',
+            ],
+          },
       ],
     },
     {

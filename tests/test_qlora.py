@@ -15,8 +15,8 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import REPO_ROOT, Results, load_function  # noqa: E402
 
-SOURCE = "03_llms/12_qlora/train_qlora.py"
-FOLDER = REPO_ROOT / "03_llms" / "12_qlora"
+SOURCE = "03_llms/13_qlora/train_qlora.py"
+FOLDER = REPO_ROOT / "03_llms" / "13_qlora"
 
 
 def raises(fn, *args):

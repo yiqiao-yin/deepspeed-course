@@ -1,0 +1,42 @@
+{
+  "_comment": "Pairformer trunk (AlphaFold3), contact prediction. Identical to 02_evoformer/ds_config.json on purpose -- the architectures are being compared, so everything except the architecture is held fixed. Read the ZeRO note below before changing the stage -- this is the one example in the course where the ZeRO stage is nearly irrelevant, and understanding why is the point of the topic.",
+
+  "train_micro_batch_size_per_gpu": 2,
+  "gradient_accumulation_steps": 1,
+
+  "_batch_comment": "train_batch_size is DELIBERATELY OMITTED so DeepSpeed derives it as micro x accum x num_gpus and any --num_gpus works without editing this file. The unit here is a CHAIN (one protein with its MSA), not a token: micro=2 means two proteins per rank per step. Two is small on purpose -- the activation cost scales with N_res^3, so batch size is the cheapest knob to turn when a longer protein will not fit.",
+
+  "optimizer": {
+    "type": "AdamW",
+    "params": { "lr": 1e-3, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01 }
+  },
+
+  "gradient_clipping": 1.0,
+
+  "_precision_comment": "bf16 on, and this one is NOT optional. DS4Sci_EvoformerAttention accepts fp16 and bf16 only -- it has no fp32 path -- so --ds-evoformer-attn requires one of them to be enabled here. bf16 over fp16 because the triangle attention logits are a sum over a third residue index and fp16's narrow range is exactly where that overflows. bf16 needs Ampere (A100 / RTX 3090) or newer; on Volta or Turing switch to fp16, but never enable both or DeepSpeed raises at initialization.",
+  "bf16": { "enabled": true },
+  "fp16": { "enabled": false },
+
+  "_zero_comment": "Stage 1, and the reason is the whole topic. ZeRO shards optimizer state (stage 1), gradients (stage 2) and parameters (stage 3). This model has ~100k parameters. Sharding it harder would trade communication for kilobytes while the thing actually filling the card -- an O(N_res^3) triangle attention logit tensor -- is an ACTIVATION, which no ZeRO stage touches. Every rank materialises it in full, every step. That is why the answer here is a fused kernel (--ds-evoformer-attn) and activation checkpointing, not a higher stage. Raising the stage to fit a longer protein is the single most tempting wrong move in this lab. MEASURED on 1x RTX 3080 Ti at --n-res 128: stage 1 = 0.65 GB, stage 3 = 0.62 GB. A 4.6% difference, for 1.5x the communication.",
+
+  "_bucket_comment": "reduce_bucket_size is set EXPLICITLY, and that matters more than it looks. Leave it out and DeepSpeed defaults it to 5e8 -- a 500 MB reduction buffer -- while ds_config_z3.json sets 16 MB. The first version of these two files differed in exactly that way, so the ZeRO-1-vs-ZeRO-3 comparison this lab invites read 1.58 GB vs 0.62 GB and appeared to show stage 3 winning by 2.5x. It was measuring the buckets, not the stage. These two configs are now identical except for the stage, which is the only way the comparison means anything.",
+  "zero_optimization": {
+    "stage": 1,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": 16777216
+  },
+
+  "_checkpointing_comment": "Activation checkpointing is configured but left OFF by default so the baseline measurement is honest. Turn it on with --activation-checkpointing to recompute the triangle activations in the backward pass instead of storing them: real memory relief, at roughly 30% more compute. Unlike the ZeRO stage, this one attacks the tensor that is actually large.",
+  "activation_checkpointing": {
+    "partition_activations": false,
+    "contiguous_memory_optimization": false,
+    "cpu_checkpointing": false,
+    "number_checkpoints": 1,
+    "synchronize_checkpoint_boundary": false,
+    "profile": false
+  },
+
+  "steps_per_print": 25,
+  "wall_clock_breakdown": false
+}

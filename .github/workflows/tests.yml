@@ -23,6 +23,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Full history: tests/test_incident_records.py resolves the
+          # commit SHAs cited in POSTMORTEMS.md. The default shallow
+          # clone makes every one of them unresolvable, and the suite
+          # would pass by finding nothing to check.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -121,6 +127,74 @@ jobs:
       - name: MoE routing, load balancing and expert accounting
         run: uv run tests/test_moe_routing.py
 
+      - name: Evoformer triangle ops, symmetries and the cubic memory wall
+        run: uv run tests/test_evoformer.py
+
+      - name: Synthetic MSAs carry coevolution (and the counterexample does not)
+        run: uv run tests/test_evoformer_data_is_learnable.py
+
+      - name: Incident records resolve, and incidents.csv is current
+        run: uv run tests/test_incident_records.py
+
+      - name: "Biped stairs: the 2x2 is a controlled comparison"
+        run: uv run tests/test_biped_stairs.py
+      - name: Terrain vision (head is cosmetic, camera cannot see it)
+        run: uv run tests/test_terrain_vision.py
+      - name: Terrain navigation (the task has a decision, the robot stands)
+        run: uv run tests/test_terrain_navigation.py
+      - name: Mars terrain (generated surface properties)
+        run: uv run tests/test_mars_terrain.py
+      - name: Mars on GPU physics (the ablation knobs really move the model)
+        run: uv run tests/test_mars_mjx.py
+      - name: Terrain VLM (the label, the scorer, and the capacity bar)
+        run: uv run tests/test_terrain_vlm.py
+      - name: Morphology (bodies differ as claimed; "fallen" means fallen)
+        run: uv run tests/test_morphology.py
+      - name: Body spec (a body is parameters, and reproduces the hand-written ones)
+        run: uv run tests/test_bodyspec.py
+      - name: Perception pays (the task must contain a decision)
+        run: uv run tests/test_perception_pays.py
+      - name: "Aerial stabilization: the rig is parameters, the gas is real"
+        run: uv run tests/test_aerial_stabilization.py
+      - name: "Barrel roll: a roll must be a roll, shaping must not pay to stall"
+        run: uv run tests/test_barrel_roll.py
+      - name: Topic 8 Lab 3 — land on target
+        run: uv run tests/test_land_on_target.py
+      - name: Topic 8 Lab 4 — fly on Mars
+        run: uv run tests/test_fly_on_mars.py
+      - name: Topic 8 Lab 5 — thruster failure
+        run: uv run tests/test_thruster_failure.py
+      - name: Topic 8 Lab 6 — learned dynamics
+        run: uv run tests/test_learned_dynamics.py
+      - name: Topic 8 Lab 7 — teacher and student
+        run: uv run tests/test_teacher_student.py
+      - name: "RL trading: no look-ahead, costs bite, universe unbiased"
+        run: uv run tests/test_rl_trading.py
+
+      - name: "Obstacle hopper: physics is real, GAE limits hold"
+        run: uv run tests/test_obstacle_hopper.py
+
+      - name: Tier-3 labs declare a baseline and a budget
+        run: uv run tests/test_tier3_claims.py
+
+      - name: "Prefill/decode: head-of-line blocking and what chunking costs"
+        run: uv run tests/test_prefill_decode.py
+
+      - name: "Pairformer: the AF3 MSA deletion, and the asymptote that survived"
+        run: uv run tests/test_pairformer.py
+
+      - name: Published protein figures trace to the shipped function
+        run: uv run tests/test_published_protein_numbers.py
+
+      - name: "Structure module: SE(3) guaranteed vs learned"
+        run: uv run tests/test_structure_module.py
+
+      - name: CATH backbones are what they claim (chemistry check)
+        run: uv run tests/test_cath_source.py
+
+      - name: Secondary structure derived from geometry
+        run: uv run tests/test_ss_derivation.py
+
       - name: Kimi K3 architecture arithmetic
         run: uv run tests/test_kimi_k3_plan.py
 
@@ -134,4 +208,4 @@ jobs:
             01_basics/04_rnn 02_intermediate/01_bayesian_neuralnet 02_intermediate/02_rnn_stock_data \
             03_llms/01_llm_finetuning 03_llms/03_ocr 03_llms/02_trl_sft \
             03_llms/06_grpo 03_llms/08_gpt_oss_lora \
-            03_llms/09_multi_agency 03_llms/12_qlora 04_video_text 05_video_speech tests
+            03_llms/09_multi_agency 03_llms/13_qlora 04_video_text 05_video_speech tests

@@ -5,6 +5,13 @@
 #   "trl==1.12.0",
 #   "peft==0.20.0",
 #   "torch==2.11.0",
+#   # trl's GRPO trainer imports `requests`, and it used to arrive
+#   # transitively. It stopped, and the symptom was an import-time
+#   # RuntimeError from trl's lazy module that names grpo_trainer rather
+#   # than the missing package -- a CI-only failure, because a cached
+#   # local environment still had it. Declared explicitly so the test
+#   # resolves the same way everywhere.
+#   "requests",
 #   "tomli; python_version < '3.11'",
 # ]
 # ///

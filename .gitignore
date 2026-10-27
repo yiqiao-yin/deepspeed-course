@@ -25,3 +25,62 @@ runpod/results/
 **/data/cifar-10-batches-py/
 **/data/cifar-10-python.tar.gz
 01_basics/03_convnet_cifar10/data/
+
+# Downloaded source data for scripts/make_casp14_figure.py -- 47 MB of CASP14
+# prediction tarballs and RCSB mmCIF files. They are public, immutable and
+# re-fetched on demand, so committing them would add weight to every clone
+# for no benefit. The RENDERED figures under docusaurus-docs/static/img/ ARE
+# committed, because CI builds the site but does not run the script.
+.cache/
+
+# RL training output: regenerate with train_ppo.py
+**/runs/
+
+# Generated training data. `07_physical_ai/03_terrain_vision/data/bc.npz` is
+# 23 MB of rendered depth frames produced by `collect.py` in about nine
+# minutes -- reproducible output, so it belongs with runs/ rather than in
+# git history. (Contrast `05_video_speech/data/`, which is real recorded
+# media and IS committed: it cannot be regenerated.)
+07_physical_ai/*/data/*.npz
+
+# Lab 5's task pool: 120 pre-solved Mars tasks, ~50 MB of numpy arrays.
+# A build artifact, not a source: regenerate with
+#     uv run mars_env.py --build-pool
+# It is cached so training does not pay ~10 s of Dijkstra per episode
+# reset, which once cost 98.6% of the wall clock.
+07_physical_ai/05_mars_terrain/task_pool*.pkl
+07_physical_ai/05_mars_terrain/runs_log_*.txt
+07_physical_ai/05_mars_terrain/pool.log
+07_physical_ai/05_mars_terrain/runs_render*.log
+
+# Topic 8 lab 1: training outputs and logs are reproducible from the
+# scripts and would otherwise put hundreds of MB of checkpoints into
+# history. The published numbers live in the README and the docs page.
+08_aerial_physics/*/runs/
+08_aerial_physics/*/*.log
+08_aerial_physics/*/logs_*.txt
+08_aerial_physics/*/logs/
+08_aerial_physics/*/logs_sweep.txt
+# Paired-comparison and sweep outputs: reproducible from the
+# committed compare.py, so they are results rather than source.
+08_aerial_physics/*/cmp_*.json
+08_aerial_physics/*/long16.json
+08_aerial_physics/*/logs_cmp_*.txt
+08_aerial_physics/*/logs_render*.txt
+08_aerial_physics/*/logs_probe*.txt
+# the sweep is launched from a COPY so that editing the
+# original cannot corrupt a running script (bash reads by
+# byte offset); the copy is scratch.
+08_aerial_physics/*/.run_arms_live.sh
+08_aerial_physics/*/.run_long_live.sh
+08_aerial_physics/*/.watch*.sh
+08_aerial_physics/*/.ladder_live.sh
+08_aerial_physics/*/.lr_live.sh
+# Lab 6's dataset is 67 MB and fully reproducible from the
+# committed collect.py. n2_tables.npz stays tracked -- that
+# one needs CoolProp, which is a build-time-only dependency.
+08_aerial_physics/06_learned_dynamics/data/
+08_aerial_physics/*/.chain*.sh
+08_aerial_physics/*/.run_live.sh
+08_aerial_physics/*/logs_long.txt
+08_aerial_physics/*/*.log

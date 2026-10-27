@@ -1,0 +1,912 @@
+#!/usr/bin/env python3
+"""
+The navigation task: get from A to B across terrain you must read.
+
+    uv run nav_env.py              # random baseline on flat and on terrain
+
+THE OBSERVATION, AND WHY IT IS SPLIT THREE WAYS
+-----------------------------------------------
+    proprio (17)   joints, velocities, and the robot's own heading
+    goal (3)       range and bearing to B, in the ROBOT's frame
+    terrain        one of three channels, and the experiment is which:
+
+        blind        nothing. Must bump into a ridge to learn it exists.
+        privileged   a local height patch, handed over. An oracle: a
+                     real robot has no such array.
+        depth        a 64x64 depth image from the head camera.
+
+Goal is given in the robot's own frame -- range and the sine/cosine of
+relative bearing -- rather than as world coordinates. A world-frame goal
+invites the policy to memorise positions in a fixed arena; a relative
+one is the same problem wherever you put it, and transfers to a map it
+has never seen. Labs 1 and 3 both excluded absolute position for the
+same reason.
+
+WHY THE REWARD IS PROGRESS-TOWARD-GOAL RATHER THAN FORWARD VELOCITY
+-------------------------------------------------------------------
+Every previous lab in this category paid for forward velocity, which on
+a corridor is the same thing as making progress. Here it is not: running
+north at full speed when the goal is east is worth nothing, and a reward
+that pays for it would produce a robot that sprints in a straight line
+and ignores B.
+
+So the reward is the REDUCTION IN DISTANCE TO B, which is the quantity
+the task is actually about. It is also what makes the detour decision
+expressible: climbing a ridge and walking round it both cost distance,
+and the policy is paid the difference.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+from robot import hfield_png, model_xml
+from mars import (STEP_MAX, generate, geodesic as mars_geodesic,
+                  make_task, preset, traversable)
+
+# Which surface preset everything in this file is built from, and
+# whether endpoints are placed ACROSS a blocker instead of sampled.
+#
+# `course` is a 34 m arena. The 60 m one gave a median detour of
+# 1.09x at this route length -- the robot walked past the obstacles
+# rather than having to deal with them -- because what creates the
+# decision is the RATIO of route to arena, not the size of either.
+#
+# Defined HERE, above its first use. It was first written down beside
+# ROUTE_BAND, forty lines too late, and the module failed to import.
+SCALE = os.environ.get("MARS_POOL_SCALE", "course")
+FORCED = os.environ.get("MARS_POOL_FORCED", "1") == "1"
+
+_P = preset(SCALE)
+ARENA, N = _P["extent"], _P["cells"]
+CELL = ARENA / N
+
+# PROPRIO is DERIVED from the compiled model, never typed. It is
+# len(qpos[2:]) + len(qvel), and lab 3 shipped the same quantity as a
+# literal: it went stale the moment the model changed, declared an
+# obs_dim one short of reality, and killed three training runs on a
+# broadcast error while the arms that did not touch it sailed through.
+# A constant that encodes the length of another thing will eventually
+# disagree with it.
+GOAL_FEATS = 3
+# The privileged channel: SIX numbers, not 121.
+#
+# The first version handed the policy an 11x11 raw height patch. That
+# is 121 extra inputs on top of 21 useful ones, fed to a 2x64 MLP, and
+# on mostly-flat ground almost all of them are near-zero. All three
+# seeds sat at EXACTLY 0% arrival for the whole run while the blind arm
+# reached 17% -- a dead-flat zero across seeds is a broken arm, not a
+# finding, and reporting "information hurts" from it would have been
+# the third time in this session a design mistake could pass as a
+# result.
+#
+# These six answer the question the robot actually faces: is the thing
+# ahead climbable, and if not, which way is clearer? That is also the
+# shape a real perception stack emits -- a few summary statistics, not
+# a raw elevation array.
+PRIV_FEATS = 6
+PROBE_RANGE = 3.0              # metres ahead the oracle can see
+PATCH = 11                     # retained for the raw-patch variant
+GOAL_RADIUS = 0.8              # within this of B counts as arrived
+# A slight crouch, and the torso height that puts the feet exactly on
+# the ground at that crouch -- both MEASURED, not guessed. The first
+# version started the torso 0.2 m above its standing height on straight
+# legs, so every episode opened with a drop onto an unstable pose that
+# folded within 90 steps. The policy then spent its whole budget
+# failing to stand and never reached the task.
+START_BEND = 0.3
+START_DZ = -0.294
+DEPTH_NEAR, DEPTH_FAR = 0.5, 6.0
+
+# Episode length, in env steps of 0.01 s.
+#
+# This is part of the TASK, not a tuning knob: at ~0.9 m/s a 2000-step
+# episode buys 18 m of walking, which is ample for a 7 m goal in the
+# 20 m arena and nowhere near enough for a 28 m route in the 40 m one.
+# Leave it at 2000 for the big world and every policy fails on the
+# clock rather than on the terrain -- a timeout that looks exactly like
+# an inability to navigate.
+# A 60 m arena at ~0.9 m/s needs more than lab 4's 20 s. Sized from
+# the arena rather than typed: the episode budget is part of the TASK,
+# and lab 4 shipped a renderer that filmed a different task than the
+# numbers described because one such parameter was never recorded.
+MAX_STEPS = 4000
+
+
+# A POOL of pre-built tasks, cached.
+#
+# `make_task` rejection-samples until it finds an A-B pair whose route
+# is both the right length and genuinely bent, which costs ~3.3 s. A
+# training run resets thousands of times; paying that each reset would
+# cost more than the physics. So tasks are built once per seed and
+# reused, which also fixes the task distribution -- two arms trained on
+# the same pool are compared on the same maps rather than on their own
+# lucky draws.
+_TASKS: dict[int, object] = {}
+POOL = 120
+# ONE FILE PER SCALE. The pool used to be a single `task_pool.pkl`
+# regardless of `MARS_POOL_SCALE`, so building a pool for a different
+# preset would silently overwrite the one labs 5-9 train on -- and
+# nothing would error. Every later run would quietly train on
+# different terrain while reporting the same lab.
+#
+# `course` keeps the original filename so existing pools (and the
+# 20 minutes they cost to build) stay valid.
+_POOL_FILE = Path(__file__).parent / (
+    "task_pool.pkl" if SCALE == "course" else f"task_pool_{SCALE}.pkl")
+
+
+ROUTE_BAND = (6.0, 11.0)
+# Which surface preset the pool is built from, and whether endpoints
+# are placed ACROSS a blocker instead of sampled.
+#
+# `course` is a 34 m arena. The 60 m one gave a median detour of
+# 1.09x at this route length -- the robot walked past the obstacles
+# rather than having to deal with them -- because what creates the
+# decision is the RATIO of route to arena, not the size of either.
+# Route length, and it is the parameter this lab got wrong first.
+#
+# The first version used 16-30 m. Lab 4 -- an EASIER task on flat
+# ground with discrete obstacles -- used about 7 m in a 20 m arena.
+# Three times the distance on rougher ground turned a navigation
+# problem into an endurance one: the robot manages roughly 6 m on
+# gently sloped terrain and was being asked for 24, so every arm
+# scored 0% and the terrain took the blame.
+#
+# At 6-11 m a policy that never trained on Mars at all already
+# arrives 1/12 of the time on the full surface, and 3/12 on gentle
+# slope. The task is learnable; the old band was not.
+
+
+def build_pool(n: int = POOL, verbose: bool = True) -> None:
+    """
+    Build every task once and write them to disk.
+
+    `make_task` rejection-samples for a route that is the right length
+    AND genuinely bent, which means repeated Dijkstra over a 320x320
+    grid: ~10 s per task. Paying that on every episode reset made
+    training run at 50 steps/s when the physics alone does 3,600 --
+    98.6% of the wall clock spent generating maps rather than
+    learning on them.
+
+    Building once also makes the comparison honest: every arm and
+    every seed trains and is scored on the SAME maps, rather than on
+    whatever each run happened to draw.
+    """
+    import pickle
+    import time
+
+    tasks, t0 = {}, time.time()
+    for i in range(n):
+        t = make_task(i, route_band=ROUTE_BAND, min_detour=1.25,
+                      forced=FORCED, scale=SCALE)
+        if t is None:
+            continue
+        tasks[len(tasks)] = t
+        if verbose and (len(tasks) % 10 == 0):
+            el = time.time() - t0
+            print(f"    {len(tasks)}/{n} tasks  {el:.0f}s elapsed, "
+                  f"~{el / max(len(tasks), 1) * (n - len(tasks)):.0f}s left",
+                  flush=True)
+    _POOL_FILE.write_bytes(pickle.dumps(tasks))
+    if verbose:
+        print(f"  wrote {len(tasks)} tasks to {_POOL_FILE.name} "
+              f"in {time.time() - t0:.0f}s")
+
+
+def _load_pool() -> dict:
+    import pickle
+
+    if not _POOL_FILE.exists():
+        raise SystemExit(
+            f"\n  No task pool at {_POOL_FILE.name}.\n"
+            f"  Build it once (about 20 minutes, then every run reuses it):\n"
+            f"      uv run mars_env.py --build-pool\n")
+    return pickle.loads(_POOL_FILE.read_bytes())
+
+
+def _task(seed: int):
+    """One task from the pre-built pool."""
+    global _TASKS
+    if not _TASKS:
+        _TASKS = _load_pool()
+    return _TASKS[int(seed) % len(_TASKS)]
+
+
+class NavWorld:
+    """Gymnasium-shaped. `reset` / `step`, no Gymnasium dependency."""
+
+    def __init__(self, *, mode: str = "blind", flat: bool = False,
+                 depth_res: int = 64, max_steps: int | None = None,
+                 frame_skip: int = 5, seed: int | None = None,
+                 goal_range: float | None = None,
+                 relief_scale: float = 1.0,
+                 upright_w: float = 0.0,
+                 morphology: str = "biped",
+                 integrator: str | None = None,
+                 layout: dict | None = None) -> None:
+        import mujoco
+
+        # "padded" is a CONTROL, not an arm of the experiment: the blind
+        # observation widened to the privileged width with six constant
+        # zeros. Zero information, identical dimensionality.
+        #
+        # It exists because the privileged arm turned out BIMODAL -- half
+        # its seeds reach the same ceiling as blind, half fail almost
+        # entirely, while blind never fails. Two explanations fit that
+        # equally well: the six extra DIMENSIONS destabilise PPO at this
+        # scale, or those particular FEATURES are harmful. Padding
+        # separates them, and nothing else does.
+        assert mode in ("blind", "privileged", "depth", "padded"), mode
+        self._mj = mujoco
+        self.mode = mode
+        self.flat = flat
+        self.depth_res = depth_res
+        self.max_steps = MAX_STEPS if max_steps is None else max_steps
+        self.frame_skip = frame_skip
+        # Curriculum. `goal_range` caps how far B may be placed; None
+        # means the map's own endpoints. A 15 m goal inside a 12 s
+        # episode needs 1.23 m/s sustained from the first step, so a
+        # robot still learning to stand can never once reach it and
+        # never sees the arrival reward at all.
+        self.goal_range = goal_range
+        # TERRAIN CURRICULUM.
+        #
+        # `relief_scale` multiplies the height field, so 0.0 is a plane
+        # and 1.0 is Mars as generated. Everything else -- the route,
+        # the start and goal, the rocks, the observation -- is
+        # unchanged, so a policy can be moved up the ladder without
+        # ever changing task or observation space.
+        #
+        # It exists because the two-stage version was too steep a
+        # step. A policy trained to 100% arrival on flat ground fell
+        # on 83-92% of episodes the moment it met full Martian
+        # roughness: the gait that works on a plane has no answer for
+        # ground tilted in two directions at once, and at a 90% fall
+        # rate it barely collects a usable transition to learn from.
+        self.relief_scale = float(relief_scale)
+        self.upright_w = float(upright_w)
+        # Set BEFORE the first `_build`, which happens below in this
+        # constructor. Defaults to the biped labs 5-7 measured on.
+        # Everything downstream -- observation width, action width,
+        # the standing pose, the actuator list -- resolves BY NAME
+        # from the compiled model, so a new layout needs no further
+        # plumbing. That is the payoff of three hardcoded-index bugs.
+        self.morphology = str(morphology)
+        # None keeps the shipped RK4, so labs 5-8 are untouched.
+        # Lab 9 measures `implicitfast` at 3.9x the speed; whether it
+        # is the SAME WORLD is a separate question the lab answers
+        # with a trained policy rather than with open-loop drift.
+        self.integrator = integrator
+        # A body straight from `robot.make_layout`, overriding the
+        # named morphology. Lab 9 searches shapes that have no name,
+        # so requiring a registry entry per body would mean editing
+        # source inside a search loop.
+        self.layout = layout
+        from robot import (fall_clearance, layout_fall_clearance,
+                           layout_stand_clearance, stand_clearance)
+        # Per-body, and identical to the old constants for the biped
+        # (0.706 and 0.400). A shorter-legged body must stand lower
+        # AND be judged fallen lower, or it is dropped on every reset
+        # and scored as collapsed while standing perfectly.
+        if self.layout is not None:
+            self._stand_clearance = layout_stand_clearance(self.layout)
+            self._fall_clearance = layout_fall_clearance(self.layout)
+        else:
+            self._stand_clearance = stand_clearance(self.morphology)
+            self._fall_clearance = fall_clearance(self.morphology)
+        self._foot_gids: list[int] = []
+        self.rng = np.random.default_rng(seed)
+        self._tmp = Path(tempfile.mkdtemp())
+        self._renderer = None
+
+        self.map = None
+        self._build(_task(0))
+        self.act_dim = int(self.model.nu)
+        from robot import STAND
+
+        # DERIVE the leg actuators and their standing targets by NAME.
+        #
+        # This was `[STAND["hip"], STAND["knee"], STAND["ankle"]] * 2`
+        # with a hard `[:6]` slice -- a literal encoding "two legs,
+        # three joints each, in this order". Adding hip abduction made
+        # it eight actuators, and the old code would have driven the
+        # first six in the wrong order rather than failing: abduction
+        # commanded to a knee angle, silently, with the learning curve
+        # as the only symptom. Same class as `qpos[4:]`, caught the
+        # same way.
+        # Resolve actuators through the JOINT THEY DRIVE.
+        #
+        # The actuators in this model are unnamed -- `<position
+        # joint="hipL" .../>` carries no `name` attribute -- so
+        # `mj_id2name(mjOBJ_ACTUATOR, i)` returns None for every one
+        # of them. A first attempt filtered on those names and got an
+        # EMPTY list, which made `ctrl[[]] = []` a silent no-op: the
+        # robot had no control whatsoever and stood perfectly still at
+        # a 0% fall rate while three training runs were blamed on
+        # observation width and exploration.
+        #
+        # `actuator_trnid[i, 0]` is the joint id each actuator drives,
+        # and joints ARE named. The assertions below exist because an
+        # empty or partial mapping must never again look like a
+        # learning problem.
+        jname = {}
+        for i in range(self.model.nu):
+            jid = int(self.model.actuator_trnid[i, 0])
+            jname[i] = self._mj.mj_id2name(
+                self.model, self._mj.mjtObj.mjOBJ_JOINT, jid)
+        self._leg_act = [i for i, n in jname.items()
+                         if n and not n.startswith("root")]
+        centres = []
+        for i in self._leg_act:
+            key = next(k for k in ("hiproll", "hip", "knee", "ankle")
+                       if jname[i].startswith(k))
+            centres.append(STAND[key])
+        self._centre = np.array(centres)
+        self._n_leg = len(self._leg_act)
+        yaw = [i for i, n in jname.items() if n and n.startswith("root")]
+        assert self._leg_act, "no leg actuators resolved -- the robot " \
+                              "would be uncontrollable"
+        assert len(yaw) == 1, f"expected one root actuator, found {yaw}"
+        assert self._n_leg + 1 == self.model.nu, (
+            f"{self._n_leg} leg + 1 yaw != {self.model.nu} actuators")
+        self._yaw_act = yaw[0]
+        lo = self.model.actuator_ctrlrange[self._leg_act, 0]
+        hi = self.model.actuator_ctrlrange[self._leg_act, 1]
+        # Half-range on each side of standing, clipped to what the joint
+        # can actually reach, so the action never commands the impossible.
+        self._span = np.minimum(self._centre - lo, hi - self._centre) * 0.9
+        self._prev_action = np.zeros(self.act_dim)
+        # 3 gravity + 2 contacts + the previous action.
+        self.body_dim = 5 + self.act_dim
+        self.proprio = (int(self.model.nq - 2) + int(self.model.nv)
+                        + self.body_dim)
+        extra = (PRIV_FEATS if mode in ("privileged", "padded") else 0)
+        self.obs_dim = self.proprio + GOAL_FEATS + extra
+        # Assert rather than trust: the observation actually produced
+        # must match what was advertised, every time the model builds.
+        assert len(self._obs()) == self.obs_dim, (
+            f"declared {self.obs_dim}, produced {len(self._obs())}")
+
+    # -- the world ----------------------------------------------------------
+
+    def _build(self, m) -> None:
+        self.map = m
+        heights = (np.zeros_like(m.heights) if self.flat
+                   else m.heights * self.relief_scale)
+        # SHIFT so the lowest point is z=0, because that is where
+        # MuJoCo puts PNG value 0. Storing the unshifted array here
+        # while handing the shifted one to MuJoCo would make `_h_at`
+        # disagree with the actual surface by the offset, and the
+        # robot would spawn floating or buried everywhere.
+        heights = heights - float(heights.min())
+        self._heights = heights
+        hfield_png(heights, self._tmp / "terrain.png")
+        # `relief` and the rocks are passed IN. MuJoCo scales the
+        # height-field PNG by this number, and a Mars surface's relief
+        # varies per seed -- baking one constant would stretch every
+        # map that did not happen to match it.
+        relief = max(float(heights.max() - heights.min()), 1e-3)
+        _xml = model_xml("terrain.png", m.start, m.goal, relief=relief,
+                         rocks=([] if self.flat else m.rocks),
+                         morphology=self.morphology, layout=self.layout)
+        if self.integrator:
+            _xml = _xml.replace('integrator="RK4"',
+                                f'integrator="{self.integrator}"')
+        self.model = self._mj.MjModel.from_xml_string(
+            _xml,
+            {"terrain.png": (self._tmp / "terrain.png").read_bytes()})
+        self.data = self._mj.MjData(self.model)
+        # EVERY qpos index, looked up BY NAME.
+        #
+        # This file addressed the state positionally: qpos[0:2] for
+        # position, qpos[3] for yaw, qpos[4:] for the legs. Each of
+        # those literals silently encoded the joint ORDER and COUNT,
+        # and freeing the torso's pitch and roll changed both. The
+        # leg slice raised loudly, which was luck -- `qpos[3]` would
+        # have carried on returning a number, just not the yaw, and
+        # the robot would have been steered by its pitch angle with
+        # nothing anywhere reporting a problem.
+        #
+        # MuJoCo already knows where each joint lives. Ask it.
+        self.q = {}
+        for nm in ("rootx", "rooty", "rootz", "rootyaw",
+                   "rootpitch", "rootroll"):
+            jid = self._mj.mj_name2id(self.model,
+                                      self._mj.mjtObj.mjOBJ_JOINT, nm)
+            if jid >= 0:
+                self.q[nm] = int(self.model.jnt_qposadr[jid])
+        # The legs are whatever is left, in model order.
+        root_adr = set(self.q.values())
+        self.leg_q, self.leg_names = [], []
+        for j in range(self.model.njnt):
+            adr = int(self.model.jnt_qposadr[j])
+            if adr in root_adr:
+                continue
+            self.leg_q.append(adr)
+            self.leg_names.append(self._mj.mj_id2name(
+                self.model, self._mj.mjtObj.mjOBJ_JOINT, j))
+        self.dt = self.model.opt.timestep * self.frame_skip
+        self._renderer = None
+        self.route_len = m.route_len
+        # The 4-connected BFS length is NOT the shortest distance -- it
+        # staircases diagonals and overstates the optimum by up to
+        # sqrt(2). Efficiency is scored against `geodesic`; `route_len`
+        # stays because it is what the renderer draws and what the goal
+        # placement walked along.
+        #
+        # Computed LAZILY. It is a scoring quantity, nothing in the
+        # reward reads it, and a Dijkstra at every one of a training
+        # run's thousands of resets would be paid for a number only
+        # `evaluate.py` ever looks at.
+        self._geodesic_len: float | None = None
+        self.straight = float(np.hypot(m.goal[0] - m.start[0],
+                                       m.goal[1] - m.start[1]))
+
+    # -- observation --------------------------------------------------------
+
+    @property
+    def geodesic_len(self) -> float:
+        """Shortest traversable distance A->B, computed once per map."""
+        if self._geodesic_len is None:
+            self._geodesic_len = mars_geodesic(
+                self.map, self.map.start, self.map.goal)
+        return self._geodesic_len
+
+    def pos(self) -> np.ndarray:
+        return np.array([self.data.qpos[self.q['rootx']],
+                         self.data.qpos[self.q['rooty']]])
+
+    def yaw(self) -> float:
+        return float(self.data.qpos[self.q['rootyaw']])
+
+    def to_goal(self) -> float:
+        return float(np.linalg.norm(np.array(self.map.goal) - self.pos()))
+
+    def _goal_feats(self) -> np.ndarray:
+        """Range and relative bearing -- the robot's frame, not the world's."""
+        d = np.array(self.map.goal) - self.pos()
+        rng_ = float(np.linalg.norm(d))
+        bearing = float(np.arctan2(d[1], d[0])) - self.yaw()
+        return np.array([min(rng_ / 20.0, 1.5),
+                         np.sin(bearing), np.cos(bearing)])
+
+    def height_patch(self) -> np.ndarray:
+        """
+        An 11x11 window of ground height ahead of the robot, relative to
+        the height it is standing on. The oracle channel.
+
+        Relative rather than absolute because the useful quantity is the
+        RISE the next step must clear, which is what `STEP_MAX` is
+        measured against. Absolute elevation would make the policy
+        relearn the threshold at every altitude.
+        """
+        x, y = self.pos()
+        yaw = self.yaw()
+        here = self._h_at(x, y)
+        out = np.zeros((PATCH, PATCH), dtype=np.float32)
+        for a in range(PATCH):
+            for b in range(PATCH):
+                fwd = (a - PATCH // 2) * 0.30 + 0.45
+                lat = (b - PATCH // 2) * 0.30
+                px = x + fwd * np.cos(yaw) - lat * np.sin(yaw)
+                py = y + fwd * np.sin(yaw) + lat * np.cos(yaw)
+                out[a, b] = self._h_at(px, py) - here
+        return np.clip(out, -1.0, 1.0).ravel()
+
+    def terrain_feats(self) -> np.ndarray:
+        """
+        Six numbers: the worst rise in three directions, and whether it
+        is climbable.
+
+        Rises are measured RELATIVE to the ground the robot stands on,
+        because the decision is about the step it must clear, not about
+        altitude -- the top of a climbable ridge is perfectly walkable
+        once you are on it.
+        """
+        x, y = self.pos()
+        yaw = self.yaw()
+        here = self._h_at(x, y)
+        out = []
+        for lobe in (0.0, +0.7, -0.7):             # ahead, left, right
+            worst = 0.0
+            for r in np.linspace(0.6, PROBE_RANGE, 9):
+                px = x + r * np.cos(yaw + lobe)
+                py = y + r * np.sin(yaw + lobe)
+                worst = max(worst, self._h_at(px, py) - here)
+            out.append(min(worst, 1.0))
+            # The classification itself, which is the whole lab: is the
+            # obstacle in this direction one the gait can clear?
+            out.append(1.0 if worst > STEP_MAX else 0.0)
+        return np.array(out, dtype=np.float64)
+
+    def _h_at(self, x: float, y: float) -> float:
+        i = int(np.clip((x + ARENA / 2) / CELL, 0, N - 1))
+        j = int(np.clip((y + ARENA / 2) / CELL, 0, N - 1))
+        return float(self._heights[j, i])
+
+    def depth(self) -> np.ndarray:
+        if self._renderer is None:
+            self._renderer = self._mj.Renderer(
+                self.model, height=self.depth_res, width=self.depth_res)
+            self._renderer.enable_depth_rendering()
+        self._renderer.update_scene(self.data, camera="eye")
+        z = np.clip(self._renderer.render(), DEPTH_NEAR, DEPTH_FAR)
+        return ((z - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)).astype(np.float32)
+
+    def body_feats(self) -> np.ndarray:
+        """
+        What a legged robot needs to know about itself on rough ground.
+
+        Three things, all standard in legged-locomotion RL and all
+        missing from this lab until now:
+
+          projected gravity (3)  which way is DOWN, in the body's own
+                                 frame. A robot on a slope has no other
+                                 way to tell a tilted world from a
+                                 tilted self, and the whole problem on
+                                 Mars is slope.
+          foot contacts (2)      which feet are loaded. On flat ground
+                                 you can infer it from the gait clock;
+                                 on scree you cannot, and knowing which
+                                 leg can push is the difference between
+                                 a recovery step and a fall.
+          previous action (n)    lets the policy produce smooth
+                                 torques instead of rediscovering its
+                                 own last command from joint state.
+
+        None of these tell the robot anything about the TERRAIN -- they
+        are proprioception, available to a real machine from an IMU and
+        foot sensors. The privileged terrain channel stays separate, so
+        the blind/privileged/padded comparison is unaffected.
+        """
+        # Gravity in the torso frame, from pitch and roll.
+        pitch = float(self.data.qpos[self.q["rootpitch"]]) \
+            if "rootpitch" in self.q else 0.0
+        roll = float(self.data.qpos[self.q["rootroll"]]) \
+            if "rootroll" in self.q else 0.0
+        cp, sp, cr, sr = (np.cos(pitch), np.sin(pitch),
+                          np.cos(roll), np.sin(roll))
+        grav = np.array([-sp, cp * sr, -cp * cr])
+        contacts = np.zeros(2)
+        for k in range(self.data.ncon):
+            g1 = self.model.geom_bodyid[self.data.contact[k].geom1]
+            g2 = self.model.geom_bodyid[self.data.contact[k].geom2]
+            for bid in (g1, g2):
+                nm = self._mj.mj_id2name(self.model,
+                                         self._mj.mjtObj.mjOBJ_BODY, bid)
+                if nm == "footL":
+                    contacts[0] = 1.0
+                elif nm == "footR":
+                    contacts[1] = 1.0
+        return np.concatenate([grav, contacts, self._prev_action])
+
+    def _obs(self) -> np.ndarray:
+        parts = [self.data.qpos[2:], np.clip(self.data.qvel, -10.0, 10.0),
+                 self.body_feats(), self._goal_feats()]
+        if self.mode == "privileged":
+            parts.append(self.terrain_feats())
+        elif self.mode == "padded":
+            parts.append(np.zeros(PRIV_FEATS))
+        return np.concatenate(parts).astype(np.float64)
+
+    # -- state --------------------------------------------------------------
+
+    def torso_height(self) -> float:
+        return float(self.data.qpos[self.q['rootz']]) + 1.0
+
+    def clearance(self) -> float:
+        return self.torso_height() - self._h_at(*self.pos())
+
+    def stance_height(self) -> float:
+        """
+        Torso height above its OWN FEET, not above the ground.
+
+        This is the quantity that says whether the robot has
+        collapsed, and `clearance()` is not it. Clearance measures
+        torso-to-terrain, so it drops whenever the GROUND RISES --
+        a body crossing a boulder reads as fallen while standing
+        perfectly upright.
+        
+        Measured: on Mars relief, 13 of 13 clearance-triggered "falls"
+        happened at a torso tilt of 0-1 degrees. Not one was a fall.
+        The artifact scales with how low the body sits, so it
+        punishes exactly the sprawling shapes that are hardest to tip
+        -- and because `fallen()` TERMINATES training episodes, it
+        was cutting those bodies off before they could learn.
+
+        Torso-above-feet is invariant to terrain height: it shrinks
+        when the legs buckle and holds when the ground rises.
+        """
+        if not self._foot_gids:
+            self._foot_gids = [
+                i for i in range(self.model.ngeom)
+                if (self._mj.mj_id2name(self.model,
+                                        self._mj.mjtObj.mjOBJ_GEOM, i)
+                    or "").startswith("foot")]
+        if not self._foot_gids:
+            return self.clearance()
+        feet = self.data.geom_xpos[self._foot_gids, 2]
+        return float(self.torso_height() - float(feet.mean()))
+
+    def tilt_deg(self) -> float:
+        """Worst of pitch and roll, in degrees."""
+        import math as _m
+
+        out = 0.0
+        for j in ("rootpitch", "rootroll"):
+            if j in self.q:
+                out = max(out, abs(_m.degrees(float(self.data.qpos[self.q[j]]))))
+        return out
+
+    # Measured, not chosen. A healthy robot settles at clearance ~0.77
+    # but its startup wobble troughs at 0.49, while a genuine collapse
+    # reaches 0.06-0.09. The first version used 0.55, which sat INSIDE
+    # the healthy oscillation and terminated episodes on a standing
+    # robot -- so every run began with the policy being punished for
+    # the one thing it had got right.
+    FALL_CLEARANCE = 0.40
+
+    def fallen(self) -> bool:
+        """Sunk relative to the ground it is over -- not an absolute height.
+
+        Absolute would make every climbable ridge read as a fall the
+        moment the robot stood on one, which is how lab 3 nearly made
+        `down` unlearnable by construction.
+        """
+        # A fall is the BODY failing, not the ground arriving:
+        # either it has tipped past recovery, or its legs have
+        # collapsed under it. See `stance_height`.
+        return bool(self.tilt_deg() > 60.0
+                    or self.stance_height() < self._fall_clearance)
+
+    def arrived(self) -> bool:
+        return self.to_goal() < GOAL_RADIUS
+
+    # -- the loop -----------------------------------------------------------
+
+    def reset(self, seed: int | None = None) -> tuple[np.ndarray, dict]:
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+        # One task from the fixed pool. Every task in it is already
+        # known solvable, within the route band, and genuinely bent --
+        # `make_task` rejection-samples for all three, so there is no
+        # retry loop here and no silent fallback to a straight map.
+        m = _task(int(self.rng.integers(0, POOL)))
+        self._build(m)
+        self._mj.mj_resetData(self.model, self.data)
+        self.data.qpos[self.q['rootx']] = m.start[0]
+        self.data.qpos[self.q['rooty']] = m.start[1]
+        # Height DERIVED from the body, not a biped constant. See
+        # robot.stand_clearance: torso_height() is qpos[rootz] + 1.0.
+        self.data.qpos[self.q['rootz']] = (
+            self._stand_clearance - 1.0 + self._h_at(*m.start))
+        self.data.qpos[self.q['rootyaw']] = float(
+            self.rng.uniform(-np.pi, np.pi))
+        b = START_BEND
+        # DERIVE where the leg joints start. This was `qpos[4:]`, which
+        # silently encoded "there are four root joints" -- true until
+        # pitch and roll were freed, at which point it wrote six leg
+        # angles into an eight-slot tail and raised. It raised loudly,
+        # which was lucky: the same literal one slot further along
+        # would have quietly mis-seeded the pose instead.
+        # The starting pose, keyed BY JOINT NAME.
+        #
+        # This was a six-element list matched positionally to
+        # `self.leg_q`, which assumed two legs of hip/knee/ankle in
+        # that order. Adding hip abduction made it eight joints and
+        # the assertion below fired -- loudly, which is the point.
+        # A positional list would otherwise have written a knee angle
+        # into an abduction joint and merely trained badly.
+        # PER-MORPHOLOGY, not a hardcoded crouch. A sprawling body's
+        # neutral is femur-out/tibia-down (all zeros); handing it the
+        # biped's crouch folds its legs under the torso and it
+        # collapses on frame one.
+        from robot import layout_stand_pose, stand_pose
+        bend = (layout_stand_pose(self.layout) if self.layout is not None
+                else stand_pose(self.morphology))
+        assert len(self.leg_q) == len(self.leg_names), "leg bookkeeping"
+        for adr, nm in zip(self.leg_q, self.leg_names):
+            key = next(k for k in ("hiproll", "hip", "knee", "ankle")
+                       if nm.startswith(k))
+            self.data.qpos[adr] = bend[key] + self.rng.uniform(-2e-2, 2e-2)
+        self._mj.mj_forward(self.model, self.data)
+        self.t = 0
+        self._prev_action = np.zeros(self.act_dim)
+        self.travelled = 0.0
+        self._arrived = False
+        self._travelled_at_arrival = None
+        self._prev_d = self.to_goal()
+        return self._obs(), {"seed": m.seed, "route": self.route_len}
+
+    # `_pull_goal_closer` is GONE, deliberately.
+    #
+    # Lab 4 capped goal distance by walking B backwards along the
+    # oracle's route. It works and it deletes the task: the first
+    # stretch of any route is the straight run before the first
+    # obstacle, so B lands on open ground and the detour ratio
+    # collapses to 1.00. Measured, on this very terrain, before the
+    # approach was abandoned. `mars.make_task` selects pairs whose
+    # NATURAL route is both the right length and at least 15% longer
+    # than the straight line -- median 1.58x rather than 1.07x.
+
+    def step(self, action: np.ndarray) -> tuple:
+        action = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
+        p0 = self.pos()
+        # Map [-1, 1] onto joint targets CENTRED ON THE STANDING POSE,
+        # so a zero action holds the robot up instead of dropping it.
+        n_leg = len(self._leg_act)
+        self.data.ctrl[self._leg_act] = (
+            self._centre + action[:n_leg] * self._span)
+        self._prev_action = np.asarray(action, dtype=np.float64).copy()
+        # The yaw actuator, BY NAME.
+        #
+        # This was `ctrl[6] = action[6]`, a literal that encoded
+        # "there are six leg actuators and yaw is the seventh". Adding
+        # hip abduction made eight, so index 6 became a LEG: the yaw
+        # command was being written into an ankle while the real yaw
+        # motor was never driven at all. The robot could not turn
+        # toward its goal, and the symptom was a flat gate stuck at
+        # exactly 6.4 m with a 0% fall rate -- standing upright,
+        # perfectly stable, going nowhere.
+        #
+        # Third time in this lab a hardcoded joint index has silently
+        # addressed the wrong thing (qpos[4:], qpos[3], and now this),
+        # and the third time it looked like a learning failure rather
+        # than a wiring failure.
+        self.data.ctrl[self._yaw_act] = action[self._n_leg]
+        for _ in range(self.frame_skip):
+            self._mj.mj_step(self.model, self.data)
+
+        self.travelled += float(np.linalg.norm(self.pos() - p0))
+        d = self.to_goal()
+        # Paid for CLOSING THE GAP, not for moving. See the module
+        # docstring: forward velocity is the wrong currency here.
+        # +1.5 alive, not +0.5. Lab 1 measured what happens when this
+        # term is too small: "the policy learns to fall over
+        # immediately", because falling ends the episode and ends the
+        # accumulating control cost. The first version of this lab
+        # halved lab 3's bonus and reproduced exactly that.
+        reward = (self._prev_d - d) * 10.0 + 1.5
+        reward -= 1e-3 * float(np.sum(np.square(action)))
+
+        # POSTURE. Nothing in the reward above pays for staying upright.
+        #
+        # That is fine on flat ground, where standing is the default and
+        # the alive bonus is enough. On ground tilted in two directions
+        # it is the whole problem, and its absence shows: the policy
+        # collects +1.5 per step for merely existing, so "topple slowly
+        # in roughly the right direction" scores about as well as "stay
+        # balanced", and at an 83% fall rate it never gathers enough
+        # upright experience to discover otherwise.
+        #
+        # Paid as a fraction of the alive bonus so the two cannot fight:
+        # at `upright_w` = 1.0 a perfectly level torso earns the full
+        # 1.5 again, and a torso at the 0.9 rad joint limit earns none.
+        if self.upright_w and "rootpitch" in self.q:
+            pitch = float(self.data.qpos[self.q["rootpitch"]])
+            roll = float(self.data.qpos[self.q["rootroll"]])
+            tilt = math.sqrt(pitch * pitch + roll * roll)
+            reward += self.upright_w * 1.5 * max(0.0, 1.0 - tilt / 0.9)
+        self._prev_d = d
+
+        # ARRIVING MUST NOT END THE EPISODE.
+        #
+        # It used to, and that made success the worst available outcome:
+        # standing still for 2000 steps earned 1.5 x 2000 = 3000, while
+        # walking 7 m and arriving at step ~700 earned 1050 + 70 + 50 =
+        # 1170. Terminating on success forfeited ~1300 steps of alive
+        # bonus, so arriving was worth 2.5x LESS than loitering and the
+        # policy -- correctly, given what it was paid -- learned not to
+        # arrive. 75% of episodes ended in a fall after 1.4 m of travel.
+        #
+        # Lab 1 documents the mirror of this: "the one-off bonus must be
+        # one-off. Pay it every tick and standing on the box forever
+        # beats crossing it." The same arithmetic, pointed the other way.
+        #
+        # Now the robot keeps its alive bonus after arriving, the goal
+        # bonus is paid ONCE, and `arrived` records that it ever got
+        # there.
+        if self.arrived() and not self._arrived:
+            self._arrived = True
+            # Freeze the odometer AT ARRIVAL.
+            #
+            # The episode deliberately continues after reaching B (see
+            # above), so `travelled` keeps accumulating while the robot
+            # mills around the goal for the remaining ~1300 steps. On
+            # one measured episode it walked 7.4 m to B against a 7.2 m
+            # optimal route -- 97% efficient -- and then another 7.2 m
+            # afterwards, so the published efficiency read 49%.
+            #
+            # Every efficiency number in this lab was therefore about
+            # half what it should have been. The task is "get to B",
+            # and the distance that answers it is the distance walked
+            # BY the time it got there.
+            self._travelled_at_arrival = self.travelled
+            reward += 100.0
+        self.t += 1
+        fell = self.fallen()
+        return self._obs(), float(reward), bool(fell), \
+            self.t >= self.max_steps, {
+                "x": float(self.pos()[0]), "y": float(self.pos()[1]),
+                "to_goal": d, "arrived": self._arrived, "fell": fell,
+                "travelled": self.travelled, "route": self.route_len,
+                "travelled_to_goal": (self._travelled_at_arrival
+                                      if self._arrived else None),
+            }
+
+
+def rollout(env: NavWorld, policy, seed: int = 0) -> dict:
+    obs, _ = env.reset(seed=seed)
+    total, steps = 0.0, 0
+    while True:
+        obs, r, term, trunc, info = env.step(policy(obs))
+        total += r
+        steps += 1
+        if term or trunc:
+            break
+    eff = ((env.geodesic_len / info["travelled"])
+           if info["travelled"] > 0.1 else 0.0)
+    return {"return": total, "steps": steps, "arrived": info["arrived"],
+            "fell": info["fell"], "to_goal": info["to_goal"],
+            "travelled": info["travelled"], "efficiency": min(eff, 1.0)}
+
+
+def random_policy(rng, n: int = 7):
+    """
+    A uniform-random action of width `n`.
+
+    `n` defaults to 7 and MUST be passed when the body has a
+    different actuator count. Adding hip abduction made it 9, and
+    this default silently produced a 7-wide action that broadcast
+    against an 8-wide leg slice -- which at least raised. The
+    dangerous version is a default that happens to fit.
+    """
+    return lambda obs: rng.uniform(-1.0, 1.0, n)
+
+
+def main() -> int:
+    rng = np.random.default_rng(0)
+    print("=" * 74)
+    print("  Random baseline, before anything is trained")
+    print("=" * 74)
+    print(f"  {'world':<12}{'return':>9}{'arrived':>10}{'fell':>8}"
+          f"{'left to go':>12}{'walked':>9}")
+    for flat in (True, False):
+        env = NavWorld(mode="blind", flat=flat)
+        rs = [rollout(env, random_policy(rng, env.act_dim), seed=s)
+              for s in range(8)]
+        print(f"  {'flat' if flat else 'terrain':<12}"
+              f"{np.mean([r['return'] for r in rs]):>9.1f}"
+              f"{sum(r['arrived'] for r in rs):>8}/8"
+              f"{sum(r['fell'] for r in rs):>6}/8"
+              f"{np.mean([r['to_goal'] for r in rs]):>11.1f} m"
+              f"{np.mean([r['travelled'] for r in rs]):>8.1f} m")
+    print()
+    print("  'arrived 0/8' is the point. If a random policy reaches B, the")
+    print("  goal radius is too generous and there is nothing to learn.")
+    return 0
+
+
+def _cli() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Mars navigation environment")
+    ap.add_argument("--build-pool", action="store_true",
+                    help="generate the task pool once (~20 min) and cache it")
+    ap.add_argument("--n", type=int, default=POOL)
+    a, _ = ap.parse_known_args()
+    if a.build_pool:
+        print(f"  building {a.n} tasks — route 16-30 m, detour >= 1.15x")
+        build_pool(a.n)
+        return 0
+    return main()
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())

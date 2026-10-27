@@ -1,0 +1,46 @@
+{
+  "_comment": "ESM-2 fine-tuning. The familiar LLM setup -- this is the one lab in the section where nothing about the config is unusual.",
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 1,
+  "_batch_comment": "train_batch_size is DELIBERATELY OMITTED so DeepSpeed derives it as micro x accum x num_gpus and any --num_gpus works without editing this file. The unit here is a CHAIN (one protein with its MSA), not a token: micro=2 means two proteins per rank per step. Two is small on purpose -- the activation cost scales with N_res^3, so batch size is the cheapest knob to turn when a longer protein will not fit.",
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": 0.0001,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08,
+      "weight_decay": 0.01
+    }
+  },
+  "gradient_clipping": 1.0,
+  "_precision_comment": "bf16 ON, unlike 04_structure_module which disables it. There is no precision-sensitive measurement here; this is ordinary transformer fine-tuning and bf16 roughly halves activation memory, which is what lets 650M fit a 24 GB card alongside LoRA. Needs Ampere or newer; on Volta/Turing use fp16, never both.",
+  "bf16": {
+    "enabled": true
+  },
+  "fp16": {
+    "enabled": false
+  },
+  "_zero_comment": "Stage 2 -- and here the ordinary reasoning APPLIES, which it did not in the other three folders. ESM-2 650M has 652M real parameters, so optimizer state and gradients are gigabytes and sharding them is worth real memory. Compare 02_evoformer, where the model is 100k parameters and the stage is nearly irrelevant: same course, same knob, opposite conclusion, because the memory is in a different place.",
+  "_bucket_comment": "reduce_bucket_size is set EXPLICITLY, and that matters more than it looks. Leave it out and DeepSpeed defaults it to 5e8 -- a 500 MB reduction buffer -- while ds_config_z3.json sets 16 MB. The first version of these two files differed in exactly that way, so the ZeRO-1-vs-ZeRO-3 comparison this lab invites read 1.58 GB vs 0.62 GB and appeared to show stage 3 winning by 2.5x. It was measuring the buckets, not the stage. These two configs are now identical except for the stage, which is the only way the comparison means anything.",
+  "zero_optimization": {
+    "stage": 2,
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "reduce_bucket_size": 200000000,
+    "allgather_bucket_size": 200000000
+  },
+  "_checkpointing_comment": "Activation checkpointing is configured but left OFF by default so the baseline measurement is honest. Turn it on with --activation-checkpointing to recompute the triangle activations in the backward pass instead of storing them: real memory relief, at roughly 30% more compute. Unlike the ZeRO stage, this one attacks the tensor that is actually large.",
+  "activation_checkpointing": {
+    "partition_activations": false,
+    "contiguous_memory_optimization": false,
+    "cpu_checkpointing": false,
+    "number_checkpoints": 1,
+    "synchronize_checkpoint_boundary": false,
+    "profile": false
+  },
+  "steps_per_print": 25,
+  "wall_clock_breakdown": false
+}

@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 48 pages with
+The documentation site is the primary way to read this material: 73 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -137,13 +137,19 @@ cargo cult:
 |---|---|---|
 | `01_basics`, `02_intermediate` | Synthetic or small data, ≤1M parameters | **Yes** — end to end, in seconds to minutes |
 | `03_llms`, `04_video_text`, `05_video_speech` | Real models, GBs to 1.1 TB of weights, 2–8 GPUs | **No** — needs real GPU capacity |
+| `06_protein_folding` | ~100k parameters, but activations scale as `O(N³)` | **Yes** — one 24 GB card, and the algorithms run on CPU |
+
+`06_protein_folding` is worth calling out because it breaks the pattern: it is
+the highest-numbered section and the *least* demanding of hardware. Its models
+are tiny; the memory goes into activations instead. That inversion is the
+section's whole subject.
 
 For the second group a full run is not a practical way to check a change. The
 repository therefore ships **logic tests** that exercise the code paths without a
 GPU or a model download:
 
 ```bash
-./tests/run_all.sh                  # 32 suites, no GPU and no downloads
+./tests/run_all.sh                  # 45 suites, no GPU and no downloads
 uv run tests/test_ds_configs.py     # a single suite
 ```
 
@@ -156,9 +162,39 @@ uv run tests/test_ds_configs.py     # a single suite
 
 See [`tests/README.md`](tests/README.md).
 
+### Where those tests come from
+
+Almost every suite above exists because something shipped broken, and
+[`POSTMORTEMS.md`](POSTMORTEMS.md) is the account of what. Each entry carries
+an **incident record** naming the commits that introduced and fixed it and the
+test that now catches it, so the claims can be checked against the code rather
+than taken on trust:
+
+```bash
+uv run scripts/incidents.py          # the table, latency computed from git
+uv run scripts/incidents.py --csv    # regenerate incidents.csv
+```
+
+[`incidents.csv`](incidents.csv) is the same data in machine-readable form.
+What it currently shows:
+
+| | |
+|---|---|
+| documented incidents | 15 (13 defects, 2 cross-cutting lessons) |
+| **did not crash** | **10 of 13** — silent-wrong, silent-noop, false-green, hang |
+| time from introduced to fixed | same-day to **367 days** |
+
+The asymmetry is the point. Crashes were found in hours; the three defects
+that ran clean and produced plausible output sat for roughly a year each. That
+is the argument for asserting mathematical properties rather than shapes — a
+shape assertion would have passed on all three.
+
+Adding a postmortem without its record fails CI
+(`tests/test_incident_records.py`).
+
 ## Folder Structure 📁
 
-Five sections, each number used exactly once. Every example lives at
+Seven sections, each number used exactly once. Every example lives at
 `NN_section/NN_topic` and is self-contained — open one folder and run it
 without touching the rest.
 
@@ -175,7 +211,8 @@ deepspeed-course/
 │   ├── 01_bayesian_neuralnet/   # Parallel-tempering MCMC — uncertainty, not point estimates
 │   ├── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
 │   ├── 03_learning_to_rank/     # RankNet / LambdaRank / ListNet — ranking lives in the LOSS
-│   └── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
+│   ├── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
+│   └── 05_rl_trading/           # A 51%-accurate forecast loses money. PPO/GRPO halve the drawdown
 │
 ├── 03_llms/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
 │   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point
@@ -189,8 +226,8 @@ deepspeed-course/
 │   ├── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
 │   ├── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
 │   ├── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
-│   └── 12_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
-│
+│   ├── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
+│   └── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers
 │   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME
@@ -199,12 +236,39 @@ deepspeed-course/
 │   ├── 05_video_eval/           # Did compression break understanding? Reports the TEMPORAL GAP
 │   └── 06_qwen3vl/              # Qwen3-VL-8B LoRA: DeepStack, and a measured memory curve
 │
-└── 05_video_speech/       # Video AND audio in, speech out
-    ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
-    ├── 02_thinker_talker/       # Two streams onto ONE 40 ms clock, then speech out
-    ├── 03_duplex_streaming/     # Listening and watching WHILE speaking
-    ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
-    └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
+├── 05_video_speech/       # Video AND audio in, speech out
+│   ├── 01_longcat_omni/         # The frontier: 560B, ~3 TB host RAM
+│   ├── 02_thinker_talker/       # Two streams onto ONE 40 ms clock, then speech out
+│   ├── 03_duplex_streaming/     # Listening and watching WHILE speaking
+│   ├── 04_omni_eval/            # Does it actually use both streams? Reports the FUSION GAIN
+│   └── data/                    # Shared corpus (44 MB), not duplicated per subtopic
+│
+├── 06_protein_folding/    # Sequence in, 3D structure out — and where ZeRO stops helping
+│   ├── 01_esm2_plm/             # ESM-2: sequence alone, no MSA. The control case
+│   ├── 02_evoformer/            # The AlphaFold2 trunk. ZeRO-1 0.65 GB vs ZeRO-3 0.62 GB — 4.6%
+│   ├── 03_pairformer/           # The AlphaFold3 trunk — deletes the MSA representation
+│   └── 04_structure_module/     # IPA + FAPE → coordinates. SE(3)-invariant by construction
+│
+├── 07_physical_ai/        # Acting in a simulated world: physics, not tokens
+    ├── 01_obstacle_hopper/      # MuJoCo + PPO from scratch. Why ONE seed proves nothing
+    ├── 02_biped_stairs/         # A 2x2 of morphologies. The switches INTERACT
+    ├── 03_terrain_vision/       # A depth camera. You cannot FEEL for a descent
+    ├── 04_terrain_navigation/   # A 20x20 arena. Climb it, or walk around it
+    ├── 05_mars_terrain/         # Part 1: a Mars-like surface, measured. No robot yet
+    ├── 06_mars_mjx/             # MJX and Warp timed against 16 CPU processes. GPU loses
+    ├── 07_terrain_vlm/          # A VLM reads traversability. First ZeRO-3 here, and it is measured
+    ├── 08_long_traverse/        # Five bodies, one task. Four legs walk 3.5x further than two
+    ├── 09_body_search/          # A body is parameters. Proportion beats leg count
+│   └── 10_perception_pays/      # Perfect terrain knowledge ties none. Biased is worse
+│
+└── 08_aerial_physics/     # Leaving the ground. The budget is propellant, not time
+    ├── 01_aerial_stabilization/ # A tumbling cold-gas car. PPO lands it on a third of the gas
+    ├── 02_barrel_roll/          # A full 360 in mid-air. Curriculum ORDER decides if it rolls at all
+    ├── 03_land_on_target/       # Lands on a 4 m mark. Seeing the ground makes it WORSE
+    ├── 04_fly_on_mars/          # A 3-gate course on Mars. Thrust-to-weight, not gravity
+    ├── 05_thruster_failure/     # A nozzle breaks mid-air. Static authority checks do not predict it
+    ├── 06_learned_dynamics/     # Can a big model learn the physics? 29,000x the params, no better
+    └── 07_teacher_student/      # A depth sensor and no altimeter. PPO gets 2.5%, distillation 50%
 ```
 
 **Every example folder has the same six files** (the contract in

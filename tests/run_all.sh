@@ -29,6 +29,7 @@ TESTS=(
     tests/test_video_frames.py
     tests/test_runpod_ctl.py
     tests/test_docs_style.py
+    tests/test_incident_records.py
     tests/test_token_compression.py
     tests/test_star_memory.py
     tests/test_video_eval.py
@@ -49,6 +50,33 @@ TESTS=(
     tests/test_multigpu_download_guard.py
     tests/test_cifar10_source.py
     tests/test_moe_routing.py
+    tests/test_prefill_decode.py
+    tests/test_tier3_claims.py
+    tests/test_obstacle_hopper.py
+    tests/test_biped_stairs.py
+    tests/test_terrain_vision.py
+    tests/test_terrain_navigation.py
+    tests/test_mars_terrain.py
+    tests/test_mars_mjx.py
+    tests/test_terrain_vlm.py
+    tests/test_morphology.py
+    tests/test_bodyspec.py
+    tests/test_perception_pays.py
+    tests/test_aerial_stabilization.py
+    tests/test_barrel_roll.py
+    tests/test_land_on_target.py
+    tests/test_fly_on_mars.py
+    tests/test_thruster_failure.py
+    tests/test_learned_dynamics.py
+    tests/test_teacher_student.py
+    tests/test_rl_trading.py
+    tests/test_evoformer.py
+    tests/test_evoformer_data_is_learnable.py
+    tests/test_pairformer.py
+    tests/test_published_protein_numbers.py
+    tests/test_structure_module.py
+    tests/test_cath_source.py
+    tests/test_ss_derivation.py
     tests/test_kimi_k3_plan.py
     tests/test_qlora.py
 )

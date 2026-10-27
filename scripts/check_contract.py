@@ -48,11 +48,57 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Documented exceptions, with the reason. An exception with no reason is a bug.
 NO_DEEPSPEED = {
+    # The strongest exception in the list: this lab has no model at
+    # all. Part 1 of lab 5 generates terrain with numpy and renders it
+    # with MuJoCo -- no parameters, no gradients, no optimizer state,
+    # so there is nothing a DeepSpeed config could configure. Part 2
+    # adds the robot and will not be on this list.
+    "07_physical_ai/05_mars_terrain":
+        "generates and measures terrain; there is no model in it",
+    # Nothing trains here either -- the lab times physics backends
+    # against each other. Its SUBJECT is whether the hardware
+    # DeepSpeed usually runs on helps at all on this model, and the
+    # measured answer (1.50x a CPU worker pool, against a 5x bar) is
+    # the lab's finding rather than an omission.
+    # Nothing trains: the lab replays lab 5's policies and compares
+    # five bodies. 15-22k-parameter policies, physics-bound on CPU,
+    # so there is no optimizer a DeepSpeed config could configure.
+    "08_aerial_physics/05_thruster_failure":
+        "a ~14k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
+    "08_aerial_physics/04_fly_on_mars":
+        "a ~15k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
+    "08_aerial_physics/03_land_on_target":
+        "a 13k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
+    "08_aerial_physics/02_barrel_roll":
+        "a 13k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
+    "08_aerial_physics/01_aerial_stabilization":
+        "a 13k-parameter PPO policy against MuJoCo on the CPU; nothing to shard",
+    "07_physical_ai/10_perception_pays":
+        "replays trained policies and varies a router; nothing trains",
+    "07_physical_ai/09_body_search":
+        "searches body shapes and ranks trained policies; the bottleneck "
+        "is CPU physics, and the lab's own measurement says so",
+    "07_physical_ai/08_long_traverse":
+        "replays trained policies to compare morphologies; nothing trains",
+    "07_physical_ai/06_mars_mjx":
+        "benchmarks MuJoCo/MJX/Warp throughput; nothing trains, so "
+        "there is no optimizer a DeepSpeed config could configure",
+    "07_physical_ai/04_terrain_navigation":
+        "a 12k-parameter PPO policy over MuJoCo height fields; the "
+        "bottleneck is physics on the CPU, not arithmetic",
+    "07_physical_ai/03_terrain_vision":
+        "a 193k-parameter CNN student has nothing for ZeRO to shard. "
+        "Note this is the one exception where a GPU DOES help -- 13.6x, "
+        "measured -- so the reason is not the usual one: a GPU helping "
+        "and DeepSpeed helping are different claims",
     "03_llms/09_multi_agency": "drives TRL's GRPOTrainer directly",
     "04_video_text/04_streaming_memory": "streaming inference — sequential, no optimizer",
     "04_video_text/05_video_eval": "evaluation — short generate() calls",
     "05_video_speech/03_duplex_streaming": "duplex inference — slices arrive in order",
     "05_video_speech/04_omni_eval": "evaluation — modality-ablation generate() calls",
+    "03_llms/12_prefill_decode": "inference scheduling — no optimizer, nothing to shard",
+    "07_physical_ai/01_obstacle_hopper": "RL control — a 10k-parameter policy, nothing to shard",
+    "07_physical_ai/02_biped_stairs": "RL control — a 12k-parameter policy, nothing to shard",
 }
 RUNTIME_DS_CONFIG = {
     "02_intermediate/01_bayesian_neuralnet": "writes a temporary config at runtime",

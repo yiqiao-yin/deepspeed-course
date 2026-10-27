@@ -2,15 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Rules here are terse on purpose. Where a rule exists because something shipped
+broken, the hook names the incident and links to the full account in
+[`POSTMORTEMS.md`](POSTMORTEMS.md). **Read the linked section before undoing a
+rule that looks arbitrary** — most of them are load-bearing and none are
+stylistic.
+
+Each account carries an **incident record** citing the commits that introduced
+and fixed it, so every claim in that file can be checked against the code
+rather than taken on trust — see
+[the incident record convention](#every-postmortem-carries-an-incident-record).
+
 ## What this repository is
 
-A teaching course, not an application. Each top-level numbered directory (`01_basics/01_neuralnet` … `05_video_speech`) is a **self-contained, runnable DeepSpeed example** that escalates in difficulty: toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL → LoRA SFT of 20B models → video-text → video-speech-to-speech.
+A teaching course, not an application. Each numbered directory
+(`01_basics/01_neuralnet` … `06_protein_folding/04_structure_module`) is a
+**self-contained, runnable DeepSpeed example** that escalates in difficulty:
+toy MLP → CNN → LSTM → Bayesian MCMC → HuggingFace/TRL fine-tuning → GRPO RL →
+LoRA SFT of 20B models → video-text → video-speech-to-speech → protein
+structure.
 
 There is no package and no shared library. Directories deliberately duplicate code rather than import from each other — a reader should be able to open one folder and run it without touching the rest. **Do not refactor shared logic into a common module.** (`require_gpu()` appears verbatim in ~34 files on purpose.)
 
 There *is* a regression suite in `tests/` (CPU-only, runs in CI) and a GPU tier in `tests/gpu/`; see [What can and cannot be run here](#what-can-and-cannot-be-run-here). Tooling lives in `runpod/` for provisioning GPUs on demand, and `scripts/` for scaffolding and drift auditing.
 
 Contributions from outside are welcome and governed by `CONTRIBUTING.md`, which is written to double as a spec an agent can follow. Read it before adding an example — it encodes the three-platform contract below. Repo is MIT (`LICENSE`).
+
+`MOVED.md` maps the pre-reorganisation paths: five top-level numbers used to be
+reused, and every folder now sits at `NN_section/NN_topic`. Folders were moved
+with `git mv`, so `git log --follow` and `git blame` work through the rename.
+
+## Architecture: which folders only make sense together
 
 ### The alignment thread spans four topics in `03_llms/`
 
@@ -79,6 +101,9 @@ stores them per expert. **Checkpoint layout and runtime module tree are not the
 same thing**, and peft can only wrap `Linear`/`Embedding`/`Conv1D`, so freezing
 the experts there is the only expressible option rather than merely the wise one.
 
+The folder also holds `analyze_kimi_k3.py` — see
+[not every entry point is a training script](#not-every-entry-point-is-a-training-script).
+
 ### `03_llms/10` and `11` are the two halves of one paper
 
 DeepSeek-V2 and V3 each make **two** architectural contributions, and the course
@@ -107,16 +132,63 @@ reach it by all-to-all. DeepSpeed ships `deepspeed/moe/` (`ep_router.py`,
 `sharded_moe.py`) for this. It is the reason the topic belongs in this course
 rather than an architecture course.
 
-### Sections 04 and 05 are multi-subtopic
+### `06_protein_folding` is one argument against a reflex
 
-Most sections hold flat topics. **`04_video_text/` and `05_video_speech/` escalate
-internally**, so each holds several numbered subtopics:
+The four subtopics escalate, but the section exists to make a single systems
+claim that the rest of the course sets up and then breaks:
+
+| Folder | What it is | Reads the thesis |
+|---|---|---|
+| `01_esm2_plm` | ESM-2, sequence only — no MSA, no geometry | the control: an ordinary transformer |
+| `02_evoformer` | the AlphaFold2 trunk | **where the thesis is measured** |
+| `03_pairformer` | the AlphaFold3 trunk — MSA deleted from the trunk | what deleting a representation buys |
+| `04_structure_module` | IPA + FAPE → coordinates | SE(3) invariance by construction |
+
+**The thesis: AlphaFold-class memory lives in activations, not parameters, so
+no ZeRO stage helps.** The trunk this course builds has ~100k parameters; what
+fills the card is the pair representation (`O(N²)`) and the triangle attention
+logits (`O(N³)`). Measured in `02_evoformer`: **ZeRO-1 0.65 GB vs ZeRO-3
+0.62 GB — 4.6%**, for 1.5× the communication. That is the point of the lab,
+and it is the reason DeepSpeed shipped a fused *kernel*
+(`DS4Sci_EvoformerAttention`) for this model family rather than another
+sharding strategy.
+
+Three things that are easy to break by tidying:
+
+- **`ds_config.json` and `ds_config_z3.json` must differ in the stage and
+  nothing else.** They once differed in `reduce_bucket_size` too — ZeRO-1 left
+  it unset, so DeepSpeed's 5e8 default made the comparison read 1.58 vs
+  0.62 GB and appear to prove ZeRO-3 saves 2.5×, the exact opposite of the
+  lab's finding. A config comparison is only a comparison if one variable moves.
+- **`DS4Sci_EvoformerAttention` is UNVERIFIED here** and labelled so in four
+  places. It needs a CUDA toolkit (`nvcc`); the PyPI `nvidia-cuda-nvcc-cu12`
+  wheels ship only `ptxas`. No memory number is published for it — do not
+  estimate one.
+- **`02` and `03` are a matched pair**, like `02_intermediate/03`+`04`. The
+  AF2→AF3 saving from deleting the MSA representation **decays with length**:
+  measured at 58.5% (32 residues), 24.2% (128), 12.5% (256). It is a constant
+  subtracted from an $O(N_{res}^3)$ term, so quoting one figure without the
+  length is meaningless — and the length that figure came from is the thing
+  most easily lost in an edit.
+
+`synthetic_msa.py` generates coevolving alignments scored by **APC-corrected**
+mutual information (Dunn 2008). Raw MI is biased by column entropy, and the
+first counterexample written here was contaminated — one shared mutation event
+per coupled pair correlated the columns even at `coupling=0.0`.
+
+### Sections 04, 05 and 06 are multi-subtopic
+
+Most sections hold flat topics. **`04_video_text/`, `05_video_speech/` and
+`06_protein_folding/` escalate internally**, so each holds several numbered
+subtopics:
 
 ```
 04_video_text/{01_hf_baseline, 02_qwen25vl, 03_token_compression,
                04_streaming_memory, 05_video_eval, 06_qwen3vl}
 05_video_speech/{01_longcat_omni, 02_thinker_talker,
                  03_duplex_streaming, 04_omni_eval, data/}
+06_protein_folding/{01_esm2_plm, 02_evoformer,
+                    03_pairformer, 04_structure_module}
 ```
 
 Each subtopic keeps the full six-file contract independently and is registered
@@ -134,6 +206,267 @@ The through-line worth knowing when editing either topic: **every frontier
 technique in both is a memory technique.** ZeRO shards what the model *is*;
 token compression shrinks what it *looks at*; STAR memory bounds what it
 *retains*. Same bargain, different currency.
+
+### `07_physical_ai` is a single escalating argument about embodiment
+
+Seven labs, and each one exists because the previous one ran out of
+something. They are not independent examples and the later ones assume
+the earlier measurements:
+
+| Folder | Adds | The thing it measured |
+|---|---|---|
+| `01_obstacle_hopper` | a body | the one-off bonus must be ONE-OFF, or standing on the box beats crossing it |
+| `02_biped_stairs` | a second leg | 0.04-0.10 m treads climb reliably, above that they do not. **Every later lab's `STEP_MAX = 0.12` comes from here** |
+| `03_terrain_vision` | an eye | a camera helps on ascent and nowhere else, because a corridor has nothing to decide |
+| `04_terrain_navigation` | a second dimension | climb it or go round it -- the first lab with a routing choice in it |
+| `05_mars_terrain` | a planet | terrain first (part 1), then a policy on it (parts 2-4) |
+| `06_mars_mjx` | a bigger machine | GPU physics is 1.50x a 16-process CPU pool; the terrain is NOT why |
+| `07_terrain_vlm` | an eye that reads | a VLM scores 52.9%; the robot that only FEELS scores ~75% |
+
+**`05_mars_terrain` is split into parts ON PURPOSE.** Lab 4 published a
+result that was wrong, and the faults were in its world, its renderer
+and its metric rather than in anything a policy learned. Terrain and
+policy are different problems; mixing them leaves you unable to say
+which one broke. Part 1 therefore contains no robot at all.
+
+Two presets and a course, and the distinction is load-bearing:
+`rover` (60 m) is what parts 1-3 measured on, `course` (34 m) is the
+forced-detour task from part 4, and `regional` (20 km) exists only to
+be looked at. **New presets are ADDED, never substituted**, so
+published numbers keep describing the surface they were measured on.
+
+### `08_aerial_physics` asks the same question seven times and keeps changing the answer
+
+Topic 7 walked a robot over terrain. Topic 8 throws a two-tonne
+cold-gas car into the air and gives it **seven seconds of
+propellant**, which removes the one luxury every walking lab had:
+you cannot stop and think. A falling vehicle must commit.
+
+| Folder | Adds | What it measured |
+|---|---|---|
+| `01_aerial_stabilization` | a body | PPO beats a textbook PD controller 89% to 75% **on a quarter of the gas** |
+| `02_barrel_roll` | a manoeuvre | teach the landing first and the roll is **never learned** (0% vs 95%) — curriculum ORDER decides everything |
+| `03_land_on_target` | a mark to hit | a 5x5 height patch takes PPO from 56% to **0%**; terrain knowledge makes it worse, monotonically |
+| `04_fly_on_mars` | a planet and a course | residual PPO on a guidance law: same arrivals, **5-8% less propellant** |
+| `05_thruster_failure` | a broken nozzle | practising with faults lifts survival **72% to 89%**; a static authority check does not predict which flights survive |
+| `06_learned_dynamics` | a world model | **29,000x the parameters, no better prediction** — the best rung has 18,281 |
+| `07_teacher_student` | a sensor and no altimeter | PPO on 144 depth beams scores **2.5%**, no better than blind; distilled from a teacher it scores **50%** |
+
+Three things are load-bearing across the topic and easy to undo:
+
+- **The worst terminal must be the outcome reachable by doing
+  nothing.** Labs 3 and 5 are landings, so inaction IS a hover and
+  the timeout must be worse than a crash. Lab 4 is a gate course
+  where the bonus pulls the policy out of a hover, so there the
+  crash must be worst. Lab 5 shipped lab 4's ladder once and taught
+  the policy never to try.
+- **Every lab after 2 inherits `STEP_MAX = 0.12`** and the reward
+  shape from lab 3, whose Φ is capped near 6. Lab 3 shipped Φ ≈ 31
+  and the `(γ−1)Φ` toll outweighed the prize: the policy fled, miss
+  distance climbing 12 m → 86 m with every episode timing out.
+- **A graded terminal, never a flat one.** A flat crash penalty
+  scores a 10 m/s dive and a 2.6 m/s arrival identically, so there
+  is no gradient from crashing toward landing.
+
+Labs 1-6 carry **no `deepspeed` launcher and no `require_gpu()`**,
+deliberately: a ~14k-parameter policy stepped against MuJoCo is
+faster on a CPU, measured. Lab 6 is the first to want a card and
+lab 7 the first with a real supervised phase.
+
+### `02_intermediate/02` and `05` are a matched pair, like `03` and `04`
+
+| Folder | Scored by | Asks |
+|---|---|---|
+| `02_rnn_stock_data` | Theil's U, directional accuracy | can a model **predict** a price series? |
+| `05_rl_trading` | money after costs, drawdown | is a prediction **worth acting on**? |
+
+The second exists because the first cannot answer its own
+follow-up. A forecast at **51.1% directional accuracy** — better
+than chance, with a real +0.031 correlation — **loses 2.2% a year**
+once it pays 5 bps a side. Three things decide that and none is
+expressible as a squared error: holding is free and flipping is
+not, a small edge is correct and unprofitable, and the objective
+is a path (one return series shuffled 400 ways has an identical
+mean and drawdowns from −23% to −71%).
+
+Two rules there that look like fussiness and are not:
+
+- **The universe is all nine SPDR sectors, and that IS the
+  survivorship-bias fix.** Twelve hand-picked large caps liquid
+  today return +23.70%/yr against the equal-weight index's
+  +13.80%. Buy-and-hold is the control every RL arm must beat, so
+  on that basket the control starts ten points ahead and RL
+  "loses" for reasons unrelated to RL. Taking ALL nine sectors
+  means there is no selection decision to be biased by. The
+  biased basket is kept as a labelled second arm so `--bias` can
+  reproduce the gap.
+- **The price panel is COMMITTED.** Vendor history is not
+  immutable — splits are applied retroactively and adjustments
+  revised — so a lab that pins numbers to a live feed publishes
+  figures nobody can check.
+
+### The geometry lesson both navigation labs had to learn separately
+
+What makes terrain a DECISION is not obstacle size or route length. It
+is the **ratio of route to arena**:
+
+| | route | arena | ratio | detour |
+|---|---|---|---|---|
+| `04_terrain_navigation` | 7 m | 20 m | 35% | 1.36x |
+| lab 5, first attempt | 8 m | 60 m | **13%** | **1.10x** |
+| lab 5 `course` | 8.8 m | 34 m | 26% | **1.39x** |
+
+At 13% the robot walks past the obstacles and the task contains no
+choice, while every arrival number still looks reasonable. Lab 4 found
+this through ridge LENGTH; lab 5 found it through arena SIZE; it is
+the same fact. A generator that scales the box without scaling the
+landforms -- or vice versa -- produces a lab that runs, trains,
+renders and has nothing in it.
+
+Related, and measured twice: **capping goal distance by walking B back
+along the oracle's route destroys the task.** The first stretch of any
+route is the straight run before the first obstacle, so the capped
+goal lands on open ground and the detour collapses to 1.00-1.07x.
+Select naturally-bent A-B pairs instead.
+
+### A hardcoded joint index will eventually address the wrong joint
+
+Lab 5 shipped this three times in one session, and each time it looked
+like a learning failure rather than a wiring failure:
+
+- `qpos[4:]` for the leg angles -- encoded "four root joints". Freeing
+  torso pitch and roll made it six, and it raised. Lucky: `qpos[3]`
+  for yaw would have kept returning a number, just the pitch angle.
+- `ctrl[6] = action[6]` for the yaw motor -- encoded "six leg
+  actuators". Adding hip abduction made it eight, so the yaw command
+  was written into an ankle and the real yaw motor was never driven.
+  The robot stood perfectly upright at a 0% fall rate and never moved,
+  and three training runs were blamed on observation width.
+- `random_policy(rng, n=7)` -- a default action width that no longer
+  matched the body.
+
+**Resolve joints and actuators by NAME, through `jnt_qposadr` and
+`actuator_trnid`.** Note that MuJoCo actuators declared as
+`<position joint="hipL"/>` are UNNAMED: `mj_id2name(mjOBJ_ACTUATOR, i)`
+returns `None`, so filter on the joint each actuator drives, not on
+the actuator. A name filter that silently returns an empty list makes
+`ctrl[[]] = []` a no-op, which is the uncontrollable-robot failure
+above.
+
+### Measure the machine before renting one
+
+Lab 5 reached "we need more compute" and the obvious move -- rent a
+GPU -- was measurably wrong. `bench_compute.py` answers it in three
+minutes on any box:
+
+| | measured |
+|---|---|
+| 12k-param policy on GPU, rollout batch | **1.7x SLOWER** than CPU |
+| 16x more envs in one process | 1.36x -- stepping was serialised |
+| 16 worker processes (`vecenv.py`) | **2.5x** |
+| raising `--eval-every` from 3 to 15 | another **1.6x** |
+
+Two findings worth carrying: the environments were stepped in a Python
+`for` loop, so a 20-core box ran at a twentieth of itself; and the
+in-training evaluation was **~75% of wall clock**, because it stayed
+serial when training went parallel. Total 3.9x, free, on hardware
+already owned. `vecenv.py` asserts the parallel pool is BIT-IDENTICAL
+to the serial loop before anyone trusts its speed.
+
+**Lab 6 asked the same question of PHYSICS and got the same answer.**
+`bench_backends.py` times MuJoCo on CPU against MJX and MuJoCo Warp on
+the card, with the bar written down first — *≥ 5x the CPU worker pool
+or it is not worth renting*:
+
+| | measured |
+|---|---|
+| CPU, 16-process pool (the baseline) | 9,337 steps/s |
+| MJX, best (then **aborts** at 4096 envs) | 0.14x |
+| Warp, 4096 envs | **1.50x** — bar was 5x, **FAILS** |
+| physics as a share of a training step | **33-34%**, so any physics win caps at **1.5x** end to end |
+
+Three things from it that generalise:
+
+- **Baseline against the pool, not one environment.** One CPU env is
+  5,630 steps/s and sixteen processes are 9,337. Dividing by the
+  single env would have reported Warp at 2.5x instead of 1.50x. The
+  comparison that flatters the new thing is rarely the one you face.
+- **A backend that `abort()`s is a data point, not a lost run.** MJX's
+  OOM is not a catchable exception -- XLA hits a `Check failed` and
+  takes the interpreter with it, which erased Warp's results *and* the
+  ablation. Each measurement now runs in its own process.
+- **Warp falls back to CPU silently** and reports throughput that
+  looks exactly like GPU throughput. `nvidia-smi` cannot answer this:
+  the question is whether JAX and Warp can *see* the card, which they
+  fail independently. Ask each backend and print it before any number.
+
+### The first lab here that needs ZeRO-3, and why the others do not
+
+`07_terrain_vlm` is the FIRST example in this section that calls
+`deepspeed.initialize`, and the justification is a measurement rather
+than the course's name. `verify_arch.py`, weights + optimizer per card:
+
+| Qwen2.5-VL-7B | 1 card | 8 cards |
+|---|---|---|
+| LoRA r=16 | **15.3 GB** -- already fits | 1.9 GB |
+| full fine-tune | 119.7 GB | **15.0 GB** |
+
+So the LoRA arm runs **plain python with no launcher** and only the
+full fine-tune uses `ds_config.json`. Sharding 15.3 GB that fitted
+would be the same cargo cult labs 1-6 avoid, pointed the other way.
+
+Three things from it that generalise:
+
+- **A control decides whether a number is readable.** The lab's
+  sighted arm scores 52.9%; its BLIND arm -- identical model, grey
+  image, same token count -- scores 45.0%, and the majority class
+  scores 55.0%. Sight helps (McNemar p = 0.006) and still loses to a
+  one-line heuristic. Reporting only the first comparison would have
+  been a true sentence and a false impression.
+- **A working no-information control emits ONE constant.** The blind
+  arm answered AROUND for all 429 items, which is what licenses the
+  comparison; a blind control with VARIED answers means information
+  is leaking through the pipeline.
+- **The analytic capacity table excludes activations, and they are
+  not small.** Predicted 7.3 GB for the 3B LoRA arm, measured
+  **11.5 GB**. ZeRO-3 shards parameters, gradients and optimizer
+  state -- never activations.
+
+### An ablation is only an ablation if ONE thing moved
+
+Lab 6 first concluded the height-field collider costs **8.6x** of all
+GPU throughput. Withdrawn: it compared a MuJoCo `plane` geom against
+an `hfield`, which are **two different collision routines**. The
+measurement was of the collider TYPE and the conclusion named the
+TERRAIN.
+
+Re-run with the collider held fixed — a height field of zeros against
+one with relief — Mars costs **1.10x** against a 3.2% spread, for
+**5.5x** the contacts. Rocks: nothing. Resolution: nothing. The
+terrain is exonerated, and three explanations are ruled out rather
+than one confirmed.
+
+That shape — three NEGATIVE results — is exactly what a broken knob
+produces, so `tests/test_mars_mjx.py` tests the knobs rather than the
+conclusions: `rocks=0` must remove 75 geoms, `plane=True` must flatten
+the elevation while keeping `nhfield == 1`. One of those checks
+shipped unable to fail, asserting on `hfield_data` — which MuJoCo
+**normalises to [0, 1]** at compile time, so its range is 1.000 for
+every terrain. The metres are in `hfield_size[2]`.
+
+### Arrival rate cannot tell you whether a policy reads terrain
+
+Lab 5 part 3 is the cheap experiment that should come first.
+`analyze_decisions.py` replays existing checkpoints and asks, for
+every landform the path comes near, whether the robot went OVER it or
+AROUND it. The robot discriminates about 3:1 -- **and so does an arm
+fed six constant zeros.** The behaviour is emergent from having a
+body, not from perception: you learn a scarp is impassable by walking
+into one.
+
+A policy that avoids every obstacle and one that reads terrain score
+identically on arrival. Three parts of that lab measured outcome and
+could not have distinguished them.
 
 ## The per-example contract
 
@@ -187,6 +520,15 @@ uv run --no-project python -c "..." # one-off, no project env
 
 Every example README documents its own `uv` setup under **Environment & Local Testing**.
 
+**A custom torch index pins its companions too.** Any package with a compiled
+extension linked against torch — `torchvision`, `torchaudio` — must appear in
+`[tool.uv.sources]` whenever torch does; with `explicit = true` only the packages
+named there come from that index, and a mismatched pair fails with
+`RuntimeError: operator torchvision::nms does not exist`, which reads like a
+torch bug and is not one. `tests/test_torch_index_pins.py` guards it by reading
+the **lock**, not the pyproject.
+→ [postmortem](POSTMORTEMS.md#a-custom-torch-index-pins-its-companions-too-or-nothing-works)
+
 ### Which examples skip the `deepspeed` launcher
 
 Five, and each for a stated reason. Do not "fix" these by adding DeepSpeed —
@@ -208,17 +550,26 @@ exception, say so explicitly and explain why.
 
 This distinction governs how to verify a change:
 
-| Examples | Scale | Verification |
+| Section | Scale | Verification |
 |---|---|---|
-| `01`–`04` | Synthetic or tiny data, ≤1M params, 1–2 GPUs | **Runnable end to end** on a single machine |
-| `05`–`09` | Real model downloads (GBs to 1.1 TB), multi-GPU, up to 560B params | **Not runnable locally.** Verify logic only |
+| `01_basics/`, `02_intermediate/` | Synthetic or tiny data, ≤1M params, 1–2 GPUs | **Runnable end to end** on a single machine |
+| `03_llms/`, `04_video_text/`, `05_video_speech/` | Real model downloads (GBs to 1.1 TB), multi-GPU, up to 560B params | **Not runnable locally.** Verify logic only |
+| `06_protein_folding/` | ~100k params, synthetic or CATH data, **1 × 24 GB** | **Runnable** — the trunks train on one modest card |
+
+`06_protein_folding/` is the third case and the exception to the usual
+reading of this table: it sits high in the numbering but needs no frontier
+hardware, because its models are small and its cost is in activations. Verify
+changes there by **running them**, not by writing a mock.
+
+(The numbers are per section and get reused, so name the section — `03_llms/03_ocr`,
+not `03`.)
 
 For the second group, do not attempt a full training run to validate a change —
 it will not fit, and a partial run proves nothing. Write or extend a **logic test**
 in `tests/` instead, which exercises the changed code path without a GPU or a
 model download:
 
-### The big exception: thirteen modules ARE fully CPU-runnable
+### The big exception: fifteen modules ARE fully CPU-runnable
 
 Their substance is *algorithms, objectives and policy* rather than weights, so
 they need no GPU and no download. **Run these directly rather than mocking
@@ -239,6 +590,8 @@ them:**
 | `03_llms/10_deepseek_from_scratch/mla.py` | MHA / GQA / MLA behind one interface, and the cache arithmetic |
 | `03_llms/11_moe/moe.py` | top-k routing, three load-balancing strategies, the params-vs-active table |
 | `04_video_text/06_qwen3vl/verify_arch.py` | builds Qwen3-VL-8B on the **meta device** — DeepStack, and whether LoRA targets resolve |
+| `06_protein_folding/02_evoformer/evoformer.py` | triangle attention and multiplicative update, and the cubic memory table |
+| `06_protein_folding/02_evoformer/synthetic_msa.py` | coevolving MSAs, measured by APC-corrected mutual information |
 
 **Assert mathematical properties, not shapes.** Every bug this repo has shipped
 in these areas ran fine and was quietly wrong, and a shape assertion would have
@@ -264,9 +617,14 @@ passed on all of them. Established patterns to copy:
   shift-invariant in real arithmetic and only approximately so in float32
   (catastrophic cancellation), so exact equality is the wrong test.
 
+### Running the tests
+
 ```bash
-./tests/run_all.sh              # all 32 suites, no GPU, no downloads
-uv run tests/test_ds_configs.py # one suite
+./tests/run_all.sh                 # all 60 suites, no GPU, no downloads
+uv run tests/test_ds_configs.py    # one suite
+
+# what CI actually runs — run_all.sh alone does not reproduce it
+uv run --no-project python -m compileall -q <training scripts>   # see .github/workflows/tests.yml
 ```
 
 Tests use [PEP 723](https://peps.python.org/pep-0723/) inline dependency metadata,
@@ -287,12 +645,28 @@ It is **advisory, not a gate** — it over-reports because teaching READMEs cont
 illustrative code and remediation advice that legitimately differ from the
 shipped source. Triage by hand; see `scripts/README.md`.
 
-### Check what hardware you actually have before declaring a thing unrunnable
+### The GPU tier: `tests/gpu/`
 
-Three rounds of the CIFAR-10 multi-GPU fix went out verified only by static
-analysis, on the stated grounds of having no GPU. The dev box had one.
-`nvidia-smi` costs a second and would have caught a `TypeError` that instead
-surfaced on a rented two-GPU machine after both ranks had launched.
+Not run by CI and not run by `run_all.sh`. These need real hardware and answer
+questions a CPU cannot:
+
+| Script | Question |
+|---|---|
+| `probe_device_binding.py` | does each rank bind to its OWN GPU? (10 s, no data, no model) |
+| `diagnose_nccl.sh` | is multi-GPU NCCL working on this box at all? |
+| `verify_uv_sync_cuda.sh` | does the committed lock actually install and import on a CUDA box? |
+| `verify_02_modern_cifar.sh` | `01_basics/03_convnet_cifar10`'s modern script, end to end |
+| `verify_04_multi_gpu.sh` | the multi-GPU path — rank guards, barriers, device binding |
+| `verify_05_ocr_models.sh` | `03_llms/03_ocr` loads and steps on the declared card |
+| `verify_05_reward_model.sh` | `03_llms/04_reward_model` end to end |
+| `verify_06_online_dpo.sh` | `03_llms/07_online_dpo` end to end |
+| `validate_llava_vision_path.py` | the vision tower actually receives pixels |
+
+Run `probe_device_binding.py` first when a multi-GPU job hangs. Correct devices
+plus a hang means the binding is fine and the interconnect is not, which is
+`diagnose_nccl.sh`'s territory. `verify_uv_sync_cuda.sh` is the executable form
+of the rule below that a harness which does not install the artifact verifies
+nothing.
 
 ### Multi-rank logic can be verified without multiple GPUs
 
@@ -320,6 +694,51 @@ control-flow risk and leaves exactly one question for real hardware. Say which
 is which when reporting — "verified" and "believed correct" are different
 claims, and a reader betting a GPU-hour deserves to know which they are getting.
 
+**Check what hardware you actually have before declaring a thing unrunnable.**
+`nvidia-smi` costs a second; three rounds of a fix went out "verified" by static
+analysis on a box that had a GPU all along.
+
+## Distributed rules
+
+These are the ones that cost the most time to rediscover.
+
+- **Only rank 0 downloads, and the others must wait on a barrier.**
+  `torchvision.datasets.*(download=True)` does **no locking**; `huggingface_hub`
+  does. Guard the download on rank, then `barrier()` — without the barrier rank 1
+  reads a directory rank 0 is still writing, which fails only *sometimes*.
+  `tests/test_multigpu_download_guard.py` enforces it (AST-based, because several
+  scripts rank-guard their *printing* while downloading unguarded).
+  → [postmortem](POSTMORTEMS.md#only-rank-0-downloads-and-the-others-must-wait-on-a-barrier)
+- **Bind the device before any collective that runs before `deepspeed.initialize()`.**
+  Call `torch.cuda.set_device(local_rank)` and pass `device_ids=` to the barrier,
+  or every rank all-reduces on cuda:0 and hangs. Pass **no `timeout=`**: torch
+  2.13 accepts one, torch 2.11 — what every lab locks — raises `TypeError`.
+  **Verify an API against the version the lab's `uv.lock` resolves**, not against
+  whatever is on the box.
+- **Derive `local_rank` from `LOCAL_RANK`, not from argv.** `torchrun` sets only
+  the environment variable, so an `args.local_rank` defaulting to `-1` binds
+  every rank to cuda:0.
+- **A rank guard may wrap printing, logging and saving; it must never wrap a
+  collective.** Run the collective on every rank and guard only what it prints.
+  Tear down deliberately — `barrier()` then `destroy_process_group()` on every
+  rank. Related: an unused expert produces no gradient, so
+  `if p.grad is not None` makes ranks disagree on how many all-reduces to issue.
+  → [postmortem](POSTMORTEMS.md#guard-the-output-never-the-collective)
+- **Size multi-GPU jobs per GPU, not in aggregate.** Weights shard under ZeRO-3;
+  activations, gather buffers and fragmentation do not.
+  → [postmortem](POSTMORTEMS.md#sizing-multi-gpu-jobs-model-it-per-gpu-not-in-aggregate)
+
+Two signatures worth recognising on sight:
+
+| Signature | Means |
+|---|---|
+| OOM whose *requested* allocation is trivially small (60 MiB) on a card with GB spare | sharding never happened — under ZeRO-3 the DeepSpeed config must exist *before* `from_pretrained`, or `zero.Init` never fires. Build `SFTConfig`/`TrainingArguments` first. |
+| a collective with `NumelIn=1` (or 1152) timing out | not a memory event. The box advertises peer-to-peer it cannot perform; `nvidia-smi topo -m` showing `SYS` is the tell, `NCCL_P2P_DISABLE=1` the fix, at a real throughput cost. |
+
+**"Rent a bigger box" was the wrong answer three times running** — twice the
+symptom looked like size and was not, and a larger machine would have masked it.
+→ [postmortem](POSTMORTEMS.md#rent-a-bigger-box-was-the-wrong-answer-three-times-running)
+
 ## Two target platforms
 
 The README's central distinction, which shapes every launcher script:
@@ -338,6 +757,28 @@ uv run scripts/check_contract.py 10_my_topic   # one example, 33 checks
 uv run scripts/check_contract.py               # the whole repo
 uv run scripts/check_contract.py -v <folder>   # show passing checks too
 ```
+
+`CONTRIBUTING.md` states the contract in full; the short version, because every
+new or edited example must satisfy it:
+
+| Reader | Requirement |
+|---|---|
+| **no GPU** | `require_gpu()` called *before* torch/deepspeed are imported; message says why it stopped, what they can still do, and how to rent a GPU; `ALLOW_CPU=1` honoured |
+| **CoreWeave** | a `run_deepspeed.sh` with `#SBATCH` headers and a cheap `--max-steps` dry-run path |
+| **RunPod** | an `EXAMPLES` entry in `runpod/runpod_ctl.py`, and the README documents `run <ex> --dry-run --collect --wait --terminate --yes` plus confirming with `pods` |
+
+Put heavy imports *inside* `main()`, after the preflight. Import torch at module
+scope and a CPU-only reader gets a CUDA traceback before the message ever runs.
+
+`check_contract.py` is advisory — older examples predate parts of the contract
+and failing the build on those would water the checks down until they catch
+nothing. The non-negotiable subset (`EXAMPLES` registration, `bash -n`, `#SBATCH`
+presence) is in `tests/test_runpod_ctl.py` and does fail CI.
+
+> When it flags something, check whether the CHECKER is wrong before changing
+> working code — three of its original checks were over-strict and were fixed in
+> the checker.
+> → [postmortem](POSTMORTEMS.md#watch-a-checker-fail-before-trusting-it)
 
 ### The contract can be RUN, not only checked
 
@@ -368,592 +809,187 @@ OOMed for every learner who believed the manifest.
 
 A few steps is enough. `--max-steps 3` proves `uv sync` resolved, the model
 loaded, and nothing OOMed, without paying for a full fine-tune. What you are
-testing is the *contract*, not the model.
+testing is the *contract*, not the model. One thing worth watching in that log:
+seeing `.../<lab>/.venv/bin/python` is proof the harness installed from the
+lab's **committed lock** rather than from whatever the container image shipped —
+the distinction that hid eight broken labs.
+→ [postmortem](POSTMORTEMS.md#a-verification-harness-that-does-not-install-the-artifact-verifies-nothing)
 
-One thing worth watching in that log: the interpreter path. Seeing
-`.../<lab>/.venv/bin/python` is proof the harness installed from the lab's
-**committed lock** rather than from whatever the container image happened to
-ship — which is exactly the distinction that hid eight broken labs.
-
-Advisory, not a CI gate — older examples predate parts of the contract and
-legitimately differ, and failing the build on those would water the checks down
-until they catch nothing. The non-negotiable subset (`EXAMPLES` registration,
-`bash -n`, `#SBATCH` presence) is in `tests/test_runpod_ctl.py` and does fail CI.
-
-It earns its keep: pointing it at the repo found `03_llms/03_ocr` requesting
-`--ntasks-per-node=2` while running `deepspeed --num_gpus=2` (four processes for
-two GPUs — a hang), and 13 READMEs that never told a RunPod reader how to shut
-the pod down.
-
-> When it flags something, check whether the CHECKER is wrong before changing
-> working code. Three of its original checks were over-strict and were fixed in
-> the checker: `import torch` at module scope is harmless on a CPU box,
-> `import deepspeed` likewise (the CUDA_HOME error comes from `initialize()`,
-> which `require_gpu()` precedes), and `pip install uv` is legitimate because
-> you cannot bootstrap uv with uv.
-
-`CONTRIBUTING.md` states the contract in full; the short version, because every
-new or edited example must satisfy it:
-
-| Reader | Requirement |
-|---|---|
-| **no GPU** | `require_gpu()` called *before* torch/deepspeed are imported; message says why it stopped, what they can still do, and how to rent a GPU; `ALLOW_CPU=1` honoured |
-| **CoreWeave** | a `run_deepspeed.sh` with `#SBATCH` headers and a cheap `--max-steps` dry-run path |
-| **RunPod** | an `EXAMPLES` entry in `runpod/runpod_ctl.py`, and the README documents `run <ex> --dry-run --collect --wait --terminate --yes` plus confirming with `pods` |
-
-Put heavy imports *inside* `main()`, after the preflight. Import torch at module
-scope and a CPU-only reader gets a CUDA traceback before the message ever runs.
-
-`tests/test_runpod_ctl.py` fails if a numbered example is missing from the
-`EXAMPLES` table or lacks a SLURM script, so the contract is enforced rather
-than merely documented.
+### The RunPod harness
 
 **Never give the pod `RUNPOD_API_KEY`** — termination is driven from the local
 machine in a `finally`, with a keyless in-pod watchdog as backstop. See
 `SECURITY.md`.
 
-### The RunPod harness lies less than it used to
+- **`--wait-seconds` defaults to 1800.** Too short for anything with a large
+  download, and with `--terminate` the pod is destroyed mid-download.
+- **GitHub rate-limits anonymous clones from cloud IP ranges**, so a pod can
+  fail with `could not read Username for 'https://github.com'` on a public repo.
+  There is a codeload tarball fallback; no credential is ever placed on the pod.
+- Four bugs that each made a **failed** run look successful are now pinned by
+  assertions in `tests/test_runpod_ctl.py`.
+  → [postmortem](POSTMORTEMS.md#the-runpod-harness-lies-less-than-it-used-to)
 
-Four bugs in `runpod/runpod_ctl.py` were found and fixed by actually running
-pods. Each made a **failed** run look successful, which is the worst failure
-mode a verification harness can have — it does not lose information, it
-manufactures confidence. All four are now pinned by assertions in
-`tests/test_runpod_ctl.py`:
+## Correctness rules with a history
 
-| Was | Effect |
-|---|---|
-| `rc=$?` read *after* the log-upload `curl` | the DONE marker reported the curl's status — essentially always 0 |
-| `[2/6] repo cloned` printed unconditionally, `cd` failing silently | a failed clone ran the launcher from `/workspace` and looked like a broken example |
-| `--dry-run` appended `\|\| true` | the command every README documents could not report a failure at all |
-| collected log written without `mkdir -p` on its parent | nested example names contain `/`, so the log was silently lost |
+Each of these exists because something shipped broken. The hook is here; the
+evidence is in `POSTMORTEMS.md`.
 
-Two operational facts that cost real time:
-
-- **GitHub rate-limits anonymous clones from cloud IP ranges** and answers with
-  an auth challenge, so a pod fails with `could not read Username for
-  'https://github.com'` on a public repo. There is a codeload tarball fallback.
-  **No credential is ever placed on the pod** — see `SECURITY.md`.
-- **`--wait-seconds` defaults to 1800.** For anything with a large download that
-  is not enough, and with `--terminate` the pod is destroyed mid-download. Pass
-  a realistic window for big models.
-
-### Sizing multi-GPU jobs: model it per GPU, not in aggregate
-
-The weights shard under ZeRO-3. **Activations, gather buffers and
-fragmentation do not** — every rank pays those in full. An aggregate
-"total VRAM vs the weights" check passed 2 × 48 GB for a 55.6 GB model that
-then OOMed at the first step with 44.25 GiB resident on a 44.39 GiB card.
-
-$$\text{per GPU} = \frac{\text{weights}}{N} + \text{overhead that does not shard}$$
-
-Two signatures worth recognising:
-
-- **An OOM whose requested allocation is trivially small** (60 MiB) on hardware
-  that should have tens of GB spare means **sharding never happened**, not that
-  you are marginally short. Under ZeRO-3 the DeepSpeed config must exist
-  *before* `from_pretrained`, or `zero.Init` never fires and every rank
-  materialises the whole model. Build `SFTConfig`/`TrainingArguments` first.
-- **A collective whose payload is one element is a barrier.** A 1,800,069 ms
-  timeout on an `ALLREDUCE` with `NumelIn=1` is never a model problem — it is
-  the box advertising peer-to-peer it cannot perform. `nvidia-smi topo -m`
-  showing `SYS` between cards is the tell; `NCCL_P2P_DISABLE=1` is the fix, at
-  a real throughput cost. `tests/gpu/diagnose_nccl.sh` decides it in a minute.
-
-### Synthetic data must carry a signal, and the summary must not lie
-
-`01_basics/02_convnet` drew `x = randn(...)` and `y = randint(...)` — labels
-independent of the images, so **zero mutual information**. On 10 classes ~10%
-was not a poor result, it was the information-theoretic **ceiling**. The script
-none the less exited 0, printed "Finished Successfully", and advised *"Poor.
-Consider training longer or adjusting hyperparameters"* — sending a reader to
-tune a target that cannot be reached. Two 3090 runs returned 10.29% and 9.49%,
-unchanged from first epoch to last: a classifier collapsing to one class, the
-correct degenerate answer when there is nothing to learn.
-
-Every other lab in `01_basics` already used learnable synthetic data
-(`y = 2x + 1`, a sum of sines); this one was the exception. It now builds a
-fixed prototype per class plus noise, and the noise default is **calibrated,
-not guessed** — at 5.0 a plain MLP hits 99% in one epoch, because 784
-dimensions of signal average out per-pixel noise.
-
-**That calibration was done against the wrong model, and it shipped.** The
-numbers came from a plain MLP; the lab trains a **CNN**, and on this data the
-two behave oppositely. The signal is a fixed per-class prototype, the noise is
-i.i.d. per pixel — an MLP averages 784 weakly-informative dimensions and wins,
-while a CNN's small kernels see too few pixels to average anything and
-max-pooling over noisy pixels selects the largest *noise* value. Measured
-held-out at the old default of 8.0:
-
-| model | 1 epoch | 10 epochs |
-|---|---|---|
-| MLP (what the *test* used) | 88.75% | 90.95% |
-| **CNN (what the *lab* ships)** | **8.85%** | 13.70% |
-
-Chance is 10%, so the lab's own model sat **at chance** for months. A full
-50-epoch production run reached 35.19% and reported "Poor" — and was *right* to,
-because nothing better was reachable. The default is now **2.5**, calibrated
-against the shipped CNN at the batch size `ds_config.json` actually uses. 2.0
-was rejected because one epoch reaches 92.65%, and a smoke test that already
-saturates stops discriminating.
-
-**Then the replacement number was wrong too, in the same way.** "~77% at one
-epoch" was published here from a *clean-room* harness — plain torch, constant
-LR, fp32 — not from the lab. Measured end to end, two machines got **61.2%**
-and **48.4%** on the same commit: DeepSpeed's fused Adam with fp16 against
-torch's Adam without. Both reach ~100% by fifty epochs.
-
-So the docs now give a **range**, and say that the durable property is *"well
-clear of the 10% chance floor"* rather than any particular number.
-`tests/test_synthetic_data_is_learnable.py` keeps a deliberately loose `>25%`
-threshold and explains why it is loose — a test pinned to 61% would fail on
-half the hardware, and tightening it would trade a real property for a fragile
-one.
-
-**Measure the thing that ships, in the way it ships.** The first version of this
-bug used the wrong *model*; the second used the right model with the wrong
-*optimizer and precision*. Both produced a confident number that no learner
-would ever see, and a published number a reader cannot reproduce costs them a
-day deciding their own correct setup is broken.
-
-`tests/test_synthetic_data_is_learnable.py` passed throughout, because
-`beats_chance()` built its own small MLP. **A learnability test that measures a
-model no learner runs is the same failure as validating a library version no
-learner installs** — the sibling mistake this file already warned about for
-`test_config_kwargs.py`. It now takes a `model_fn` and the 02_convnet checks
-pass the lab's own `CNNModelEnhanced`, at the lab's batch size and sample count;
-measuring at batch 256 gave ~23 gradient steps per epoch against the lab's ~312
-and under-reported badly. It also asserts that `--noise`'s argparse default and
-`get_data_loader`'s own `noise=` default agree, because they are different
-numbers and the suite reads the second while the lab runs the first.
-
-**A second defect surfaced only by running the lab end to end**, and no static
-check would have found it: `warmup_epochs` was hardcoded to `5` at the call site
-while `total_epochs` was passed through. A `--epochs 1` run therefore spent its
-*only* epoch at `0.001 x 1/5` — a fifth of the target rate. The schedule was
-written for the 50-epoch default and silently crippled every short run, which is
-precisely the run the manifest offers. Measured at one epoch: **24.32% before,
-61.21% after**. Warmup now scales as `min(5, max(1, total_epochs // 5))`, which
-leaves the 50-epoch schedule identical. **Any hyperparameter expressed in epochs
-is a bug waiting for a short run** — check `--max-steps` and low `--epochs`
-paths against every schedule, not just the default.
-
-Two rules follow:
-
+- **Synthetic data must carry a signal, and the summary must not lie.** Labels
+  independent of inputs make chance the information-theoretic ceiling, and the
+  script will still print "Finished Successfully" while advising the reader to
+  train longer. Calibrate noise **against the model and optimizer the lab
+  actually ships**, and publish a range rather than a number.
+  → [postmortem](POSTMORTEMS.md#synthetic-data-must-carry-a-signal-and-the-summary-must-not-lie)
 - **A short run must not be reported as a failure.** Clawdeck runs these with
-  `--epochs 1`; printing "Poor" under a "Finished Successfully" banner is how a
-  beginner concludes they broke something. Say the run was capped and what a
-  real one looks like.
-  **This rule is not self-enforcing, and it recurred.** `03_convnet_cifar10`
-  shipped the identical defect months later: `--max-steps 20` — the command
-  Clawdeck offers by name as *"Quick (20 steps)"* — printed *"Poor. Consider
-  training longer"* directly above *"Finished Successfully"*. Twenty steps is
-  ~1,280 of 50,000 images and chance on CIFAR-10 is 10%, so ~10% was the
-  **expected** result. Unlike `02_convnet` the data was real and learnable; only
-  the reporting lied. It was found by *running the lab*, not by reading it.
-- **`tests/test_synthetic_data_is_learnable.py` asserts it**, on a HELD-OUT
-  split — memorising random labels on the training set is possible and proves
-  the opposite of learning. It carries the old generator as a counterexample
-  and asserts it FAILS, because a learnability check that never sees
-  unlearnable data would pass while returning True unconditionally.
+  `--epochs 1` / `--max-steps 20`. Say the run was capped and what a real one
+  looks like. This has shipped twice, months apart.
+- **Any hyperparameter expressed in epochs is a bug waiting for a short run.**
+  A `warmup_epochs` hardcoded to 5 spent a `--epochs 1` run's only epoch at a
+  fifth of the target rate: 24.32% → 61.21% once fixed.
+- **A slow data source can make a lab unrunnable, and it looks like success.**
+  CIFAR-10 from `cs.toronto.edu` is ~400× slower than the HF mirror and outlived
+  the orchestrator window, so the job reported *finished* without one training
+  step. Capping steps does not cap the download. A mirror is a trust decision —
+  `tests/test_cifar10_source.py` asserts counts, shapes and canonical **label
+  order**.
+  → [postmortem](POSTMORTEMS.md#a-slow-data-source-can-make-a-lab-unrunnable-and-it-looks-like-success)
+- **A measured claim is scoped to the configuration it was measured in.**
+  `11_moe`'s load-balancing finding reversed at world size 2; it was scoped to
+  world size 1 and the disagreement written down as unresolved rather than
+  rewritten around one unreplicated run. **It has now shipped twice**: the
+  second time the figure was correct and the residue count attached to it was
+  not, which doubled the published saving. A number and the configuration it
+  was measured in are one indivisible fact; quoting the number alone is a
+  different claim, not a shorter one. `tests/test_published_protein_numbers.py`
+  recomputes every analytic figure from the shipped function and pins the
+  measured ones to a single owning table.
+  → [postmortem](POSTMORTEMS.md#a-measured-claim-is-scoped-to-the-configuration-it-was-measured-in)
+- **Never fabricate expected output.** If it has not been run, mark it *not yet
+  verified on hardware*.
+- **Library API drift comes in three classes** — a rejected kwarg (fails at
+  construction), a removed attribute (fails at the save step, after training),
+  a vanished symbol (fails at import, before anything runs). All three are
+  syntactically valid, so `compileall` catches none. `tests/test_config_kwargs.py`
+  covers them and checks its own pinned versions against every lab's `uv.lock`.
+  When bumping a library, expect it to fail and read it as a to-do list.
+  → [postmortem](POSTMORTEMS.md#library-api-drift-comes-in-three-classes-and-only-one-is-obvious)
+- **A lab is its COMMAND, not just its code.** `03_llms/03_ocr` OOMed because
+  the manifest omitted `--use-lora`, not because the hardware claim was wrong.
+  `parse_known_args()` — used by contract, since the launcher injects
+  `--local_rank` — makes a misplaced flag silent. When editing a manifest, **edit
+  by index, not by string match**: two labs both have a `train_ds.py` and their
+  commands were byte-identical.
+  → [postmortem](POSTMORTEMS.md#a-lab-is-its-command-not-just-its-code)
+- **A passing static suite is evidence about the questions it asks, never
+  coverage of the ones it does not.** That OCR bug was green on three checkers at
+  once. → [postmortem](POSTMORTEMS.md#three-green-checkers-one-broken-lab)
+- **Watch a checker fail before trusting it.** A check you have not seen reject
+  bad input is not a check — four here shipped unable to fail. Run a new check
+  against the **unfixed** tree first, and keep the counterexample in the suite
+  permanently. **A substring is not a fact about the program**: ask the AST
+  whether the thing is called, reachable, and in the branch you think it is.
+  → [postmortem](POSTMORTEMS.md#watch-a-checker-fail-before-trusting-it)
 
-### A custom torch index pins its companions too, or nothing works
+### Every postmortem carries an incident record
 
-`01_basics/03_convnet_cifar10` passed every check and still could not run:
+A war story with no commit references cannot be verified and cannot be
+counted. `POSTMORTEMS.md` went thirteen months citing none, which made it an
+anthology rather than a record. **A new postmortem must arrive with its
+record**, and `tests/test_incident_records.py` fails CI if one does not:
 
-    RuntimeError: operator torchvision::nms does not exist
+```markdown
+## The thing that broke
 
-raised from inside `torch/_library/fake_impl.py`, which reads like a torch bug
-and is not one. `[tool.uv.sources]` pinned `torch` to the cu128 index but not
-`torchvision`, and with `explicit = true` only the packages named there come
-from that index — so torch resolved to `2.11.0+cu128` while torchvision came
-from PyPI, built against a different torch. Its compiled `_C.so` never
-registered its ops.
+> **Incident record** · class `silent-wrong` ·
+> introduced [`72bf410`](<repo>/commit/72bf410) ·
+> fixed [`dabdd7b`](<repo>/commit/dabdd7b) ·
+> detector [`tests/test_clawdeck_manifest.py`](<repo>/blob/main/tests/test_clawdeck_manifest.py)
+```
 
-**Any package with a compiled extension linked against torch must appear in
-`[tool.uv.sources]` whenever torch does** — `torchvision`, `torchaudio`. Fixing
-one and not the other is the easy mistake: `05_video_speech/01_longcat_omni`
-had the identical bug with `torchaudio` and was found only by generalising the
-report.
+Seven classes, and the split is the point of keeping them:
 
-`tests/test_torch_index_pins.py` guards it by reading the **lock**, not the
-pyproject — the resolution rather than the declaration — so a lock regenerated
-against a different index fails even while `pyproject.toml` still looks right.
-
-### A slow data source can make a lab unrunnable, and it looks like success
-
-`01_basics/03_convnet_cifar10` fetched CIFAR-10 through
-`torchvision.datasets.CIFAR10(download=True)`, i.e. from `cs.toronto.edu`.
-Measured raw fetch from two unrelated networks — a rented cloud box and a home
-connection:
-
-| source | speed | 170 MB takes |
-|---|---|---|
-| `cs.toronto.edu` | 73–82 kB/s | **~40 minutes** |
-| `huggingface.co` | 30–40 MB/s | **~6 seconds** |
-
-~400×. The lab was **unusable on a cold box**: the download outlived the
-orchestrator's 900 s window, so the job was reported *finished* having never
-reached a single training step — no loss, no accuracy, no verdict, just
-progress bars. A lab that cannot finish is worse than one that fails, because
-it fails silently.
-
-It now loads from the HuggingFace mirror. Three things worth keeping in mind:
-
-- **Capping steps does not cap the download.** `--max-steps 20` already trains
-  on ~1,280 of 50,000 images, but `torchvision` fetches the entire archive
-  before it can read one image. You cannot subset an archive fetch; only
-  changing the *source* helps.
-- **You cannot just point torchvision at a faster URL.** It md5-verifies each
-  extracted pickle, so only the original byte-identical archive passes, and no
-  mirror of that archive exists on the Hub. The dataset has to be loaded
-  differently, not merely fetched from elsewhere.
-- **A mirror is a trust decision, so assert it.** Data that is *nearly*
-  CIFAR-10 — a different split boundary, a subset, permuted label indices —
-  trains fine and quietly produces numbers comparable to nothing.
-  `tests/test_cifar10_source.py` checks 50,000/10,000 rows, exactly 5,000 and
-  1,000 per class, RGB 32×32, and torchvision's canonical **label order**. That
-  last one matters most: the same images under permuted indices score
-  identically and caption every prediction wrong.
-
-`huggingface_hub` takes `.lock` files, so the rank-guard race below can no
-longer happen here — but the guard stays, because concurrency-safe is not free.
-Without it every rank does the same fetch and decode.
-
-### Only rank 0 downloads, and the others must wait on a barrier
-
-`01_basics/03_convnet_cifar10` had a `download_cifar10()` whose docstring read
-*"This prevents multiple processes from downloading simultaneously"* and whose
-body did no such thing. Under the lab's own manifest command,
-`deepspeed --num_gpus=2`, both ranks wrote the same 170 MB tarball into the same
-`./data` and extracted over each other:
-
-    RuntimeError: Dataset not found or corrupted. You can use download=True ...
-
-— a spectacularly misleading message for a file that downloaded fine, twice. The
-tell is **two interleaved progress bars both reaching 170M**.
-
-`torchvision.datasets.*(download=True)` does **no locking.** HuggingFace
-`from_pretrained` / `snapshot_download` / `load_dataset` go through
-`huggingface_hub`, which takes `.lock` files and survives concurrency — so this
-is specific to the torchvision path, not a general claim about downloads.
-
-Three things make it worth a static check:
-
-- **It passes on one GPU.** A single rank cannot race itself, so every 1-GPU
-  smoke test is green.
-- **It is syntactically valid**, so `compileall` cannot see it.
-- **It was masked for months by an accident.** The data used to be re-hydrated
-  onto the box at boot, so `./data` was already populated and neither rank ever
-  downloaded. Cleaning that up surfaced a race that had always been there.
-
-The barrier matters as much as the guard: without it rank 1 skips the download
-and races ahead to read a directory rank 0 is still writing, which fails only
-*sometimes*. `train_modern_cifar10.py` in the same folder had it right all
-along (`download=is_main`, then `barrier()`) and is the pattern to copy.
-
-**Fixing it exposed a second bug, in the fix itself.** The guard worked — rank 1
-waited, the download happened once — and the job then died twelve minutes later
-*in the barrier*, `ALLREDUCE` with `NumelIn=1` running for 721,595 ms. NCCL
-implements `barrier()` as an all-reduce of a one-element tensor, so it must pick
-a device, and torch chooses: (1) `barrier(device_ids=)`, (2) the device bound at
-`init_process_group`, (3) CPU, else (4) **the current device — cuda:0 on every
-rank.** torch's own source warns this "may use default device 0, causing issues
-like hang or all processes creating context on device 0."
-
-`deepspeed.initialize()` normally binds the device for you. **A download guard
-runs before `initialize()` by design, so it is precisely the window where this
-bites.** Call `torch.cuda.set_device(local_rank)` before the collective and pass
-`device_ids=` to the barrier. There is deliberately **no `timeout=`** on that barrier:
-torch 2.13 accepts one, and **torch 2.11 — what every lab here locks — does
-not.** Passing it raises `TypeError` on the rented GPU after both ranks have
-launched. I shipped exactly that bug by reading the signature out of whichever
-torch a `find` returned first; the uv cache held 2.9, 2.10, 2.11, 2.13 and
-2.14, and only the last two have the parameter. **Verify an API against the
-version the lab's `uv.lock` resolves, not against whatever is on the box.**
-`tests/test_config_kwargs.py` now covers `torch.distributed` free functions for
-this reason, and normalises `2.11.0+cu128` to `2.11.0` when comparing.
-
-`train_modern_cifar10.py` — held up above as the reference — had the same latent
-defect, `set_device` sitting *six lines below* its barrier. It had simply never
-been run cold on two GPUs. Copying a sibling is only as safe as the sibling's
-test coverage.
-
-**Derive `local_rank` from the environment, not from argv.** The same folder's
-`train_modern_cifar10.py` took its device from `args.local_rank`, which argparse
-defaults to `-1`. Under the `deepspeed` launcher that works — `launch.py` sets
-`RANK`, `LOCAL_RANK` and `WORLD_SIZE` in each child's environment *and* injects
-`--local_rank` into argv. Under `torchrun`, which sets only the environment
-variable, every rank computes `max(-1, 0) == 0` and binds cuda:0: the same hang,
-one launcher away. Read `LOCAL_RANK` first and fall back to argv.
-
-Two tools exist for the failure, and they answer different questions:
-
-| Tool | Question |
+| class | meaning |
 |---|---|
-| `tests/gpu/probe_device_binding.py` | does each rank bind to its OWN GPU? (10 s, no data, no model) |
-| `tests/gpu/diagnose_nccl.sh` | is multi-GPU NCCL working on this box at all? |
-
-Run the probe first. Correct devices plus a hang means the binding is fine and
-the interconnect is not, which is the other script's territory.
-
-`tests/test_multigpu_download_guard.py` enforces both properties for every lab
-`clawdeck.yaml` declares as `gpu.count > 1`. It is **AST-based, not a grep**,
-and that distinction is the whole point — several scripts here rank-guard their
-*printing* and *checkpoint saving* while downloading unguarded, so a file-wide
-`grep get_rank() == 0` passes them all. It asks instead whether each individual
-download call is lexically inside a rank-gated branch. Its permanent
-counterexamples include the bug exactly as it shipped **and** a file whose rank
-guard sits around the wrong statement.
-
-### A lab is its COMMAND, not just its code
-
-`03_llms/03_ocr` OOMed on the 24 GB it advertised. The obvious readings were
-"declare 48 GB" or "shrink the config". Both were wrong. The manifest ran
+| `silent-wrong` | ran clean, plausible output, incorrect |
+| `silent-noop` | reported success having done nothing |
+| `false-green` | a check passed input it should have rejected |
+| `hang` | no error, no progress |
+| `fails-loud` | crashed — the easy class, and the rare one here |
+| `doc-drift` | a published claim diverged from the code |
+| `cross-cutting` | a lesson spanning incidents, not a defect itself |
 
 ```bash
-uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20
+uv run scripts/incidents.py          # the table, with latency from git
+uv run scripts/incidents.py --csv    # regenerate incidents.csv
 ```
 
-while the script's **own header** had always documented
+`incidents.csv` is **derived and committed**, and the suite fails if it drifts
+from the prose — regenerate it in the same commit that adds a record.
+Latencies are computed from git rather than written down, so they cannot rot.
 
-```bash
-deepspeed --num_gpus=2 train_ds.py --use-4bit --use-lora
-```
+Two things that are easy to get wrong here:
 
-Both flags are `action="store_true"`, so the lab had been doing a
-**full-parameter** fine-tune of Qwen2-VL-2B: 4.4 GB weights + 4.4 GB gradients
-+ ~24 GB Adam state, which ZeRO-2 shards to ~12 GB/rank — ~19 GB before
-activations, on a 23.56 GiB card. Measured, to the gigabyte. The lab's own
-summary says *"cap max_pixels to bound memory"* and the command skipped the
-memory-bounding feature.
+- **One record describes one instance.** The scoped-claim section covers two,
+  and listing all their commits together dated the fix ten days *before* the
+  introduction. Negative latency is now a hard failure rather than a number
+  absorbed into the median.
+- **CI needs `fetch-depth: 0`.** `actions/checkout` defaults to a shallow
+  clone, which makes every SHA unresolvable — and the suite would then pass by
+  finding nothing to check. It detects the shallow case and fails instead.
 
-**`min_vram_gb` was never wrong. The command was.** Adding `--use-lora` made the
-lab cheaper, not more expensive: verified at 20/20 steps, rc=0, zero OOM on the
-same 2 × RTX 3090 that had failed.
+What the corpus currently supports, as measurements rather than impressions:
+**13 of 16 defects did not crash**, and latency ranges from same-day to 367
+days. That asymmetry — the quiet ones survive a year — is the argument for
+every property-based test in `tests/`.
 
-**Then the fix landed on the wrong lab**, and that is the part worth keeping.
-`03_llms/01_llm_finetuning` and `03_llms/03_ocr` both contain a file called
-`train_ds.py`, so their manifest commands were **byte-identical**. A
-`str.replace(old, new, 1)` hit the first match. The tell was in the comment I
-wrote with it — it describes Qwen2-VL-2B, the *OCR* model, while sitting under
-the Llama SFT lab.
+### A lab that claims something is BETTER declares a baseline and a budget
 
-Two rules fall out:
+Scoped to one tier, deliberately. Most labs make no comparative claim and
+demanding this of them would be cargo cult:
 
-- **Edit by index, not by string match, when the string is not unique.** Locate
-  the block by its `- id:` and act on line numbers. Anchoring on text that
-  appears twice is how a correct fix reaches the wrong target.
-- **`parse_known_args()` makes a misplaced flag SILENT.** The labs use it by
-  contract, because the launcher injects `--local_rank`. So an unrecognised flag
-  is ignored rather than rejected: one lab quietly carried a no-op, the other
-  kept OOMing, and nothing raised anywhere.
-
-`tests/test_clawdeck_manifest.py` now resolves every `--flag` in a cmd against
-the `add_argument` names that script actually defines, skipping those the
-`deepspeed` launcher consumes. 804 checks. **It cannot catch the original
-omission** — a missing flag is an absence, and absences are not checkable — but
-it catches every misplacement, which is the failure mode `parse_known_args()`
-guarantees will be quiet.
-
-### Three green checkers, one broken lab
-
-That bug was invisible to every static check on both sides of the integration
-at once:
-
-| checker | what it saw |
-|---|---|
-| Clawdeck's catalog check | a valid, bookable, priced command |
-| `test_clawdeck_manifest.py` | a `.py` file that exists |
-| the runtime | a flag it was contractually obliged to ignore |
-
-Three green signals, one lab that OOMs for a learner. Only *running it* found
-it. A passing static suite is evidence about the questions it asks, never
-coverage of the ones it does not.
-
-### "Rent a bigger box" was the wrong answer three times running
-
-Twice the symptom looked like size and was not, and a larger machine would have
-**masked** each rather than fixed it:
-
-| symptom | looked like | actually was |
+| tier | claims | requirement |
 |---|---|---|
-| `03_ocr` OOM at 24 GB | needs 48 GB | a command missing `--use-lora` |
-| `06_qwen3vl` 2-GPU hang | 8.77 B too big | NCCL peer-to-peer |
+| 1 | nothing comparative (`01_neuralnet` fits y = 2x + 1) | none |
+| 2 | a systems fact (memory, throughput, tokens/page) | budget only |
+| 3 | **X beats Y on a measured axis** | **baseline + budget, enforced** |
 
-The second is the cleaner case. The hang was
-`WorkNCCL(SeqNum=6, OpType=BROADCAST, **NumelIn=1152**)` — a few kilobytes.
-**A collective whose payload is tiny cannot be a memory event.** It is the box
-advertising peer-to-peer it cannot perform, and `NCCL_P2P_DISABLE=1` fixed it
-immediately. Loaded, the model used 10.1 GB of a 47.7 GB card — 21%. Memory was
-never near the constraint.
+Two visible lines near the top of the README, in this exact form —
+`tests/test_tier3_claims.py` fails CI without them, and `TIER3` in that file
+is the registry:
 
-What settled it was reproducing on **two independent boxes**. One hang is a
-bad-host lottery; the same hang on different hardware is a property of the code
-or the provider, and that is a different investigation. `06_qwen3vl` carries
-`--no-p2p` and `--load-only` for exactly this, and `--load-only` answers "will
-this shard on my GPUs" in one step without a training run.
-
-### Guard the output, never the collective
-
-The section above is about making sure only rank 0 does the *work*. This is its
-mirror image, and it cost eleven minutes of silence on two independent boxes
-before anyone could see it.
-
-`03_llms/11_moe/train_moe_ds.py` ended its training loop with:
-
-```python
-if not is_main:
-    return                                   # other ranks leave
-...
-model_engine(xe.unsqueeze(0))                # rank 0 runs the eval forward
+```markdown
+**Baseline:** the untrained scorer, NDCG 0.4862 at every row.
+**Budget:** epochs 1 to 40; the spread is 0.041 at one epoch and 0.001 at forty.
 ```
 
-On the default path that is harmless, because `MoELayer.forward` contains no
-collectives. Under `--expert-parallel` the identical call is an **all-to-all
-requiring every rank**, and the others had already gone. Training completed,
-then the surviving rank sat in the collective until NCCL's watchdog aborted
-it: a `SIGABRT` and a non-zero exit, with **no Python traceback anywhere.**
+Tier 3 is where this repo has been confidently wrong twice — `11_moe`'s
+load-balancing finding reversed at world size 2, and the ranking spread
+collapses by a factor of 40 with training budget. Both were scoping errors,
+not measurement errors.
 
-Two things make it worth its own entry:
+**A keyword search is the wrong check here.** The first version grepped for
+the word "baseline" and flagged `05_video_speech/04_omni_eval`, which has
+had a proper two-sided control all along (model B ignores the video; the
+harness must flag it *and* must not flag model A) and simply never used the
+word. Hence the explicit marker. A substring is not a fact about the
+document.
 
-- **It is invisible on the path you test.** Single-GPU runs pass. The
-  non-EP multi-GPU runs pass, on the same box, in 60 s. Only the communicating
-  layer fails, and only above one rank.
-- **The job SUCCEEDS first.** A learner watches 500 steps of falling loss, then
-  eleven minutes of nothing, then "failed". That reads as *"I broke it"* about
-  a run that worked, which is worse than a fast crash.
+**State a falsifier too — not enforced, costs one line.** Any check for it
+would be a check for a phrase. It is convention because it works:
+`03_llms/12_prefill_decode` wrote one before measuring, printed
+`HOLDS`/`FAILS` against it, and got `FAILS` on its first dry run. Not a bug
+— at a 512-token prompt there are only two chunks and chunking genuinely
+loses. A whole regime documented because the claim was written in a form
+that could lose.
 
-The rule generalises past MoE: **a rank guard may wrap printing, logging and
-saving; it must never wrap a collective.** Run the collective on every rank and
-guard only what it prints. And tear down deliberately — `barrier()` then
-`destroy_process_group()` on every rank — or a fast rank exits while a slow one
-is still inside a collective, which is the same bug moved to shutdown.
-
-Related, found while building a two-rank harness for this: **an unused expert
-produces no gradient, so `if p.grad is not None` makes ranks disagree on how
-many all-reduces to issue** and gloo dies with "Connection reset by peer".
-Sync every parameter unconditionally, materialising zeros.
-
-### A measured claim is scoped to the configuration it was measured in
-
-`11_moe` published, from six seeds and two expert counts, that load balancing
-makes the model strictly *worse* — a tax paid for schedulability rather than a
-quality improvement. A 2-GPU run then reported the exact reverse, with the
-unbalanced arm 33x worse and its loss **rising** through training.
-
-Neither number was wrong. The claim was: it had been measured only
-single-process, and said "every configuration".
-
-What was done about it is the point. Before touching the thesis:
-
-- the world-size-1 result was re-checked across **six seeds** — no overlap
-  between groups, so not seed luck;
-- the same script was run at world size 1 to rule out "two different
-  experiments" — the ordering held, so the reversal really is a world-size
-  effect;
-- an attempt to reproduce it on **two gloo ranks on CPU**, with gradients
-  all-reduced exactly as data parallelism does, did **not** reverse it.
-
-So the claim was **scoped** to world size 1 and the disagreement written into
-`moe.py`, the folder README and the docs page as explicitly unresolved — in
-neither direction. Rewriting the thesis around one unreplicated run would have
-been as wrong as leaving the over-broad claim standing, and quietly dropping
-the inconvenient measurement would have been worse than both.
-
-**"Measured at X" is a different claim from "true in general", and the docs
-should say which one they are making.**
-
-### A verification harness that does not install the artifact verifies nothing
-
-`runpod/runpod_ctl.py run` is the tool that proves an example works on real
-hardware. For most of its life it did:
-
-```bash
-uv pip install --system deepspeed        # and nothing else
-deepspeed --num_gpus=N train_x.py        # the SYSTEM interpreter
-```
-
-It never ran `uv sync`. So it exercised whatever the **container image**
-happened to ship, not the example's committed lock — and the six-file contract
-is built entirely around that lock. The harness was verifying the image.
-
-What that hid: **eight labs could not start from a fresh clone.** Every lab
-calling `AutoProcessor.from_pretrained` was missing `pillow`, `torchvision` or
-both, because a transformers image/video processor imports them and nothing
-declared it:
-
-    ValueError: Could not load any image processor class for ...
-    ImportError: Qwen2VLVideoProcessor requires the Torchvision library
-
-Neither message names the missing package. All eight were advertised in
-`clawdeck.yaml`. CI's `compileall` cannot see it — an import that only runs
-inside `main()` is never executed — and the labs "worked" every time anyone
-tested them, on a box that already had the packages.
-
-Three things to carry:
-
-- **Run the command the README documents, not a convenient approximation.**
-  The bootstrap now does `cd <example> && uv sync && uv run deepspeed ...`
-  because that is the contract; anything else tests a different system.
-- **`uv sync` from the committed lock is the only honest check.** A fresh
-  `uv sync` into a temp dir takes two minutes and is how both failure modes
-  above were *reproduced* rather than inferred.
-- **`tests/test_torch_index_pins.py` now enforces it statically**: a lab whose
-  code builds a processor must lock both packages. It reads the lock, not the
-  pyproject — the resolution rather than the declaration.
-
-### Library API drift comes in three classes, and only one is obvious
-
-`tests/test_config_kwargs.py` covers all three. Each is syntactically valid, so
-`compileall` catches none of them:
-
-| class | example | when it fails |
-|---|---|---|
-| a rejected **kwarg** | `logging_dir=` | when the config object is constructed |
-| a removed **attribute** | `trainer.tokenizer` | at the *save step*, after training |
-| a vanished **symbol** | `AutoModelForVision2Seq` | at **import**, before anything runs |
-
-The third arrived last and is the cheapest to hit: `03_llms/03_ocr` imported a
-name transformers 5.x had renamed — **and never used it.** A dead import took
-the whole lab down, while `run_modern_ocr.py` in the same folder had already
-migrated. Sweeping for the class found a second live site: `05_dpo`'s
-`--method orpo`, because trl 1.x moved ORPO (and CPO) to `trl.experimental`.
-
-**The subtle part is deciding which imports are allowed to fail.** The first
-version of that check skipped anything inside `try/except ImportError` — and
-therefore missed the very bug it was written for, because `03_ocr` wraps its
-whole import block in one that prints "Missing required package" and exits 1.
-**A try/except with no alternative import is not a fallback; it is a crash with
-better formatting.** The rule now requires a *genuine* alternative — the same
-symbol imported from a different module elsewhere in the file.
-
-`logging_dir=` is syntactically valid, so `compileall` cannot catch it — it
-fails only when `TrainingArguments` is constructed. A learner discovered exactly
-that on rented GPUs after both ranks had launched and the model had loaded.
-
-`tests/test_config_kwargs.py` parses every call to a known config constructor
-(`TrainingArguments`, `SFTConfig`, `DPOConfig`, `GRPOConfig`, `LoraConfig`, …)
-and checks each keyword against the **installed** class's signature. No GPU, no
-download — the constructors import fine on CPU, which is what makes this
-catchable at all.
-
-Run against the tree when written it found **20** rejected kwargs in 13 files,
-of which only one had been reported: `logging_dir`, `warmup_ratio`,
-`overwrite_output_dir`, `save_safetensors` and `max_prompt_length` were all
-removed by transformers 5.x / trl 1.x. **Four sat in commands Clawdeck offers
-by name**, so three more labs would have failed the same way.
-
-Two properties keep it honest, and both matter:
-
-- **A constructor whose signature takes `**kwargs` is skipped**, loudly. It
-  accepts anything, so a pass would be false confidence.
-- **The pinned versions in its PEP 723 header are checked against every lab's
-  `uv.lock`.** Otherwise the suite validates a version no learner runs — passing
-  while the labs are broken, which is precisely the failure it exists to
-  prevent.
-
-When bumping a library, expect this to fail and read it as a to-do list: it
-names the file, the line and the exact kwarg.
+**For latency or throughput, report repeats and the spread.** One timed call
+is a sample, not a measurement. In `12_prefill_decode` the baseline decode
+step varies ±14% while the blocked step varies ±1.5%, so the ratio between
+them wanders 4×–8× while the absolutes barely move — quote the absolutes.
+The same discipline caught a two-point fit returning a **negative** cost per
+cached token, which a single sample would have published as a confident
+constant.
 
 ## The Clawdeck lab manifest
 
@@ -1038,13 +1074,22 @@ Register the printed line, then `./tests/run_all.sh` is green before any of your
 own code exists. Skip the registration and exactly one check fails — that is the
 suite enforcing its own checklist, not a broken scaffold.
 
-`scripts/` holds three tools, and they answer different questions:
+`scripts/` holds five tools. Three answer questions about an example; two
+generate figures for the book:
 
 | Tool | Question | Gate? |
 |---|---|---|
 | `new_example.py` | "give me a skeleton that already satisfies the contract" | — |
 | `check_contract.py` | "does this example work for all three readers?" | advisory |
 | `audit_readmes.py` | "has this README drifted from the code?" | advisory, over-reports |
+| `make_protein_animations.py` | six figures for `06_protein_folding` (PNG + GIF) | — |
+| `make_casp14_figure.py` | the CASP14 panel, from the public archive + RCSB | — |
+
+The two figure scripts carry **PEP 723 inline metadata and no `pyproject.toml`**,
+deliberately. A `pyproject.toml` would oblige an entry in `clawdeck.yaml` (CI
+enforces it), and these are authoring tools rather than labs — a learner should
+never be offered "run the figure generator" as an exercise. `uv run
+scripts/<name>.py` still provisions them.
 
 ## Conventions to preserve
 
@@ -1074,27 +1119,13 @@ suite enforcing its own checklist, not a broken scaffold.
   if a pipeline can be misconfigured into doing nothing, **assert that it did
   something** — the multimodal collators check that pixels and audio features
   actually arrived.
-- **Watch a checker fail before trusting it.** A check you have not seen reject
-  bad input is not a check. This is not hypothetical caution — three checkers
-  written in this repo shipped a bug that made them *unable to fail*:
 
-  | Checker | The bug |
-  |---|---|
-  | `gpu_guards()` in `test_clawdeck_manifest.py` | `walk()` took a node and recursed into its **children**, so a guard that was itself a statement of a block was never tested. The whole check silently passed everything. |
-  | `beats_chance()` in `test_synthetic_data_is_learnable.py` | passed `seed=` unconditionally and died with `TypeError` against the very generator it was written to catch — CI went red naming a signature mismatch, not the finding |
-  | the first `--num_gpus`/`gpu.count` check | over-flagged six entries that demonstrably run on CPU, because it keyed on the *presence* of a guard rather than its **reachability** |
-  | `check_contract.py`'s reader-A classifier | tested `"require_gpu" in src`, so a file whose **comment explained why it deliberately has no guard** was classified as guarded and then failed every follow-up check for a function it does not contain. Now an AST check for a real `Call`. |
+### Not every entry point is a training script
 
-  The pattern in the last two is the same: **a substring is not a fact about
-  the program.** Ask the AST whether the thing is called, reachable, and in the
-  branch you think it is.
-
-### Not every entry point is a training script, and the name should say so
-
-`03_llms/01_llm_finetuning/analyze_kimi_k3.py` is named `analyze_`, not
-`train_`, because it does not train — Kimi K3 is 2.78 T parameters / 1,561 GB
-and its remote code does not import on the pinned transformers, so there is no
-run to have. Two things follow that generalise:
+...and the name should say so. `03_llms/01_llm_finetuning/analyze_kimi_k3.py` is
+named `analyze_`, not `train_`, because it does not train — Kimi K3 is 2.78 T
+parameters / 1,561 GB and its remote code does not import on the pinned
+transformers, so there is no run to have. Two things follow that generalise:
 
 - **It carries no `require_gpu()`, deliberately, and says so in a comment.**
   `--plan` reads a JSON file over HTTPS; `--verify-arch` builds on the meta
@@ -1102,22 +1133,9 @@ run to have. Two things follow that generalise:
   objection applies as to a distributed launcher with nothing to distribute.
 - **A script with no end-to-end run makes its DERIVATIONS the only testable
   surface.** `tests/test_kimi_k3_plan.py` runs the shipped functions against a
-  fixture config. It caught three defects on its first run, none of which a
-  shape assertion could see: `min()` of the layer gaps reported *"every 1th
-  layer"* (the mode is 4; K3 has 23 gaps of 4 and one of 1, because 93 layers
-  do not divide evenly), `linear // full` truncated a 3:1 design to 2:1, and
-  `(n - full) > 0` called **every dense model hybrid**. All three were
-  populated fields of the right type holding plausible small integers.
-
-  So: run a new check against the **unfixed** tree first, and keep a
-  counterexample in the suite permanently. `test_config_kwargs.py` found 20
-  broken call sites that way when only 3 had been reported;
-  `test_synthetic_data_is_learnable.py` carries the old random-label generator
-  and asserts it fails.
-
-- **Never fabricate expected output.** If it has not been run, mark it *not yet
-  verified on hardware*. A wrong published number costs a reader a day debugging
-  their own correct setup.
+  fixture config and caught three defects on its first run — all populated fields
+  of the right type holding plausible small integers.
+  → [postmortem](POSTMORTEMS.md#a-script-with-no-end-to-end-run-makes-its-derivations-the-only-testable-surface)
 
 ## Documentation site
 
@@ -1156,7 +1174,7 @@ There are **two** CI workflows:
   **Never put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It overrides
   the global config and drifts silently. `tests/test_docs_style.py` enforces the
   palette, the absence of inline overrides, label quoting, and that the config
-  still sets what CONTRIBUTING.md publishes — all 41 diagram pages conform.
+  still sets what CONTRIBUTING.md publishes — all 67 diagram pages conform.
 
 - **The site's own background is `#000000`**, not the dark blue of the Mermaid
   palette above — `custom.css` sets `--ifm-background-color: #000000` and dark

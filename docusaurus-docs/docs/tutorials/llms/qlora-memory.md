@@ -1,10 +1,10 @@
 ---
-sidebar_position: 18
+sidebar_position: 19
 ---
 
 # QLoRA vs LoRA: Measuring the Frozen Base
 
-The companion lab in `03_llms/12_qlora/` trains the same Qwen3-4B adapters
+The companion lab in `03_llms/13_qlora/` trains the same Qwen3-4B adapters
 twice: once with bf16 base weights, once with NF4 four-bit base weights.
 It asks an infrastructure question: how much **allocated GPU memory per
 rank** does each path use? The example does not test model quality.
@@ -38,13 +38,13 @@ before each load. Packed NF4 parameters use their original quantization
 shape for logical counts; stored bytes also include quantization state.
 The run rejects identical representations or adapters and rejects an NF4
 memory peak that is not smaller on a rank. For the SLURM and RunPod commands,
-see the lab [README](https://github.com/yiqiao-yin/deepspeed-course/tree/main/03_llms/12_qlora).
+see the lab [README](https://github.com/yiqiao-yin/deepspeed-course/tree/main/03_llms/13_qlora).
 
 Without a GPU, `--plan` shows only the ideal weight arithmetic. The offline
 test checks the comparison invariants:
 
 ```bash
-uv run --no-project python 03_llms/12_qlora/train_qlora.py --plan
+uv run --no-project python 03_llms/13_qlora/train_qlora.py --plan
 uv run tests/test_qlora.py
 ```
 

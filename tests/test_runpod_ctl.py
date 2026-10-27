@@ -94,7 +94,7 @@ def main() -> int:
     r.check(ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                           "feature-x").count("-b feature-x") == 1,
             "bootstrap honours --branch")
-    fork_boot = ctl.bootstrap("03_llms/12_qlora", ctl.EXAMPLES["03_llms/12_qlora"],
+    fork_boot = ctl.bootstrap("03_llms/13_qlora", ctl.EXAMPLES["03_llms/13_qlora"],
                               "feature/qlora-vs-lora",
                               repo_url="https://github.com/contributor/deepspeed-course")
     r.check("https://github.com/contributor/deepspeed-course" in fork_boot
@@ -102,7 +102,7 @@ def main() -> int:
             and "-b feature/qlora-vs-lora" in fork_boot,
             "a contributor fork and branch reach both clone and tarball fallback")
     try:
-        ctl.bootstrap("03_llms/12_qlora", ctl.EXAMPLES["03_llms/12_qlora"],
+        ctl.bootstrap("03_llms/13_qlora", ctl.EXAMPLES["03_llms/13_qlora"],
                       "main", repo_url="https://example.org/repo; echo unsafe")
     except ValueError:
         r.check(True, "unsafe repository override is rejected")

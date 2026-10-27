@@ -219,9 +219,9 @@ DS_CONFIG = '''{
       "weight_decay": 0.01
     }
   },
+  "_zero_comment": "Stage 2 shards optimizer states and gradients (16-psi -> 2-psi + 14-psi/N) at the SAME 2-psi communication volume as plain data parallelism. It is free. Stage 3 also shards parameters but costs 1.5x the communication; reach for it only when stage 2 still will not fit. NOTE: this comment lives at the TOP LEVEL, not inside zero_optimization -- DeepSpeed's pydantic model forbids extra fields in that block, and tests/test_ds_configs.py fails a scaffold that puts it there.",
   "zero_optimization": {
     "stage": 2,
-    "_stage_comment": "Stage 2 shards optimizer states and gradients (16-psi -> 2-psi + 14-psi/N) at the SAME 2-psi communication volume as plain data parallelism. It is free. Stage 3 also shards parameters but costs 1.5x the communication; reach for it only when stage 2 still will not fit.",
     "allgather_partitions": true,
     "allgather_bucket_size": 200000000.0,
     "overlap_comm": true,

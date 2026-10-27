@@ -1,0 +1,51 @@
+[project]
+name = "land-on-target"
+version = "0.1.0"
+description = "Topic 8 Lab 3 — land where you are told, on ground you did not choose."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "mujoco>=3.2",
+    "pillow>=10.0",
+    # The rig audit solves a linear program for pure-couple authority.
+    # Topic 7 published a hand-calculated authority figure that was
+    # 11% wrong because it ignored the nozzle cant; an exact solver
+    # costs one dependency and removes the whole class of error.
+    "scipy>=1.11",
+    # PPO. ~15k parameters and the bottleneck is MuJoCo on the CPU,
+    # so there is nothing for ZeRO to shard -- same reasoning, and
+    # the same measured outcome, as every lab in topic 7.
+    # Pinned to match every other lab: a suite run against a torch
+    # the learner does not have validates a world nobody is in.
+    "torch==2.11.0",
+]
+
+[project.optional-dependencies]
+# THE FIRST DEEPSPEED DEPENDENCY IN TOPIC 8, and optional on purpose.
+#
+# Labs 1 to 5 train a ~14k-parameter policy and say five times that
+# there is nothing for ZeRO to shard. That is true of the policy.
+# The largest dynamics model here is 705M parameters -- 11.3 GB of
+# weights and Adam state before any activation -- so the question is
+# live for the first time, and `--deepspeed` lets it be measured
+# rather than asserted. The small rungs do not need it and the lab
+# runs end to end without it installed.
+deepspeed = ["deepspeed>=0.14"]
+
+# Build-time only. `gen_tables.py` uses CoolProp's reference equation
+# of state to write n2_tables.npz, which IS committed -- a learner
+# runs the lab from the lock without this.
+tables = ["CoolProp>=6.6"]
+
+[tool.uv]
+package = false
+
+# A custom torch index pins its companions too. With `explicit = true`
+# only the packages named here come from it.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

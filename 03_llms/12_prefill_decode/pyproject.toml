@@ -1,0 +1,24 @@
+[project]
+name = "prefill-decode"
+version = "0.1.0"
+description = "Prefill/decode scheduling: shared, chunked, disaggregated"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.9",
+    "transformers==5.16.1",  # pinned to match every other lab; test_config_kwargs enforces it
+    "accelerate>=1.0",
+]
+
+[project.optional-dependencies]
+tracking = ["wandb>=0.18"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

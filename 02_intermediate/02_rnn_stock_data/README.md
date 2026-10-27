@@ -68,6 +68,25 @@ download required:
 
 See [`tests/README.md`](../../tests/README.md) for what each suite covers.
 
+## See also: does a good forecast make money?
+
+This lab is scored by **Theil's U** against a persistence baseline and by
+**directional accuracy** against a coin flip — the right discipline for a
+forecast, and the reason this folder reports those numbers rather than a bare
+RMSE.
+
+It stops one step short of the question a reader usually has next.
+[`05_rl_trading`](../05_rl_trading) takes the same kind of data and asks what
+a forecast is worth once you have to **act** on it: a supervised model with
+**51.1% directional accuracy** — genuinely better than chance — loses **2.2% a
+year** after 5 bps of trading cost. The same network trained on money instead
+of squared error cuts the worst drawdown from 36.9% to 20.6%.
+
+**One predicts, the other decides**, the way
+[`03_learning_to_rank`](../03_learning_to_rank) and
+[`04_groupwise_ranking`](../04_groupwise_ranking) vary opposite halves of one
+system.
+
 ## Overview
 
 This project trains a SimpleRNN model to predict stock price deltas (price - moving average) using historical stock data from Yahoo Finance. The model learns temporal patterns in the relationship between current prices and their moving averages across multiple time periods.

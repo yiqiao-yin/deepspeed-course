@@ -66,6 +66,43 @@ def pages():
     return sorted(DOCS.rglob("*.md"))
 
 
+def test_wide_content_cannot_widen_the_page(r: Results) -> None:
+    """
+    Display math must scroll inside its own box, not stretch the document.
+
+    Found on an iPhone: ONE over-wide equation on the Evoformer page made the
+    whole document wider than the viewport, so Safari zoomed the entire page
+    out and the body text rendered at about 60% width. The equation itself
+    was clipped mid-symbol.
+
+    It is not a one-page problem. A sweep found 61 of 248 display blocks in
+    this book wide enough to do the same -- including the GRPO objective and
+    the ZeRO memory decompositions, which are long because the mathematics is
+    long. Shortening equations is therefore the wrong fix; containing the
+    overflow once in CSS is the right one, and this check stops that rule
+    being dropped by someone tidying the stylesheet.
+
+    Tables are deliberately NOT checked here: Infima already ships
+    `table { display: block; overflow: auto; }`, verified against the built
+    bundle, so a rule of our own would be redundant and would risk changing
+    table layout across the book to fix a problem that does not exist.
+    """
+    css = (REPO_ROOT / "docusaurus-docs" / "src" / "css" / "custom.css").read_text()
+
+    block = re.search(r"\.katex-display\s*\{([^}]*)\}", css)
+    r.check(block is not None,
+            "custom.css contains a .katex-display rule",
+            "without it, one long equation widens the whole page on mobile")
+    if block:
+        body = block.group(1)
+        r.check("overflow-x" in body and "auto" in body,
+                "display math is given overflow-x: auto",
+                "so a wide equation scrolls in its own box instead of "
+                "stretching the document")
+        r.check("max-width" in body,
+                "display math is capped at the container width")
+
+
 def test_global_theme(r: Results) -> None:
     """The config must still configure what CONTRIBUTING.md documents."""
     cfg = CONFIG.read_text()
@@ -444,9 +481,16 @@ def test_readme_folder_tree(r: Results) -> None:
     tree = readme[fence:readme.index("```", fence + 3)]
 
     # 1. every path the tree shows must exist
+    # Glob every numbered section, not a hardcoded range. This read
+    # `0[1-5]_*` until 06_protein_folding landed, at which point the tree was
+    # correct and the CHECKER reported all four new folders as ghosts. Worse,
+    # it had been silently under-checking in the other direction too: the
+    # protein examples were absent from `topics`, so check 2 would not have
+    # noticed the whole section missing from the tree.
     shown = {m for m in re.findall(r"([0-9]{2}_[a-z_0-9]+)/", tree)}
-    sections = {p.name for p in REPO_ROOT.glob("0[1-5]_*") if p.is_dir()}
-    topics = {t.name for sec in REPO_ROOT.glob("0[1-5]_*") if sec.is_dir()
+    numbered = sorted(p for p in REPO_ROOT.glob("[0-9][0-9]_*") if p.is_dir())
+    sections = {p.name for p in numbered}
+    topics = {t.name for sec in numbered
               for t in sec.iterdir() if t.is_dir() and t.name[:2].isdigit()}
     ghosts = sorted(shown - sections - topics)
     r.check(not ghosts,
@@ -467,6 +511,7 @@ def test_readme_folder_tree(r: Results) -> None:
 
 def main() -> int:
     r = Results("Docs site style — mermaid house theme and page structure")
+    test_wide_content_cannot_widen_the_page(r)
     test_global_theme(r)
     test_diagrams_use_the_palette(r)
     test_no_inline_theme_overrides(r)

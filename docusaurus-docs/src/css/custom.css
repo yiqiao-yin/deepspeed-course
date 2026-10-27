@@ -257,3 +257,36 @@ div[class^='codeBlockContainer'] {
   fill: #08182a !important;
   stroke: #2d5a86 !important;
 }
+
+/* ---------------------------------------------------------------------------
+ * KaTeX display math must scroll inside its own box, never widen the page.
+ *
+ * Found on an iPhone: ONE over-wide equation on the Evoformer page made the
+ * whole document wider than the viewport, so Safari zoomed the entire page
+ * out to fit and the body text rendered at about 60% width with dead space
+ * beside it. The equation itself was clipped mid-symbol.
+ *
+ * It is not a one-page problem. A sweep of the book found 61 of 248 display
+ * blocks wide enough to do this, including the GRPO objective and the ZeRO
+ * memory decompositions -- equations that are long because the mathematics is
+ * long and cannot be shortened. So the fix belongs in CSS, not in the
+ * content: contain the overflow once, here, and every page is safe including
+ * ones not written yet.
+ *
+ * overflow-y is hidden because a horizontal scrollbar on an inline-ish
+ * element otherwise provokes a spurious vertical one; the padding keeps the
+ * scrollbar clear of descenders.
+ * ------------------------------------------------------------------------- */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.3rem;
+  max-width: 100%;
+}
+
+/* No table rule here on purpose. Infima already ships
+ * `table { display: block; overflow: auto; }`, so adding our own would be
+ * redundant at best and would risk changing table layout on every page of
+ * the book to fix a problem that does not exist. Verified against the built
+ * CSS bundle rather than assumed.
+ */

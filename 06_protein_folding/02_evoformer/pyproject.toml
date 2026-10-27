@@ -1,0 +1,59 @@
+# =============================================================================
+# 06_protein_folding/02_evoformer as a self-contained uv project.
+#
+#     cd 06_protein_folding/02_evoformer
+#     uv sync                    # creates .venv, installs the LOCKED versions
+#     uv run deepspeed --num_gpus=1 train_evoformer_ds.py
+#
+# The committed uv.lock is required (CONTRIBUTING.md section 4): it is what
+# makes every reader install the same versions. Without it `uv pip install`
+# resolves to whatever is newest that day, which is how a tutorial that worked
+# in March breaks in September with nobody having touched it.
+#
+# After adding your real dependencies below, run `uv lock` and COMMIT the lock.
+# torch is pinned to an explicit CUDA index (cu128) below. PyPI's DEFAULT torch
+# is a CUDA 13 wheel, which installs fine on a pre-CUDA-13 driver (550/570) and
+# then reports cuda.is_available() == False -- silently, while nvidia-smi shows
+# the card. cu128 works on old and new drivers alike.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-06-protein-folding-02-evoformer"
+version = "0.1.0"
+description = "Evoformer (AlphaFold2 trunk)"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.2",
+    # DS4Sci_EvoformerAttention landed in 0.10.3; 0.19 is what the rest of the
+    # course locks and what this lab was verified against.
+    "deepspeed>=0.19",
+    "numpy>=1.26",
+    # --data nanofold only. Parquet is read directly rather than through
+    # `datasets`, because load_dataset(streaming=True) produced no rows in 15
+    # minutes on this dataset while a direct shard fetch took 1.9 s. See the
+    # header of nanofold_data.py.
+    "pyarrow>=15",
+    "huggingface-hub>=0.23",
+]
+
+[project.optional-dependencies]
+# W&B stays OPTIONAL: the training script wraps `import wandb` in try/except
+# and only tracks when WANDB_API_KEY is set. Making it required contradicts
+# the code and tests/test_runpod_ctl.py will fail you for it.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Runnable example, not a distributable library. Without this uv tries to BUILD
+# the folder as a package and `uv sync` fails.
+package = false
+
+# Pin the CUDA build rather than inheriting PyPI's default -- see the header.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

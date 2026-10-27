@@ -134,6 +134,24 @@ labs:
       - { label: "Objectives + metrics (CPU)", cmd: "uv run ranking_losses.py" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_learning_to_rank.py --method all --max-steps 20" }
 
+  - id: 02_intermediate/05_rl_trading
+    title: "RL for trading: reward or loss?"
+    summary: "A 51% accurate forecast loses money. The same net on P&L halves the drawdown."
+    est_minutes: 12
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # Everything here is CPU-only and needs no network: the price
+      # panel is committed. No --width is passed, so the default 64
+      # is used and train_rl.py's GPU guard (which fires above 512)
+      # is unreachable -- honest, and provably so.
+      - { label: "The frozen panel and its drawdowns", cmd: "uv run data.py" }
+      - { label: "What survivorship bias is worth", cmd: "uv run data.py --bias" }
+      - { label: "Prove no feature reads forward", cmd: "uv run data.py --leakage" }
+      - { label: "The cost model, and where an edge dies", cmd: "uv run market.py --cost-curve" }
+      - { label: "Everything the learned arms must beat", cmd: "uv run baselines.py" }
+      - { label: "Train GRPO on P&L after costs", cmd: "uv run train_rl.py --method grpo --iters 120", primary: true }
+      - { label: "What ZeRO can and cannot shard here", cmd: "uv run capacity.py" }
+
   - id: 02_intermediate/04_groupwise_ranking
     title: "Groupwise ranking"
     summary: "GSF and SetRank — scoring documents in context, not alone."
@@ -265,13 +283,311 @@ labs:
       - { label: "Expert parallelism (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --expert-parallel --deepspeed_config ds_config_ep.json" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --max-steps 20" }
 
-  - id: 03_llms/12_qlora
+  - id: 03_llms/13_qlora
     title: "QLoRA vs LoRA"
     summary: "Compare NF4 and bf16 base-model memory on the same ZeRO-2 training task."
     est_minutes: 45
     gpu: { min_vram_gb: 24, count: 1 }
     run:
       - { label: "Compare (20 steps each)", cmd: "uv run deepspeed --num_gpus=1 train_qlora.py --max-steps 20", primary: true }
+  # ---------------------------------------------------------------------------
+  # 07_physical_ai — learning to act in a simulated world
+  # ---------------------------------------------------------------------------
+  - id: 07_physical_ai/10_perception_pays
+    title: "Does perception pay? (No)"
+    summary: "Perfect terrain knowledge ties no knowledge. Realistic perception is worse than none."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: the decidability check is the one worth
+      # failing on -- a sweep over undecidable tasks measures nothing.
+      - { label: "Is the task decidable? (CPU)", cmd: "uv run perception_sweep.py --check" }
+      - { label: "The sweep, 8 seeds (CPU, ~12 min)", cmd: "uv run perception_sweep.py --seeds 8", primary: true }
+      - { label: "Just the oracle arm (CPU)", cmd: "uv run perception_sweep.py --arm oracle --seeds 8" }
+      - { label: "Film the three beliefs", cmd: "uv run render_beliefs.py", needs_gpu: true }
+
+  - id: 07_physical_ai/09_body_search
+    title: "Body Search: proportion wins"
+    summary: "Search body shapes instead of guessing five. A short wide biped beats every multi-legged robot."
+    est_minutes: 15
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: the generator's promise, then the plan.
+      - { label: "Is a body really parameters? (CPU)", cmd: "uv run ../../tests/test_bodyspec.py" }
+      - { label: "What would the search run? (CPU)", cmd: "uv run search_bodies.py --stage count --plan" }
+      - { label: "Why implicitfast (CPU, ~2 min)", cmd: "uv run speed_physics.py" }
+      - { label: "Rank the trained bodies (CPU)", cmd: "uv run rank_bodies.py --episodes 24", primary: true }
+      - { label: "Film the ranked grid", cmd: "uv run render_search.py", needs_gpu: true }
+      - { label: "Film the body zoo", cmd: "uv run render_zoo.py", needs_gpu: true }
+
+  - id: 07_physical_ai/08_long_traverse
+    title: "Long Traverse: the body is it"
+    summary: "Five bodies, one task, one budget. Four legs walk 3.5x further than two; six never fall."
+    est_minutes: 12
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # CPU-only and correct: planner properties, then the comparison.
+      - { label: "Planner and routers (CPU)", cmd: "uv run traverse.py --check" }
+      - { label: "Do the bodies differ? (CPU)", cmd: "uv run ../../tests/test_morphology.py" }
+      - { label: "Compare five bodies (CPU, ~8 min)", cmd: "uv run compare_bodies.py", primary: true }
+      - { label: "Film all five side by side", cmd: "uv run render_morphology.py", needs_gpu: true }
+
+  - id: 07_physical_ai/07_terrain_vlm
+    title: "Terrain VLM: seeing vs touching"
+    summary: "Lab 5's robot told cliffs from hills 3:1 by touch. Can a vision model beat that?"
+    est_minutes: 25
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # CPU-only and correct: the labels, the capacity argument, and the
+      # scorer all run without a GPU or a download.
+      - { label: "Are the labels sound? (CPU)", cmd: "uv run make_dataset.py --check" }
+      - { label: "Does ZeRO-3 earn its place? (CPU)", cmd: "uv run verify_arch.py" }
+      - { label: "Build the dataset (CPU, ~8 min)", cmd: "uv run make_dataset.py --seeds 400" }
+      - { label: "The BLIND control first", cmd: "uv run python train_vlm.py --lora --blind --name blind", needs_gpu: true }
+      - { label: "Train the sighted arm (~20 min)", cmd: "uv run python train_vlm.py --lora --name lora3b", primary: true, needs_gpu: true }
+      - { label: "Zero-shot baseline", cmd: "uv run evaluate.py --zero-shot", needs_gpu: true }
+      - { label: "Score it against the controls", cmd: "uv run evaluate.py --run lora3b", needs_gpu: true }
+
+  - id: 07_physical_ai/06_mars_mjx
+    title: "Mars on GPU physics: does it pay?"
+    summary: "MuJoCo on CPU vs MJX and Warp on the card, same model. GPU loses, and the ablation says why."
+    est_minutes: 12
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: this checks the ablation knobs really move
+      # the model, which is what the whole finding rests on.
+      - { label: "Are the knobs real? (CPU)", cmd: "uv run ../../tests/test_mars_mjx.py" }
+      # Everything below genuinely needs the card -- the GPU backends ARE
+      # the subject, so these carry needs_gpu rather than pretending.
+      - { label: "Feasibility gate: will MJX take our terrain?", cmd: "uv run probe_mjx.py", needs_gpu: true }
+      - { label: "Benchmark all three backends (~6 min)", cmd: "uv run bench_backends.py", primary: true, needs_gpu: true }
+      - { label: "Just the ablation: why is it slow?", cmd: "uv run bench_backends.py --ablate-only", needs_gpu: true }
+      - { label: "Film 16 rollouts at once", cmd: "uv run render_swarm.py --run m2_blind_s0 --tiles 16", needs_gpu: true }
+
+  - id: 07_physical_ai/05_mars_terrain
+    title: "Mars Terrain: the ground first"
+    summary: "Part 1 of lab 5. A generated Martian surface, measured rather than admired. No robot yet."
+    est_minutes: 8
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # All CPU: the generator is numpy and the checks never open a GL context.
+      - { label: "Measure the surface (CPU)", cmd: "uv run mars.py --check 20", primary: true }
+      - { label: "One map, in text (CPU)", cmd: "uv run mars.py --scale rover --ascii" }
+      - { label: "The planetary view (CPU)", cmd: "uv run mars.py --scale regional" }
+      # Rendering needs an OpenGL context, which a CPU-only box may not have.
+      - { label: "Animate it", cmd: "uv run render_mars.py --all", needs_gpu: true }
+
+  - id: 07_physical_ai/04_terrain_navigation
+    title: "Terrain Navigation: climb or go around"
+    summary: "A 20x20 m arena, ridges of two kinds, and a robot that must tell them apart."
+    est_minutes: 18
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is a height field, the policy is 12k params.
+      - { label: "The arena and its oracle (CPU)", cmd: "uv run world.py --check 200" }
+      - { label: "The robot (CPU)", cmd: "uv run robot.py" }
+      - { label: "Random baseline (CPU)", cmd: "uv run nav_env.py" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_nav.py --dry-run" }
+      - { label: "Locomotion gate (~10 min)", cmd: "uv run train_nav.py --flat --total-steps 800000 --name gate_flat" }
+      - { label: "Train a navigator (~20 min)", cmd: "uv run train_nav.py --mode privileged --goal-range 7 --name nav_priv_s0", primary: true }
+
+  - id: 07_physical_ai/03_terrain_vision
+    title: "Terrain Vision: looking before you step"
+    summary: "You cannot feel for a descent. The first lab here where the robot needs an eye."
+    est_minutes: 15
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is XML, the teachers are 11k params.
+      - { label: "The three terrains (CPU)", cmd: "uv run vision_env.py" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_teacher.py --dry-run" }
+      - { label: "Train the teacher (~13 min)", cmd: "uv run train_teacher.py --name v3_priv_s0" }
+      - { label: "Train the blind control (~12 min)", cmd: "uv run train_teacher.py --no-privileged --name v3_blind_s0" }
+      # These two need a GPU to be worth doing, and the student needs the dataset.
+      - { label: "CPU vs GPU on the student", cmd: "uv run train_student.py --auto --bench", needs_gpu: true }
+      - { label: "Train the vision student", cmd: "uv run train_student.py --auto --device cuda", primary: true, needs_gpu: true }
+
+  - id: 07_physical_ai/02_biped_stairs
+    title: "Biped Stairs: a limb or a constraint?"
+    summary: "Four robots, one staircase, and two switches that turn out to interact."
+    est_minutes: 12
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # CPU-only and correct: the world is XML, the policy is 12k params.
+      - { label: "The four robots (CPU)", cmd: "uv run morphology.py" }
+      - { label: "Random baselines (CPU)", cmd: "uv run stairs_env.py" }
+      - { label: "Train one cell (~4 min)", cmd: "uv run train_ppo.py --cell 2leg_free", primary: true }
+      - { label: "The whole 2x2 (~10 min)", cmd: "uv run train_ppo.py --sweep --seeds 3 --jobs 6" }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
+
+  - id: 08_aerial_physics/07_teacher_student
+    title: "Teacher and Student: learning to see"
+    summary: "PPO reading 144 depth beams scores 2%. Distilled from a teacher, the same net scores 48%."
+    est_minutes: 35
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # The sensor, the information gap and the statistics are all
+      # arithmetic and run anywhere. Training a teacher is CPU work
+      # on a process pool, which is why this lab carries no
+      # unconditional require_gpu().
+      - { label: "The rangefinder's geometry (CPU, instant)", cmd: "uv run rangefinder.py" }
+      - { label: "Cast it against real terrain (CPU, ~20 s)", cmd: "uv run rangefinder.py --scene --cost" }
+      - { label: "What the beams can and cannot recover (CPU, ~6 min)", cmd: "uv run teach_env.py --gap --gap-samples 3000" }
+      # NO --size HERE, deliberately. distill.py's GPU guard is gated
+      # on --size and the contract checker -- correctly conservative --
+      # treats any command passing that flag as able to reach it. The
+      # DEFAULT size is `match`, which is 17k parameters and CPU-safe,
+      # so omitting the flag is both honest and provably so.
+      - { label: "Train a teacher (CPU pool, ~20 min)", cmd: "uv run train_policy.py --sense oracle --name oracle_s0 --total-steps 1500000" }
+      - { label: "Distil it into a student that only sees beams", cmd: "uv run distill.py --teacher runs/oracle_s0 --method dagger --episodes 200 --iters 6", primary: true }
+      - { label: "Score the arms, paired, against the falsifier", cmd: "uv run compare.py" }
+
+  - id: 08_aerial_physics/06_learned_dynamics
+    title: "Learned Dynamics: does size help?"
+    summary: "29,000x the parameters, no better prediction. The first lab here that wants a GPU."
+    est_minutes: 30
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # The ladder and the null are arithmetic and run anywhere; the
+      # large rungs want the card, which is why this lab has topic 8's
+      # first real require_gpu().
+      - { label: "The size ladder and its memory (CPU, instant)", cmd: "uv run dynamics.py" }
+      - { label: "What 'learned nothing' scores (CPU, ~1 min)", cmd: "uv run baseline.py" }
+      - { label: "Collect trajectories (CPU, ~10 min)", cmd: "uv run collect.py --episodes 300 --out data/train.npz" }
+      # NO --size HERE, deliberately. The guard is gated on --size and
+      # the checker -- correctly conservative -- treats any command
+      # passing that flag as able to reach it, since it cannot know
+      # which values are safe. The DEFAULT size is `small`, which is
+      # CPU-runnable, so omitting the flag is both honest and
+      # provably safe. Verified: exits 0 with CUDA_VISIBLE_DEVICES="".
+      - { label: "Train the default rung (CPU, ~1 min)", cmd: "uv run train_dyn.py --kind mlp --epochs 4" }
+      - { label: "Train a large rung (GPU, ~12 min)", cmd: "uv run train_dyn.py --kind mlp --size xl --epochs 4", primary: true, needs_gpu: true }
+      - { label: "Collate and judge against the bar", cmd: "uv run ladder.py" }
+
+  - id: 08_aerial_physics/05_thruster_failure
+    title: "Thruster Failure: landing broken"
+    summary: "A nozzle jams mid-flight. Training with failures lifts survival from 72% to 89%."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the survivability audit is a linear program and training is a
+      # ~14k-parameter MLP against MuJoCo on the CPU -- measured
+      # faster than a card.
+      - { label: "Which failures are survivable? (CPU, ~1 min)", cmd: "uv run fault.py" }
+      - { label: "How many at once? (CPU, ~2 min)", cmd: "uv run fault.py --simultaneous" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "Random policy on a broken rig (CPU, ~2 min)", cmd: "uv run fail_env.py --episodes 12" }
+      - { label: "Learn the clean landing first (CPU, ~25 min)", cmd: "uv run train_fail.py --fail-p 0.0 --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_fail.py --dry-run" }
+      - { label: "Film a failure", cmd: "uv run render_fail.py runs/run --episodes 3", needs_gpu: true }
+
+  - id: 08_aerial_physics/04_fly_on_mars
+    title: "Fly on Mars: a gate course"
+    summary: "On Mars the car weighs 62% less and pushes 8.6% harder. PPO flies a three-gate course."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the budget table is arithmetic, the rig audit is a linear
+      # program, and training is a ~15k-parameter MLP against MuJoCo
+      # on the CPU -- measured faster than a card.
+      - { label: "Can the tank afford the course? (CPU, instant)", cmd: "uv run flight_env.py --budget" }
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "The scheduled guidance law (CPU, ~6 min)", cmd: "uv run classical.py --world mars --episodes 32" }
+      - { label: "Train the Mars arm (CPU, ~25 min)", cmd: "uv run train_flight.py --world mars --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_flight.py --dry-run" }
+      - { label: "Film the course", cmd: "uv run render_flight.py runs/run --episodes 3", needs_gpu: true }
+
+  - id: 08_aerial_physics/03_land_on_target
+    title: "Land on Target: put it on the mark"
+    summary: "PPO lands the cold-gas car on a 4 m mark in boulder country, from a tumbling launch."
+    est_minutes: 25
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the rig audit is a linear program, the decidability report is
+      # geometry, and training is a ~13k-parameter MLP against MuJoCo
+      # on the CPU -- measured faster than a card.
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "Is there a DECISION in this ground? (CPU, ~1 min)", cmd: "uv run target_env.py --decidable" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "The engineered baseline (CPU, ~8 min)", cmd: "uv run classical.py --episodes 32" }
+      - { label: "Train the blind arm (CPU, ~25 min)", cmd: "uv run train_target.py --sense blind --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_target.py --dry-run" }
+      - { label: "Film a landing", cmd: "uv run render_target.py runs/run --episodes 3", needs_gpu: true }
+
+  - id: 08_aerial_physics/02_barrel_roll
+    title: "Barrel Roll: a full 360 in mid-air"
+    summary: "PPO rolls the car 95% of the time vs 68% for the engineered controller, on 40% less gas."
+    est_minutes: 20
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the CPU entries, correctly:
+      # the rig audit is a linear program, the env check imports no
+      # learner, and training is a 13k-parameter MLP against MuJoCo
+      # on the CPU -- measured faster than a card.
+      - { label: "Can the tank afford a roll? (CPU, instant)", cmd: "uv run roll_env.py --budget" }
+      - { label: "Random policy: 100% crash (CPU, ~2 min)", cmd: "uv run roll_env.py --episodes 12" }
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "The baseline that does not learn (CPU, ~8 min)", cmd: "uv run classical.py --episodes 32" }
+      - { label: "Stage A: learn the roll (CPU, ~8 min)", cmd: "uv run train_roll.py --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_roll.py --dry-run" }
+      - { label: "Film the barrel roll", cmd: "uv run render_roll.py runs/run --episodes 3", needs_gpu: true }
+
+  - id: 08_aerial_physics/01_aerial_stabilization
+    title: "Aerial Stabilization: cold-gas car"
+    summary: "A tumbling 2-tonne car and 7 seconds of gas. Full rank is not reachability."
+    est_minutes: 15
+    gpu: { min_vram_gb: 8, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on the first five, and that is
+      # CORRECT rather than an oversight: the rig audit is a linear
+      # program, the PPO checks import no simulator, and training is a
+      # 13k-parameter MLP against MuJoCo on the CPU -- measured FASTER
+      # than a card. Clawdeck is right to advertise these as "Runs now".
+      - { label: "Physics audit — residuals (CPU, ~2 min)", cmd: "uv run verify.py" }
+      - { label: "Why RK4, measured (CPU)", cmd: "uv run verify.py --only integrators" }
+      - { label: "What the rig can and CANNOT do (CPU, instant)", cmd: "uv run thrusters.py --all" }
+      - { label: "The propellant, real gas (CPU, instant)", cmd: "uv run gas.py" }
+      - { label: "What the tank can buy (CPU, instant)", cmd: "uv run aerial_env.py --budget" }
+      - { label: "PPO properties, no simulator (CPU)", cmd: "uv run ppo.py" }
+      - { label: "The baseline that does not learn (CPU, ~3 min)", cmd: "uv run classical.py --episodes 24" }
+      - { label: "Train it (CPU, ~6 min)", cmd: "uv run train_aerial.py --total-steps 1500000 --n-envs 8", primary: true }
+      - { label: "Quick smoke test (40 s)", cmd: "uv run train_aerial.py --dry-run" }
+      - { label: "Film the landing", cmd: "uv run render_flight.py runs/run", needs_gpu: true }
+
+  - id: 07_physical_ai/01_obstacle_hopper
+    title: "Obstacle Hopper: learning to climb"
+    summary: "Real MuJoCo physics, PPO from scratch, and why one seed proves nothing."
+    est_minutes: 10
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu on these three, and that is CORRECT:
+      # the world is an XML string, the policy is 10k parameters, and CPU is
+      # measurably 2.3x faster than GPU. Clawdeck is right to advertise them
+      # as "Runs now".
+      - { label: "The world + random baseline (CPU)", cmd: "uv run obstacle_env.py" }
+      - { label: "GAE limits, no simulator (CPU)", cmd: "uv run ppo.py" }
+      - { label: "Train the hopper (CPU, ~8 min)", cmd: "uv run train_ppo.py --total-steps 600000", primary: true }
+      - { label: "Quick smoke test (30 s)", cmd: "uv run train_ppo.py --dry-run" }
+      - { label: "The ablation: blind to obstacle height", cmd: "uv run train_ppo.py --total-steps 600000 --blind-to-height --name blind_s0" }
+
+  - id: 03_llms/12_prefill_decode
+    title: "Prefill and Decode: when to split them"
+    summary: "Head-of-line blocking, chunked prefill, and why the obvious fix loses here."
+    est_minutes: 10
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # No --num_gpus and no needs_gpu, deliberately: scheduler.py is a pure
+      # discrete-event simulator with no torch import at all, so Clawdeck is
+      # right to advertise it as "Runs now".
+      - { label: "The three policies (CPU, no download)", cmd: "uv run --no-project python scheduler.py" }
+      # These DO need a GPU and carry no --num_gpus, so they must say so or
+      # Clawdeck advertises them as CPU-runnable and the learner hits a wall.
+      - { label: "Measure the head-of-line stall", cmd: "uv run serve_bench.py --demo --prompt-len 4096 --chunk 256", primary: true, needs_gpu: true }
+      - { label: "Calibrate the cost model", cmd: "uv run serve_bench.py --calibrate --repeats 9 --warmup 4", needs_gpu: true }
+      - { label: "Quick calibration (3 repeats)", cmd: "uv run serve_bench.py --calibrate --repeats 3 --warmup 1", needs_gpu: true }
 
   - id: 04_video_text/01_hf_baseline
     title: "Video-text baseline"
@@ -369,3 +685,69 @@ labs:
       # model id called "none" and fail.
       - { label: "Ablation grid (CPU)", cmd: "uv run omni_eval.py", primary: true }
       - { label: "Fewer questions", cmd: "uv run omni_eval.py --questions 20" }
+
+  # ---------------------------------------------------------------------------
+  # 06_protein_folding — the memory is in the ACTIVATIONS, and ZeRO cannot help
+  # ---------------------------------------------------------------------------
+  - id: 06_protein_folding/02_evoformer
+    title: "Evoformer (AlphaFold2 trunk)"
+    summary: "Triangle attention, coevolution, and the O(N^3) wall ZeRO does not touch."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the first two, and that is correct: both are plain
+      # PyTorch/NumPy on CPU with no download, so Clawdeck may advertise them
+      # as "Runs now". Most of the teaching in this topic is in them.
+      - { label: "The trunk and the memory wall (CPU)", cmd: "uv run evoformer.py" }
+      - { label: "Does the data carry signal? (CPU)", cmd: "uv run synthetic_msa.py" }
+      - { label: "Train on synthetic MSAs", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py", primary: true }
+      - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --ds-evoformer-attn" }
+      - { label: "ZeRO-3 (measure that it does NOT help)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --deepspeed_config ds_config_z3.json" }
+      - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --data nanofold --n-res 64" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_evoformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/03_pairformer
+    title: "Pairformer (AlphaFold3 trunk)"
+    summary: "AF3 deleted the MSA representation. The cubic term did not move."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy with no download, so Clawdeck may advertise them as
+      # "Runs now". pairformer.py IS the lesson of this topic.
+      - { label: "AF2 vs AF3, priced (CPU)", cmd: "uv run pairformer.py" }
+      - { label: "Does the data carry signal? (CPU)", cmd: "uv run synthetic_msa.py" }
+      - { label: "Train the AF3 trunk", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py", primary: true }
+      - { label: "With the DeepSpeed4Science kernel", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --ds-evoformer-attn" }
+      - { label: "Real MSAs from the PDB", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --data nanofold --n-res 64" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_pairformer_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/04_structure_module
+    title: "Structure module (IPA vs diffusion)"
+    summary: "SE(3) equivariance: guaranteed by construction, or learned approximately."
+    est_minutes: 8
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus on the CPU entries, and that is correct: both are plain
+      # PyTorch/NumPy, and structure.py IS the lesson of this topic.
+      - { label: "Guaranteed vs learned symmetry (CPU)", cmd: "uv run structure.py" }
+      - { label: "Check the real backbones (CPU)", cmd: "uv run cath_data.py --split validation" }
+      - { label: "Train with IPA (AlphaFold2)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head ipa", primary: true }
+      - { label: "Train with an AF3-style head", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion" }
+      - { label: "AF3-style, with augmentation", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --head diffusion --augment" }
+      - { label: "Real CATH backbones", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --data cath --head ipa" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_structure_ds.py --max-steps 3" }
+
+  - id: 06_protein_folding/01_esm2_plm
+    title: "ESM-2 protein language model"
+    summary: "A protein is a sequence, so the whole LLM stack transfers. Almost."
+    est_minutes: 10
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      # No --num_gpus: plm.py is plain NumPy and needs no GPU.
+      - { label: "Masking and derived labels (CPU)", cmd: "uv run plm.py" }
+      - { label: "Secondary structure, 150M", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 150M", primary: true }
+      - { label: "650M with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 650M --use-lora" }
+      - { label: "3B with LoRA", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task ss --model 3B --use-lora" }
+      - { label: "Masked LM instead", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --task mlm --model 35M" }
+      - { label: "Quick (3 steps)", cmd: "uv run deepspeed --num_gpus=1 train_esm2_ds.py --max-steps 3 --model 8M" }

@@ -1,5 +1,9 @@
 # 02_intermediate/03_learning_to_rank — Learning to Rank
 
+**Baseline:** the untrained scorer, NDCG **0.4862**, identical at every row — any objective that does not beat it has learned nothing.
+
+**Budget:** epochs 1 to 40, and the budget is part of the finding: the spread between objectives is 0.041 at one epoch and 0.001 at forty.
+
 Ranking is not classification, and the difference lives entirely in the loss.
 This example implements the four classical learning-to-rank objectives —
 **pointwise**, **RankNet**, **LambdaRank**, **ListNet** — behind one shared

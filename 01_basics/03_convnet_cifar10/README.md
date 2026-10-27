@@ -1,5 +1,9 @@
 # Enhanced CIFAR-10 CNN Training with DeepSpeed
 
+**Baseline:** `cifar10_deepspeed.py` itself — 0.5M params, ~81% — the two-conv network the modern architectures are measured against.
+
+**Budget:** full schedule on 2 GPUs; wall-clock per model in the table. `--max-steps N` caps a run, and a capped run is a smoke test, not a result.
+
 Train an enhanced CNN on the CIFAR-10 dataset using DeepSpeed with production-ready training features and comprehensive monitoring.
 
 ## Environment & Local Testing

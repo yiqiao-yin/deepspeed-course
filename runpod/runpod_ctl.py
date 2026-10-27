@@ -85,6 +85,27 @@ EXAMPLES = {
                                            note="Four LTR objectives, one scorer. "
                                                 "Tiny model; 2 GPUs is to exercise "
                                                 "QUERY-level sharding, not memory."),
+    "02_intermediate/05_rl_trading": dict(
+                                    min_vram=8, gpus=1, disk=8,
+                                    script="train_rl.py",
+                                    launcher="python",
+                                    args="--method grpo --iters 120",
+                                    note="launcher=python, and capacity.py "
+                                         "is the argument rather than an "
+                                         "assertion: the policies are 4,866 "
+                                         "and 9,731 parameters, so ZeRO "
+                                         "would shard 0.08 MB across the "
+                                         "cards and pay an all-gather every "
+                                         "step. The real bottleneck is a "
+                                         "SEQUENTIAL rollout over 2,992 "
+                                         "trading days -- the position on "
+                                         "day t depends on the action on "
+                                         "day t-1 -- which does not shard "
+                                         "at all. Rent CORES. Needs no "
+                                         "network: the price panel is "
+                                         "committed, 659 KB, because vendor "
+                                         "history is not immutable and this "
+                                         "lab publishes numbers."),
     "02_intermediate/04_groupwise_ranking": dict(min_vram=8, gpus=2, disk=20,
                                            script="train_groupwise_ranking.py",
                                            note="GSF / SetRank vs a pointwise "
@@ -128,6 +149,64 @@ EXAMPLES = {
                                     note="MLA from the paper. Tiny model; the "
                                          "KV cache is an INFERENCE cost, so "
                                          "ZeRO does not touch it."),
+    "06_protein_folding/02_evoformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_evoformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold2's Evoformer trunk. ONE GPU: "
+                                         "the bottleneck here is an ACTIVATION "
+                                         "(triangle attention is O(N_res^3)), "
+                                         "not parameters, so adding ranks does "
+                                         "not help -- --ds-evoformer-attn does. "
+                                         "--n-res is the knob that will OOM you. "
+                                         "The trunk and the data both run on CPU: "
+                                         "uv run evoformer.py, "
+                                         "uv run synthetic_msa.py."),
+    "06_protein_folding/03_pairformer": dict(min_vram=24, gpus=1, disk=30,
+                                    script="train_pairformer_ds.py",
+                                    launcher="deepspeed",
+                                    note="AlphaFold3's Pairformer: the AF2 "
+                                         "trunk with the MSA representation "
+                                         "deleted. Saves ~24% of per-block "
+                                         "activations at 384 residues and "
+                                         "NOTHING asymptotically -- the "
+                                         "triangle attention logits are "
+                                         "byte-identical to AF2's, so "
+                                         "--ds-evoformer-attn matters here "
+                                         "too despite the name. Run "
+                                         "06_protein_folding/02_evoformer "
+                                         "first; the result is the "
+                                         "difference. uv run pairformer.py "
+                                         "prices it on CPU."),
+    "06_protein_folding/04_structure_module": dict(min_vram=24, gpus=1, disk=20,
+                                    script="train_structure_ds.py",
+                                    launcher="deepspeed",
+                                    note="Pair representation to 3D. The "
+                                         "cheapest lab in the section -- no "
+                                         "cubic term, runs in 0.2 GB. The "
+                                         "point is --head ipa vs --head "
+                                         "diffusion: AF2's SE(3) guarantee "
+                                         "measures 1e-15, AF3's learned "
+                                         "symmetry 5e-02, and augmentation "
+                                         "only gets it to 8e-03. fp32 on "
+                                         "purpose -- bf16 cannot represent "
+                                         "the difference being taught. "
+                                         "uv run structure.py shows it all "
+                                         "on CPU."),
+    "06_protein_folding/01_esm2_plm": dict(min_vram=24, gpus=1, disk=60,
+                                    script="train_esm2_ds.py",
+                                    launcher="deepspeed",
+                                    note="ESM-2 fine-tuning -- the on-ramp to "
+                                         "the section, and the one lab here "
+                                         "where the ordinary ZeRO reasoning "
+                                         "applies (650M real parameters, so "
+                                         "stage 2 earns its keep). Labels are "
+                                         "DERIVED from backbone dihedrals, "
+                                         "not downloaded. --model 3B needs "
+                                         "--use-lora; its checkpoint is "
+                                         ".bin-only and loads fine on "
+                                         "transformers 5.18. Compare accuracy "
+                                         "against the MAJORITY CLASS (~0.50), "
+                                         "never 1/3."),
     "03_llms/11_moe": dict(min_vram=24, gpus=2, disk=20,
                                     script="train_moe_ds.py",
                                     launcher="deepspeed",
@@ -136,9 +215,296 @@ EXAMPLES = {
                                          "PARTITIONS the experts across ranks; "
                                          "the routing lesson itself runs on CPU "
                                          "via `uv run moe.py`."),
-    "03_llms/12_qlora": dict(min_vram=24, gpus=1, disk=60,
+    "03_llms/13_qlora": dict(min_vram=24, gpus=1, disk=60,
                             script="train_qlora.py",
                             note="LoRA and QLoRA use ZeRO-2; peak VRAM is per GPU."),
+    "03_llms/12_prefill_decode": dict(min_vram=16, gpus=1, disk=20,
+                                    script="serve_bench.py",
+                                    launcher="python",
+                                    args="--calibrate --demo --repeats 7",
+                                    note="SIXTH launcher=python exception: this "
+                                         "is inference scheduling. No optimizer, "
+                                         "no gradients, nothing to shard, so a "
+                                         "distributed launcher would be cargo "
+                                         "cult. The scheduling behaviour itself "
+                                         "runs on CPU via `uv run scheduler.py`."),
+    "07_physical_ai/10_perception_pays": dict(min_vram=8, gpus=1, disk=14,
+                                    script="perception_sweep.py",
+                                    launcher="python",
+                                    args="--seeds 8",
+                                    note="FIFTEENTH launcher=python "
+                                         "exception, and the simplest: "
+                                         "NOTHING TRAINS. The lab replays "
+                                         "lab 9's policies and varies a "
+                                         "router's accuracy, so there are no "
+                                         "gradients and nothing for ZeRO to "
+                                         "shard. Pure CPU; the GPU is "
+                                         "requested only so the belief "
+                                         "animation has an OpenGL context."),
+    "07_physical_ai/09_body_search": dict(min_vram=8, gpus=1, disk=14,
+                                    script="rank_bodies.py",
+                                    launcher="python",
+                                    args="--episodes 24",
+                                    note="FOURTEENTH launcher=python "
+                                         "exception. Nothing here trains "
+                                         "under DeepSpeed -- the policies "
+                                         "are 15-45k parameters and the "
+                                         "bottleneck is MuJoCo physics on "
+                                         "the CPU. The lab's own speed "
+                                         "finding makes the point: swapping "
+                                         "the integrator from RK4 to "
+                                         "implicitfast gave 1.7-2.6x end to "
+                                         "end, MORE than the ~1.40x eight "
+                                         "rented GPUs would have bought. The "
+                                         "GPU request is only so the three "
+                                         "animations have an OpenGL context; "
+                                         "the search and the ranking are "
+                                         "pure CPU."),
+    "07_physical_ai/08_long_traverse": dict(min_vram=8, gpus=1, disk=12,
+                                    script="compare_bodies.py",
+                                    launcher="python",
+                                    args="--episodes 24",
+                                    note="THIRTEENTH launcher=python "
+                                         "exception. Nothing trains here -- "
+                                         "the lab REPLAYS policies trained in "
+                                         "lab 5 and compares five bodies on "
+                                         "one task. The policies are 15-22k "
+                                         "parameters and the bottleneck is "
+                                         "MuJoCo physics on the CPU, so there "
+                                         "is nothing for ZeRO to shard. The "
+                                         "GPU is requested only so the "
+                                         "five-body animation has an OpenGL "
+                                         "context; `compare_bodies.py` itself "
+                                         "is pure CPU."),
+    "07_physical_ai/07_terrain_vlm": dict(min_vram=24, gpus=1, disk=60,
+                                    script="train_vlm.py",
+                                    args="--lora --name lora3b",
+                                    note="The FIRST example in 07_physical_ai "
+                                         "that uses DeepSpeed, and the reason "
+                                         "is measured: verify_arch.py shows a "
+                                         "7B full fine-tune needs 119.7 GB on "
+                                         "one card and 15.0 GB across eight, "
+                                         "while LoRA on the same model needs "
+                                         "15.3 GB on ONE. So the LoRA arm here "
+                                         "runs PLAIN python (nothing to shard, "
+                                         "and labs 5-6 both measured that "
+                                         "reaching for hardware first was "
+                                         "wrong), and ZeRO-3 is reserved for "
+                                         "the full arm -- `deepspeed "
+                                         "--num_gpus=8 train_vlm.py "
+                                         "--deepspeed ds_config.json`, which "
+                                         "needs a bigger box than this entry "
+                                         "rents. Measured in-use on the LoRA "
+                                         "arm: 11.5 GB of a 16 GB card, so 24 "
+                                         "is comfortable."),
+    "07_physical_ai/06_mars_mjx": dict(min_vram=16, gpus=1, disk=24,
+                                    script="bench_backends.py",
+                                    launcher="python",
+                                    args="--envs 64,256,1024,2048",
+                                    note="TWELFTH launcher=python exception, and "
+                                         "the lab is ABOUT the exception: it "
+                                         "times MuJoCo physics on CPU, MJX and "
+                                         "Warp and asks whether a GPU is worth "
+                                         "renting at all. Nothing trains -- no "
+                                         "parameters, no gradients, nothing for "
+                                         "ZeRO to shard. The measured answer is "
+                                         "no, which is why this is a measurement "
+                                         "lab and not a port. The GPU request is "
+                                         "real: the two GPU backends are the "
+                                         "subject, and the CPU pool it is "
+                                         "compared against needs the cores, so "
+                                         "rent something with both."),
+    "07_physical_ai/05_mars_terrain": dict(min_vram=8, gpus=1, disk=12,
+                                    script="mars.py",
+                                    launcher="python",
+                                    args="--check 20",
+                                    note="ELEVENTH launcher=python exception, "
+                                         "and the clearest one yet: this lab "
+                                         "trains NOTHING. Part 1 of lab 5 "
+                                         "generates a Mars-like surface with "
+                                         "numpy and measures it. No "
+                                         "parameters, no gradients, nothing "
+                                         "for ZeRO to shard. The GPU is "
+                                         "requested only so the renderer has "
+                                         "an OpenGL context; `mars.py --check` "
+                                         "itself is pure CPU."),
+    "07_physical_ai/04_terrain_navigation": dict(min_vram=16, gpus=1, disk=20,
+                                    script="train_nav.py",
+                                    launcher="python",
+                                    args="--mode privileged --goal-range 7 "
+                                         "--total-steps 1500000",
+                                    note="TENTH launcher=python exception. A "
+                                         "12k-parameter PPO policy over MuJoCo "
+                                         "height fields -- nothing for ZeRO to "
+                                         "shard, and the bottleneck is physics "
+                                         "on the CPU, as in labs 1-3. Run "
+                                         "`--flat` first: it is the locomotion "
+                                         "gate, and it failed twice before the "
+                                         "position-actuator fix."),
+    "07_physical_ai/03_terrain_vision": dict(min_vram=16, gpus=1, disk=20,
+                                    script="train_student.py",
+                                    launcher="python",
+                                    args="--auto --device cuda --epochs 40",
+                                    note="NINTH launcher=python exception, and "
+                                         "the first for a NEW reason. The other "
+                                         "eight skip DeepSpeed because a GPU "
+                                         "buys nothing; here a GPU buys 13.6x "
+                                         "+/- 0.9 over 5 repeats (2860 vs 38677 "
+                                         "samples/s) "
+                                         "because the student is a conv net on "
+                                         "a fixed dataset with no simulator in "
+                                         "the loop. DeepSpeed is still wrong -- "
+                                         "193k parameters have nothing for ZeRO "
+                                         "to shard. --auto is load-bearing: "
+                                         "neither runs/ nor the 23 MB rendered "
+                                         "dataset is committed, so on a fresh "
+                                         "pod the student would have nothing to "
+                                         "train on. It trains a teacher and "
+                                         "renders the data first, ~25 min."),
+    "07_physical_ai/02_biped_stairs": dict(min_vram=16, gpus=1, disk=15,
+                                    script="train_ppo.py",
+                                    launcher="python",
+                                    args="--sweep --seeds 3 --jobs 6",
+                                    note="EIGHTH launcher=python exception: a "
+                                         "12k-parameter PPO policy, nothing "
+                                         "for ZeRO to shard. The 2x2 is twelve "
+                                         "independent processes, so --jobs "
+                                         "helps and a GPU does not."),
+    # --- 08_aerial_physics ------------------------------------------------
+    "08_aerial_physics/07_teacher_student": dict(
+                                    min_vram=16, gpus=1, disk=20,
+                                    script="distill.py",
+                                    launcher="python",
+                                    args="--teacher runs/oracle_s0 "
+                                         "--method dagger --episodes 200 "
+                                         "--iters 6",
+                                    note="TWENTY-SECOND launcher=python "
+                                         "entry, and the reason is the same "
+                                         "measurement labs 1-5 made: the "
+                                         "student at --size match is 17k "
+                                         "parameters and the cost is MuJoCo "
+                                         "rollouts with a torch forward per "
+                                         "step, which is CPU-bound. Rent "
+                                         "CORES. The card only earns its "
+                                         "place at --size deep or xl, where "
+                                         "distill.py's guard fires and "
+                                         "--deepspeed takes the ZeRO path; "
+                                         "that is the arm the ds_config is "
+                                         "for. NOTE this lab needs a "
+                                         "TEACHER on disk -- run "
+                                         "./run_arms.sh oracle first, or "
+                                         "the run exits with a message "
+                                         "saying so rather than distilling "
+                                         "from nothing."),
+    "08_aerial_physics/06_learned_dynamics": dict(
+                                    min_vram=24, gpus=1, disk=24,
+                                    script="train_dyn.py",
+                                    launcher="python",
+                                    args="--kind mlp --size xl --epochs 4",
+                                    note="THE FIRST LAB IN TOPIC 8 THAT "
+                                         "WANTS A CARD, and the first with "
+                                         "a real require_gpu(). Labs 1-5 "
+                                         "train a ~14k-parameter policy "
+                                         "against MuJoCo and are faster on "
+                                         "CPU. Here the largest rung is "
+                                         "705M parameters, measured at "
+                                         "15.97 GB of a 16 GB card. "
+                                         "launcher=python because the "
+                                         "measured answer is that ZeRO at "
+                                         "world size 1 costs 1.81x the "
+                                         "memory and buys nothing -- which "
+                                         "IS the lab's finding."),
+    "08_aerial_physics/05_thruster_failure": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_fail.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="TWENTIETH launcher=python "
+                                         "exception, same reason as labs 1 "
+                                         "to 4: a ~14k-parameter MLP has "
+                                         "nothing for ZeRO to shard and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. Note the "
+                                         "CURRICULUM: --fail-p 0 first, "
+                                         "then warm start at 1.0. Trained "
+                                         "from scratch with a failure every "
+                                         "episode the policy never learns "
+                                         "to land -- half the draws leave "
+                                         "no hover reachable."),
+    "08_aerial_physics/04_fly_on_mars": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_flight.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="NINETEENTH launcher=python "
+                                         "exception, same reason as labs 1 "
+                                         "to 3: a ~15k-parameter MLP has "
+                                         "nothing for ZeRO to shard and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. The two "
+                                         "arms differ ONLY in --world; the "
+                                         "course generator is seeded "
+                                         "identically so Earth is a "
+                                         "control rather than a second "
+                                         "experiment."),
+    "08_aerial_physics/03_land_on_target": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_target.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="EIGHTEENTH launcher=python "
+                                         "exception, same reason as labs 1 "
+                                         "and 2: a 13k-parameter MLP has "
+                                         "nothing for ZeRO to shard and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. The "
+                                         "three arms differ ONLY in "
+                                         "--sense (blind / slope / patch); "
+                                         "anything else that moves "
+                                         "invalidates the comparison."),
+    "08_aerial_physics/02_barrel_roll": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_roll.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="SEVENTEENTH launcher=python "
+                                         "exception. 13,397 parameters, "
+                                         "nothing for ZeRO to shard, and "
+                                         "MuJoCo on the CPU is the "
+                                         "bottleneck. Rent CORES. Note the "
+                                         "CURRICULUM ORDER: stage A learns "
+                                         "the roll, stage B adds the "
+                                         "landing. Reversed, the policy "
+                                         "reaches 0% roll completion and "
+                                         "stays there."),
+    "08_aerial_physics/01_aerial_stabilization": dict(
+                                    min_vram=8, gpus=1, disk=16,
+                                    script="train_aerial.py",
+                                    launcher="python",
+                                    args="--total-steps 1500000 --n-envs 8",
+                                    note="SIXTEENTH launcher=python exception. "
+                                         "A 13,013-parameter PPO policy has "
+                                         "nothing for ZeRO to shard, and the "
+                                         "bottleneck is MuJoCo on the CPU -- "
+                                         "topic 7 measured a policy this size "
+                                         "1.7x SLOWER on a GPU. Rent CORES, "
+                                         "not a card: the worker pool is 4.70x "
+                                         "on 20 of them. The GPU in this entry "
+                                         "exists only so the flight GIF has an "
+                                         "OpenGL context. Run `verify.py` "
+                                         "first: it audits conservation "
+                                         "residuals, and it found five "
+                                         "defects a learning curve cannot."),
+    "07_physical_ai/01_obstacle_hopper": dict(min_vram=16, gpus=1, disk=15,
+                                    script="train_ppo.py",
+                                    launcher="python",
+                                    args="--total-steps 600000",
+                                    note="SEVENTH launcher=python exception: a "
+                                         "10k-parameter PPO policy has nothing "
+                                         "for ZeRO to shard, and CPU is 1.7-2.0x "
+                                         "FASTER than GPU here (measured). "
+                                         "Rentable for convenience, not speed; "
+                                         "it runs fine on a laptop."),
     "04_video_text/01_hf_baseline": dict(min_vram=48, gpus=2, disk=120,
                    script="llava_video_trainer/video_training_script.py",
                    note="Video tokens are quadratic in frame count."),
@@ -377,7 +743,7 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'&& report "[6/6] comparison.json uploaded" '
         f'|| report "[6/6] comparison.json upload FAILED"; '
         'else report "[6/6] comparison.json MISSING"; fi'
-    ) if topic else 'true'
+    ) if topic and example == "03_llms/13_qlora" else 'true'
 
     # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
     # pod gets shut down, but it dies with your laptop lid. This backstop kills

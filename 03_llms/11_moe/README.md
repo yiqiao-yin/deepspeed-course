@@ -1,5 +1,9 @@
 # 11 · Mixture of Experts
 
+**Baseline:** `--balance none`, the unbalanced router. The claim is that balancing makes it *worse*, so the unbalanced arm is what balancing must beat.
+
+**Budget:** 300 steps on CPU, **world size 1**. The scoping is load-bearing: a 2-GPU run reported the opposite ordering, and that disagreement is recorded as unresolved rather than written around.
+
 Routing, load balancing, and expert parallelism — built from the DeepSeek-V3
 paper and measured rather than asserted.
 
