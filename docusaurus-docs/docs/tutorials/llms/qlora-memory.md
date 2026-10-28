@@ -48,5 +48,20 @@ uv run --no-project python 03_llms/13_qlora/train_qlora.py --plan
 uv run tests/test_qlora.py
 ```
 
-No hardware measurements are included here yet. The setup needs a real GPU
-run before its numeric result can be interpreted.
+## Measured GPU results
+
+Five single-GPU benchmark runs were completed on October 26, 2026:
+three using an NVIDIA RTX 3090 and two using an RTX 4090. Each run
+trained both configurations for 40 optimizer steps.
+
+Across all five runs, the measured peak PyTorch-allocated GPU memory was
+8.19 GiB for LoRA and 3.94 GiB for QLoRA, representing a **51.86% reduction**
+in peak allocated memory.
+
+Training-loop durations varied between runs. These measurements demonstrate
+memory savings under the tested configuration but do not establish
+equivalent model quality, generalization, or a statistically reliable
+training-speed advantage.
+
+The companion lab README contains the individual benchmark results,
+original execution logs, JSON measurements, and statistical analysis.
