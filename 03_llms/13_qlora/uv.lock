@@ -363,7 +363,7 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f2/06/aeeb0abbffbb3f1d8db049916eb654559d9d766443b058864b7e67e867f7/deepspeed-0.19.7.tar.gz", hash = "sha256:c6640ecbda08ec6b4b6c72521155351719f145f48d850687b7332f503992921c", size = 1927513, upload-time = "2026-09-16T22:01:06.442Z" }
 
 [[package]]
-name = "deepspeed-course-03-llms-12-qlora"
+name = "deepspeed-course-03-llms-13-qlora"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

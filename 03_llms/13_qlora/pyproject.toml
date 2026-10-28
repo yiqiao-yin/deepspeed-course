@@ -10,15 +10,17 @@
 # resolves to whatever is newest that day, which is how a tutorial that worked
 # in March breaks in September with nobody having touched it.
 #
-# After adding your real dependencies below, run `uv lock` and COMMIT the lock.
-# torch is pinned to an explicit CUDA index (cu128) below. PyPI's DEFAULT torch
-# is a CUDA 13 wheel, which installs fine on a pre-CUDA-13 driver (550/570) and
-# then reports cuda.is_available() == False -- silently, while nvidia-smi shows
-# the card. cu128 works on old and new drivers alike.
+# Dependencies are recorded in the committed uv.lock file.
+# After changing dependencies, run `uv lock` and commit the updated lockfile.
+
+# PyTorch uses the explicit CUDA 12.8 (cu128) index configured below.
+# This matches the CUDA version used in the tested RunPod environment.
+# CUDA wheels require compatible NVIDIA drivers. Verify compatibility
+# before attempting to reproduce this experiment on different hardware.
 # =============================================================================
 
 [project]
-name = "deepspeed-course-03-llms-12-qlora"
+name = "deepspeed-course-03-llms-13-qlora"
 version = "0.1.0"
 description = "QLoRA vs LoRA"
 readme = "README.md"
@@ -34,9 +36,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# W&B stays OPTIONAL: the training script wraps `import wandb` in try/except
-# and only tracks when WANDB_API_KEY is set. Making it required contradicts
-# the code and tests/test_runpod_ctl.py will fail you for it.
+# Weights & Biases is optional and is not used by this training script.
+# Readers may add their own experiment tracking if desired.
+# The LoRA vs QLoRA comparison runs without W&B.
 tracking = ["wandb>=0.16"]
 
 [tool.uv]
