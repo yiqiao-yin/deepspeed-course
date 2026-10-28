@@ -40,15 +40,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import pathlib
+import re
+import shlex
 import uuid
 
 REST = "https://rest.runpod.io/v1"
 GRAPHQL = "https://api.runpod.io/graphql"
 REPO_URL = "https://github.com/yiqiao-yin/deepspeed-course.git"
-# Codeload serves public tarballs without the anonymous-clone challenge
-# that GitHub applies to cloud IP ranges. Used as a fallback in bootstrap().
-TARBALL_URL = ("https://codeload.github.com/yiqiao-yin/deepspeed-course/"
-               "tar.gz/refs/heads/{branch}")
 
 # Result transport. RunPod's API exposes NO log endpoint (verified against both
 # the REST OpenAPI spec and GraphQL introspection), so the pod cannot be read
@@ -217,6 +215,9 @@ EXAMPLES = {
                                          "PARTITIONS the experts across ranks; "
                                          "the routing lesson itself runs on CPU "
                                          "via `uv run moe.py`."),
+    "03_llms/13_qlora": dict(min_vram=24, gpus=1, disk=60,
+                            script="train_qlora.py",
+                            note="LoRA and QLoRA use ZeRO-2; peak VRAM is per GPU."),
     "03_llms/12_prefill_decode": dict(min_vram=16, gpus=1, disk=20,
                                     script="serve_bench.py",
                                     launcher="python",
@@ -602,7 +603,8 @@ def _request(url: str, key: str, method: str = "GET", payload=None, timeout: int
         if exc.code in (401, 403):
             sys.exit(f"\n  RunPod rejected the credentials ({exc.code}).\n"
                      "  Check RUNPOD_API_KEY at https://console.runpod.io/user/settings\n")
-        sys.exit(f"RunPod API {exc.code} on {method} {url}\n  {detail}")
+        safe_url = url.split("?")[0]
+        sys.exit(f"RunPod API {exc.code} on {method} {safe_url}\n  {detail.replace(key, '[REDACTED]')}")
     except urllib.error.URLError as exc:
         sys.exit(f"Could not reach RunPod: {exc.reason}")
 
@@ -684,8 +686,21 @@ def cmd_recommend(args):
 
 def bootstrap(example: str, spec: dict, branch: str,
               topic: str = "", dry_run: bool = False,
-              max_hours: float = DEFAULT_MAX_HOURS) -> str:
+              max_hours: float = DEFAULT_MAX_HOURS,
+              repo_url: str = REPO_URL) -> str:
     """Shell run inside the pod: clone, install with uv, run, push results out."""
+    # A contribution branch may live on a public fork until its PR is merged.
+    # Restrict the override to GitHub repo URLs, with no shell metacharacters.
+    match = re.fullmatch(
+        r"https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/?",
+        repo_url.removesuffix(".git"))
+    if not match or match.group(2) in (".", ".."):
+        raise ValueError("--repo must be a public https://github.com/OWNER/REPO URL")
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._/-]*", branch) or ".." in branch:
+        raise ValueError("--branch must be a Git branch name")
+    owner, repo_name = match.groups()
+    tarball_url = (f"https://codeload.github.com/{owner}/{repo_name}/"
+                   f"tar.gz/refs/heads/{urllib.parse.quote(branch, safe='/')}")
     # `uv run`, so the example's OWN locked dependencies are used. Without it
     # the launcher ran the system interpreter against whatever the container
     # image happened to ship, and any example needing peft / transformers /
@@ -714,6 +729,19 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'curl -s -m 60 -T /workspace/run.log -H "Filename: {example}.log" '
         f'{NTFY}/{topic} >/dev/null 2>&1 || true'
     ) if topic else 'true'
+
+    # Preserve structured benchmark results before the GPU instance is terminated.
+    # Upload comparison.json alongside the training log for reproducibility.
+    # Report missing files or upload failures so incomplete results are detectable.
+    push_json = (
+        'if [ -f comparison.json ]; then '
+        f'curl -fsS -m 60 -T comparison.json '
+        f'-H "Filename: {example}/comparison.json" '
+        f'{NTFY}/{topic} >/dev/null '
+        f'&& report "[6/6] comparison.json uploaded" '
+        f'|| report "[6/6] comparison.json upload FAILED"; '
+        'else report "[6/6] comparison.json MISSING"; fi'
+    ) if topic and example == "03_llms/13_qlora" else 'true'
 
     # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
     # pod gets shut down, but it dies with your laptop lid. This backstop kills
@@ -757,14 +785,15 @@ def bootstrap(example: str, spec: dict, branch: str,
         # nothing can answer. NO CREDENTIAL IS EVER PUT ON THE POD -- see
         # SECURITY.md; a read-only token would still be a token on rented
         # hardware, and the tarball makes one unnecessary.
-        f"GIT_TERMINAL_PROMPT=0 git clone --depth 1 -b {branch} {REPO_URL} "
+        f"GIT_TERMINAL_PROMPT=0 git clone --depth 1 -b {shlex.quote(branch)} "
+        f"{shlex.quote(repo_url)} /workspace/deepspeed-course "
         f"> /workspace/clone.log 2>&1 || true",
         'if [ ! -d /workspace/deepspeed-course ]; then'
         ' report "[2/6] git clone refused, falling back to tarball";'
-        f' curl -sL {TARBALL_URL.format(branch=branch)} -o /workspace/repo.tar.gz'
+        f' curl -sL {shlex.quote(tarball_url)} -o /workspace/repo.tar.gz'
         ' >> /workspace/clone.log 2>&1;'
         ' tar xzf /workspace/repo.tar.gz -C /workspace >> /workspace/clone.log 2>&1;'
-        ' mv /workspace/deepspeed-course-* /workspace/deepspeed-course'
+        f' mv /workspace/{repo_name}-* /workspace/deepspeed-course'
         ' >> /workspace/clone.log 2>&1 || true;'
         ' fi',
         'if [ ! -d /workspace/deepspeed-course ]; then'
@@ -804,7 +833,9 @@ def bootstrap(example: str, spec: dict, branch: str,
         # exactly what --dry-run asks for. Anything else non-zero is real.
         "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
         "tail -40 /workspace/run.log",
+        # Collect the training log and structured results before pod termination.
         push_log,
+        push_json,
         'report "[6/6] DONE rc=$rc — log attached"',
     ]
     return "; ".join(steps)
@@ -880,7 +911,7 @@ def cmd_run(args):
         disk=spec["disk"], volume=max(spec["disk"], 20), image=args.image,
         name=f"dsc-{args.example[:24]}", cloud=args.cloud, yes=args.yes,
         start_cmd=bootstrap(args.example, spec, args.branch, topic,
-                            args.dry_run, args.max_hours),
+                            args.dry_run, args.max_hours, args.repo),
     )
     created = _create_pod(ns)
     if created is None:
@@ -1204,6 +1235,8 @@ def main() -> int:
     u.add_argument("--gpu", help="default: cheapest that fits")
     u.add_argument("--image", default=DEFAULT_IMAGE)
     u.add_argument("--branch", default="main")
+    u.add_argument("--repo", default=REPO_URL,
+                   help="public GitHub repository URL (for a contribution fork)")
     u.add_argument("--cloud", default="SECURE", choices=["SECURE", "COMMUNITY"])
     u.add_argument("--yes", action="store_true", help="required; billing starts at once")
     u.add_argument("--collect", action="store_true",

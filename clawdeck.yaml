@@ -283,6 +283,13 @@ labs:
       - { label: "Expert parallelism (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --expert-parallel --deepspeed_config ds_config_ep.json" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_moe_ds.py --max-steps 20" }
 
+  - id: 03_llms/13_qlora
+    title: "QLoRA vs LoRA"
+    summary: "Compare NF4 and bf16 base-model memory on the same ZeRO-2 training task."
+    est_minutes: 45
+    gpu: { min_vram_gb: 24, count: 1 }
+    run:
+      - { label: "Compare (20 steps each)", cmd: "uv run deepspeed --num_gpus=1 train_qlora.py --max-steps 20", primary: true }
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------

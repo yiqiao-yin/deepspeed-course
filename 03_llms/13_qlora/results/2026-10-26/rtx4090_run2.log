@@ -1,0 +1,106 @@
+=== nvidia-smi ===
+Tue Oct 27 00:54:18 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090        On  |   00000000:C1:00.0 Off |                  Off |
+| 30%   34C    P8             20W /  450W |       1MiB /  24564MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+=== versions ===
+python 3.11.11
+torch 2.8.0.dev20250319+cu128
+cuda True 1
+gpu NVIDIA GeForce RTX 4090
+deepspeed 0.19.8
+=== ds_report ===
+--------------------------------------------------
+DeepSpeed C++/CUDA extension op report
+--------------------------------------------------
+NOTE: Ops not installed will be just-in-time (JIT) compiled at
+      runtime if needed. Op compatibility means that your system
+      meet the required dependencies to JIT install the op.
+--------------------------------------------------
+JIT compiled ops requires ninja
+ninja .................. [92m[OKAY][0m
+--------------------------------------------------
+op name ................ installed .. compatible
+--------------------------------------------------
+[93m [WARNING] [0m async_io requires the dev libaio .so object and headers but these were not found.
+[93m [WARNING] [0m async_io: please install the libaio-dev package with apt
+[93m [WARNING] [0m If libaio is already installed (perhaps from source), try setting the CFLAGS and LDFLAGS environment variables to where it can be found.
+async_io ............... [93m[NO][0m ....... [93m[NO][0m
+fused_adam ............. [93m[NO][0m ....... [92m[OKAY][0m
+cpu_adam ............... [93m[NO][0m ....... [92m[OKAY][0m
+cpu_adagrad ............ [93m[NO][0m ....... [92m[OKAY][0m
+cpu_lion ............... [93m[NO][0m ....... [92m[OKAY][0m
+pin_memory ............. [93m[NO][0m ....... [92m[OKAY][0m
+dc ..................... [93m[NO][0m ....... [92m[OKAY][0m
+[93m [WARNING] [0m Unable to locate CUTLASS. Install nvidia-cutlass, clone CUTLASS next to DeepSpeed, or set CUTLASS_PATH to the CUTLASS checkout.
+evoformer_attn ......... [93m[NO][0m ....... [93m[NO][0m
+fp_quantizer ........... [93m[NO][0m ....... [92m[OKAY][0m
+fused_lamb ............. [93m[NO][0m ....... [92m[OKAY][0m
+fused_lion ............. [93m[NO][0m ....... [92m[OKAY][0m
+[93m [WARNING] [0m gds requires the dev libaio .so object and headers but these were not found.
+[93m [WARNING] [0m gds: please install the libaio-dev package with apt
+[93m [WARNING] [0m If libaio is already installed (perhaps from source), try setting the CFLAGS and LDFLAGS environment variables to where it can be found.
+[2026-10-27 00:55:56,224] [WARNING] [runner.py:230:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-10-27 00:55:56,224] [INFO] [runner.py:659:main] cmd = /workspace/deepspeed-course/03_llms/12_qlora/.venv/bin/python -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info train_qlora.py
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NCCL_VERSION=2.25.1-1
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_PACKAGE_NAME=libnccl2
+[2026-10-27 00:56:01,558] [INFO] [launch.py:154:main] 0 NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1
+[2026-10-27 00:56:01,558] [INFO] [launch.py:161:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-10-27 00:56:01,558] [INFO] [launch.py:167:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-10-27 00:56:01,558] [INFO] [launch.py:178:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-10-27 00:56:01,558] [INFO] [launch.py:179:main] dist_world_size=1
+[2026-10-27 00:56:01,558] [INFO] [launch.py:183:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-10-27 00:56:01,559] [INFO] [launch.py:261:main] process 797 spawned with command: ['/workspace/deepspeed-course/03_llms/12_qlora/.venv/bin/python', '-u', 'train_qlora.py', '--local_rank=0']
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]Fetching 3 files:  33%|███▎      | 1/3 [00:02<00:05,  2.98s/it]Fetching 3 files:  67%|██████▋   | 2/3 [00:23<00:13, 13.47s/it]Fetching 3 files: 100%|██████████| 3/3 [00:25<00:00,  8.00s/it]Fetching 3 files: 100%|██████████| 3/3 [00:25<00:00,  8.43s/it]
+Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights:   5%|▌         | 20/398 [00:00<00:01, 197.34it/s]Loading weights:  19%|█▉        | 75/398 [00:00<00:00, 398.00it/s]Loading weights:  34%|███▍      | 136/398 [00:00<00:00, 483.92it/s]Loading weights:  48%|████▊     | 191/398 [00:00<00:00, 505.47it/s]Loading weights:  62%|██████▏   | 246/398 [00:00<00:00, 518.68it/s]Loading weights:  75%|███████▌  | 300/398 [00:00<00:00, 525.38it/s]Loading weights:  89%|████████▉ | 355/398 [00:00<00:00, 528.22it/s]Loading weights: 100%|██████████| 398/398 [00:00<00:00, 500.64it/s]
+lora step 1/40: loss 5.3456
+lora step 10/40: loss 2.7614
+lora step 20/40: loss 0.6637
+lora step 30/40: loss 0.0570
+lora step 40/40: loss 0.0067
+lora memory: start=0.00 GiB; loaded=7.55 GiB; load peak=7.55 GiB; overall peak=8.19 GiB; stored tensors=7.55 GiB
+lora training time: 13.88 seconds
+/workspace/deepspeed-course/03_llms/12_qlora/.venv/lib/python3.11/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[rank0]:[W1027 00:56:56.980795336 ProcessGroupNCCL.cpp:5188] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+rank 0 lora: peak allocated 8.19 GiB; trainable 16,515,072; loss 5.3456 -> 0.0067
+Peak is allocated bytes per GPU including model load; stored bytes count tensors and NF4 metadata. No GPU values are summed.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights:   1%|          | 3/398 [00:00<00:16, 23.46it/s]Loading weights:  12%|█▏        | 48/398 [00:00<00:01, 242.70it/s]Loading weights:  23%|██▎       | 93/398 [00:00<00:00, 324.30it/s]Loading weights:  35%|███▌      | 140/398 [00:00<00:00, 378.35it/s]Loading weights:  46%|████▋     | 185/398 [00:00<00:00, 401.84it/s]Loading weights:  58%|█████▊    | 231/398 [00:00<00:00, 418.76it/s]Loading weights:  70%|██████▉   | 278/398 [00:00<00:00, 428.27it/s]Loading weights:  81%|████████  | 323/398 [00:00<00:00, 430.05it/s]Loading weights:  92%|█████████▏| 368/398 [00:00<00:00, 431.19it/s]Loading weights: 100%|██████████| 398/398 [00:01<00:00, 393.52it/s]
+qlora step 1/40: loss 5.9611
+qlora step 10/40: loss 2.9768
+qlora step 20/40: loss 1.3482
+qlora step 30/40: loss 0.4172
+qlora step 40/40: loss 0.5710
+qlora memory: start=0.00 GiB; loaded=3.28 GiB; load peak=3.94 GiB; overall peak=3.94 GiB; stored tensors=3.26 GiB
+qlora training time: 15.95 seconds
+/workspace/deepspeed-course/03_llms/12_qlora/.venv/lib/python3.11/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[rank0]:[W1027 00:57:25.616085367 ProcessGroupNCCL.cpp:5188] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+rank 0 qlora: peak allocated 3.94 GiB; trainable 16,515,072; loss 5.9611 -> 0.5710
+Peak is allocated bytes per GPU including model load; stored bytes count tensors and NF4 metadata. No GPU values are summed.
+LoRA vs QLoRA comparison passed; saved comparison.json
+[2026-10-27 00:57:28,584] [INFO] [launch.py:356:main] Process 797 exits successfully.

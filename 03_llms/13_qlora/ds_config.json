@@ -1,0 +1,35 @@
+{
+  "_comment": "Both arms use ZeRO-2: optimizer states and gradients are sharded, base weights stay on every GPU. Quantized weights do not follow the same ZeRO-3 partitioning path in this Transformers version.",
+  "bf16": {
+    "enabled": true
+  },
+  "_precision_comment": "This comparison requires bf16, supported by the tested RTX 3090 and RTX 4090 GPUs. Older GPUs without bf16 support are outside the validated setup. Do not switch to fp16 without updating the training checks and repeating the benchmarks. Never enable bf16 and fp16 simultaneously.",
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "torch_adam": true,
+      "lr": 0.0002,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08,
+      "weight_decay": 0.0
+    }
+  },
+  "zero_optimization": {
+    "stage": 2,
+    "allgather_partitions": true,
+    "allgather_bucket_size": 20000000,
+    "overlap_comm": false,
+    "reduce_scatter": true,
+    "reduce_bucket_size": 20000000,
+    "contiguous_gradients": true
+  },
+  "_batch_comment": "train_batch_size is DELIBERATELY OMITTED. DeepSpeed derives it as micro x accum x num_gpus, so this config is portable to any GPU count. Pin train_batch_size only if you have a reason, and then it MUST equal micro x accum x the --num_gpus your launcher requests, or the run aborts at startup. This is the single most common breakage in the repo.",
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+  "gradient_clipping": 1.0,
+  "steps_per_print": 10,
+  "wall_clock_breakdown": false
+}
