@@ -83,8 +83,10 @@ scancel <jobid>                          # if you need to stop the job
 From the repository root, inspect price and availability, launch with
 automatic termination, and confirm no pod remains:
 
+Before running these commands, set the RUNPOD_API_KEY environment variable in your shell. Uncomment the example below and replace 'your_value_here' with your actual API key. Never commit your actual API key to GitHub.
+
 ```bash
-export RUNPOD_API_KEY=...
+# export RUNPOD_API_KEY="your_value_here"
 uv run runpod/runpod_ctl.py recommend 03_llms/13_qlora
 uv run runpod/runpod_ctl.py run 03_llms/13_qlora \
     --dry-run --collect --wait --terminate --yes

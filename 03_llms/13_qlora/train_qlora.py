@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 MODEL_ID = "Qwen/Qwen3-4B"
 # Apply the same LoRA adapters to these attention and feed-forward projections.
@@ -28,14 +29,18 @@ CORPUS = (
 )
 
 
-def require_gpu():
+def require_gpu() -> None:
     """Check GPU availability and explain CPU-only options."""
     cpu_help = (
         "\nYou can inspect the theoretical memory plan without a GPU:\n"
         "  uv run --no-project python "
         "03_llms/13_qlora/train_qlora.py --plan\n"
         "Or run the local tests:\n"
-        "  uv run tests/test_qlora.py"
+        "  uv run tests/test_qlora.py\n"
+        "\nTo rent a CUDA GPU, see the RunPod instructions in:\n"
+        "  03_llms/13_qlora/README.md\n"
+        "The README explains how to check GPU pricing, launch a pod,\n"
+        "and terminate it after training."
     )
 
     if os.environ.get("ALLOW_CPU") == "1":
@@ -69,7 +74,8 @@ def require_gpu():
         )
 
 
-def parse_args(argv=None):
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line options for LoRA and QLoRA experiments."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm", choices=("both", "lora", "qlora"),
                         default="both")
@@ -90,7 +96,7 @@ def parse_args(argv=None):
     return args
 
 
-def check_config(config):
+def check_config(config: dict[str, Any]) -> None:
     """Reject configs which silently make the two labels incomparable."""
     if config.get("zero_optimization", {}).get("stage") != 2:
         raise ValueError("Both arms require ZeRO-2. Quantized ZeRO-3 may "
@@ -103,7 +109,7 @@ def check_config(config):
         raise ValueError("Both arms require bf16 compute.")
 
 
-def parameter_count(param):
+def parameter_count(param: Any) -> int:
     """Params4bit.numel counts packed bytes; quant_state.shape is logical."""
     state = getattr(param, "quant_state", None)
     if state is not None:
@@ -114,7 +120,7 @@ def parameter_count(param):
     return getattr(param, "ds_numel", param.numel())
 
 
-def parameter_stats(model):
+def parameter_stats(model: Any) -> dict[str, int]:
     """Logical counts and stored tensor bytes, including quantization state."""
     logical = trainable = storage = quantized = 0
     for param in model.parameters():
@@ -137,7 +143,7 @@ def parameter_stats(model):
                 stored_tensor_bytes=storage, quantized_tensors=quantized)
 
 
-def expected_adapter_count(model):
+def expected_adapter_count(model: Any) -> int:
     """Independent LoRA formula: rank x (input width + output width)."""
     expected = targets = 0
     for name, layer in model.named_modules():
@@ -154,7 +160,7 @@ def expected_adapter_count(model):
     return expected
 
 
-def check_pair(lora, qlora):
+def check_pair(lora: dict[str, Any], qlora: dict[str, Any]) -> None:
     """Reject unequal adapters, contaminated peaks, or invalid NF4 results."""
     # Check that neither run began with substantial GPU memory already in use.
     if any(row["start_allocated_bytes"] > 256 * 2**20 for row in (lora, qlora)):
@@ -178,14 +184,14 @@ def check_pair(lora, qlora):
                          "Investigate rather than publishing the comparison.")
 
 
-def check_loss_trend(result):
+def check_loss_trend(result: dict[str, Any]) -> None:
     """Only a long enough run can support a tiny-corpus loss trend claim."""
     if result["steps"] >= 20 and (
             result["last_window_mean"] >= result["first_window_mean"]):
         raise ValueError(f"{result['arm']} loss did not decrease over the "
                          "five-step windows; investigate the training run.")
 
-def compare_isolated_arms(args):
+def compare_isolated_arms(args: argparse.Namespace) -> None:
     """Train each arm in a fresh worker so the first model cannot skew VRAM."""
     rank = int(os.environ.get("RANK", "0"))
     # Each DeepSpeed worker starts both children in order. The child inherits
@@ -227,7 +233,8 @@ def compare_isolated_arms(args):
     print("LoRA vs QLoRA comparison passed; saved", args.output, flush=True)
 
 
-def main():
+def main() -> None:
+    """Coordinate GPU validation, model initialization, and LoRA/QLoRA training."""
     args = parse_args()
     # The planning mode needs no GPU or heavyweight training dependencies.
     if args.plan:
