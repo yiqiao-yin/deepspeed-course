@@ -3,7 +3,7 @@
   "bf16": {
     "enabled": true
   },
-  "_precision_comment": "bf16 needs Ampere (A100/3090) or newer. On older cards use fp16 instead — but NEVER enable both, DeepSpeed raises at initialization and tests/test_ds_configs.py will catch it.",
+  "_precision_comment": "This comparison requires bf16, supported by the tested RTX 3090 and RTX 4090 GPUs. Older GPUs without bf16 support are outside the validated setup. Do not switch to fp16 without updating the training checks and repeating the benchmarks. Never enable bf16 and fp16 simultaneously.",
   "optimizer": {
     "type": "AdamW",
     "params": {

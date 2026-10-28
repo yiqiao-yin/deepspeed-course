@@ -83,7 +83,7 @@ scancel <jobid>                          # if you need to stop the job
 From the repository root, inspect price and availability, launch with
 automatic termination, and confirm no pod remains:
 
-Before running these commands, set the RUNPOD_API_KEY environment variable in your shell. Uncomment the example below and replace 'your_value_here' with your actual API key. Never commit your actual API key to GitHub.
+Before running these commands, set the `RUNPOD_API_KEY` environment variable in your shell. Uncomment the example below and replace `your_value_here` with your actual API key. Never commit your actual API key to GitHub.
 
 ```bash
 # export RUNPOD_API_KEY="your_value_here"
@@ -283,7 +283,7 @@ The timing measurements are descriptive results from a small sample and do not e
 
 Across all five experiments, QLoRA achieved a 51.86% reduction in peak allocated GPU memory compared with conventional LoRA, while both methods trained the same 16,515,072 adapter parameters.
 
-Because the model, training data, adapter configuration, and DeepSpeed ZeRO-2 settings remained consistent, the observed difference primariliy reflects the reduced memory requirements of QLoRA's quantized base weights.
+Because the model, training data, adapter configuration, and DeepSpeed ZeRO-2 settings remained consistent, the observed difference primarily reflects the reduced memory requirements of QLoRA's quantized base weights.
 
 These measurements represent peak PyTorch-allocated CUDA memory, not total physical GPU memory consumption.
 

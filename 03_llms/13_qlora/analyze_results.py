@@ -34,10 +34,15 @@ for gpu, runs in sorted(benchmarks.items()):
 
     slowdown = ((qlora_mean / lora_mean) - 1) * 100
 
-    lora_memory = runs[0]["lora"]["peak_allocated_bytes"]
-    qlora_memory = runs[0]["qlora"]["peak_allocated_bytes"]
+    # Calculate memory savings for every run, not just the first one.
+    memory_savings_by_run = [
+        (1 - run["qlora"]["peak_allocated_bytes"]
+         / run["lora"]["peak_allocated_bytes"]) * 100
+         for run in runs
+    ]
 
-    memory_savings = (1 - qlora_memory / lora_memory) * 100
+
+    memory_savings = statistics.mean(memory_savings_by_run)
 
     print(f"\n{gpu} — {len(runs)} benchmark runs")
     print(f"LoRA mean:        {lora_mean:.2f} seconds")
