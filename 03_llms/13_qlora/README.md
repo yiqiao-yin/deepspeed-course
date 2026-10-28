@@ -381,3 +381,29 @@ Restoring the original condition returned the suite to 18/18 passing.
 This demonstrates that the tests detect disabled peak-memory validation.
 The demonstration ran locally using simulated measurements; it did not
 require a GPU. The broken change was never committed.
+
+## References
+
+### Research papers
+
+1. **Hu, E. J., et al. (2021).** *LoRA: Low-Rank Adaptation of Large Language Models.* arXiv:2106.09685.
+   Introduces low-rank adaptation for efficient fine-tuning of pretrained language models.
+
+2. **Dettmers, T., Pagnoni, A., Holtzman, A., & Zettlemoyer, L. (2023).** *QLoRA: Efficient Finetuning of Quantized LLMs.* Advances in Neural Information Processing Systems (NeurIPS 36). arXiv:2305.14314.
+   Introduces QLoRA, including 4-bit NormalFloat (NF4) quantization and double quantization.
+
+3. **Rajbhandari, S., Rasley, J., Ruwase, O., & He, Y. (2020).** *ZeRO: Memory Optimizations Toward Training Trillion Parameter Models.* Proceedings of SC20: International Conference for High Performance Computing, Networking, Storage and Analysis. arXiv:1910.02054.
+   Introduces the ZeRO approach used by DeepSpeed to reduce redundant memory consumption during distributed training.
+
+4. **Yang, A. et al. (2025).** *Qwen3 Technical Report.* arXiv:2505.09388.
+   Describes the Qwen3 model family, including the architecture and capabilities underlying the model used in this experiment.
+
+### Implementation resources
+
+5. **Hugging Face.** *PEFT Documentation — Quantization.*
+   Technical documentation describing parameter-efficient fine-tuning with quantized language models.
+   https://github.com/huggingface/peft/blob/main/docs/source/developer_guides/quantization.md
+
+6. **bitsandbytes contributors.** *bitsandbytes Documentation.*
+   Implementation documentation for low-bit quantization, including 4-bit NF4 quantization.
+   https://huggingface.co/docs/bitsandbytes/main/en/index
