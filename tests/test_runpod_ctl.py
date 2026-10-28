@@ -19,6 +19,7 @@ import importlib.util
 import pathlib
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import REPO_ROOT, Results, source_contains  # noqa: E402
@@ -39,7 +40,34 @@ def main() -> int:
 
     r.check(CTL.exists(), "runpod/runpod_ctl.py exists")
     ctl = load_ctl()
+    # ---- Security: GraphQL API keys must not appear in URLs ----------
+    fake_key = "FAKE_TEST_KEY"
+    captured = {}
 
+    class RequestCaptured(Exception):
+        pass
+
+    def capture_request(url, *, data=None, method=None, headers=None):
+        captured["url"] = url
+        captured["authorization"] = (headers or {}).get("Authorization")
+        raise RequestCaptured()
+
+    with patch("urllib.request.Request", side_effect=capture_request):
+        try:
+            ctl._request(
+                ctl.GRAPHQL,
+                fake_key,
+                method="POST",
+                payload={"query": "{ gpuTypes { id } }"}
+            )
+        except RequestCaptured:
+            pass
+
+    r.check(
+        captured.get("url") == ctl.GRAPHQL
+        and captured.get("authorization") == f"Bearer {fake_key}",
+        "GraphQL API key stays in the Authorization header, not the URL"
+    )
     # ---- 1. The example table must match the repository ----------------
     for name, spec in ctl.EXAMPLES.items():
         folder = REPO_ROOT / name

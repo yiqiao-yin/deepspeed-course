@@ -575,8 +575,6 @@ def api_key(args) -> str:
 
 def _request(url: str, key: str, method: str = "GET", payload=None, timeout: int = 60):
     data = json.dumps(payload).encode() if payload is not None else None
-    if url == GRAPHQL:
-        url += "?" + urllib.parse.urlencode({"api_key": key})
     req = urllib.request.Request(url, data=data, method=method, headers={
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
