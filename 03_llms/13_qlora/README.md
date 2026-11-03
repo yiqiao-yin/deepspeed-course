@@ -5,6 +5,10 @@ base weights in bf16 (LoRA) or NF4 four-bit form (QLoRA). The training task,
 adapter targets, optimizer, and ZeRO stage stay the same. This is a memory
 comparison, not an evaluation of answer quality.
 
+**Baseline:** bf16 LoRA on the same Qwen3-4B, same adapters, same data — 8.19 GiB peak allocated per rank.
+
+**Budget:** 40 optimizer steps per arm; 5 runs across RTX 3090 and RTX 4090.
+
 ## What this demonstrates
 
 DeepSpeed **ZeRO-2** shards gradients and optimizer state across ranks but

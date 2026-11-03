@@ -1102,13 +1102,13 @@ The layout engine and the base colours are set **globally**, once, in
 | every `*TextColor` | `#ffffff` | white type throughout |
 
 > ⛔ **Do not put `%%{init: ...}%%` or `layout: elk` inside a diagram.** It
-> fights the global config and drifts the moment the config changes. All 36
+> fights the global config and drifts the moment the config changes. All 68
 > mermaid pages currently declare neither — keep it that way.
 
 #### What you DO declare: the five node classes
 
 Add these `classDef` lines at the bottom of your diagram and assign nodes with
-`class`. Copy the block verbatim — the names are load-bearing across 67 pages:
+`class`. Copy the block verbatim — the names are load-bearing across 68 pages:
 
 ```
 classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff

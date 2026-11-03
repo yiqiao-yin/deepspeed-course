@@ -37,10 +37,11 @@ def require_gpu() -> None:
         "03_llms/13_qlora/train_qlora.py --plan\n"
         "Or run the local tests:\n"
         "  uv run tests/test_qlora.py\n"
-        "\nTo rent a CUDA GPU, see the RunPod instructions in:\n"
-        "  03_llms/13_qlora/README.md\n"
-        "The README explains how to check GPU pricing, launch a pod,\n"
-        "and terminate it after training."
+        "\nTo rent a CUDA GPU, run this command from the repository root:\n"
+        "  uv run runpod/runpod_ctl.py run 03_llms/13_qlora "
+        "--dry-run --collect --wait --terminate --yes\n"
+        "See 03_llms/13_qlora/README.md for credentials, pricing,\n"
+        "and instructions for running from a contribution fork."
     )
 
     if os.environ.get("ALLOW_CPU") == "1":
