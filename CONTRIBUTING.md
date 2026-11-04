@@ -136,6 +136,14 @@ welcome.
   `04_video_text/05_your_idea/`. This is often the better choice — it inherits the
   topic's context and does not claim the reader has finished everything before it.
 
+**Take the number when you open the PR, not when you open the issue.** A number
+discussed in an issue is not reserved, and the gap between proposing an example
+and finishing it is usually weeks. This has already cost someone once: #32 was
+told to use `03_llms/12_qlora`, we merged `12_prefill_decode` into that slot nine
+days later, and the contributor had to renumber the whole folder themselves. If a
+maintainer suggests a number, treat it as "the next free one at the time", re-check
+`ls` before you push, and rename without asking if it has gone — nobody will mind.
+
 ### Before you start something large
 
 Open an issue describing the idea. Not for permission — to avoid two people
@@ -522,6 +530,7 @@ verifiable, and almost every one is enforced by CI or by a test:
 | **Sidebar entry** | `docusaurus-docs/sidebars.js` | `test_docs_style.py` — a missing entry silently **orphans** the page, so it is now checked |
 | **Mermaid palette** | any `\`\`\`mermaid` block | `test_docs_style.py` |
 | **Clawdeck lab entry** | `clawdeck.yaml` at the repo root | `test_clawdeck_manifest.py` **fails** without it |
+| **Tier-3 claim** | `**Baseline:**` and `**Budget:**` near the top of the folder README, **and** an entry in `TIER3` in `tests/test_tier3_claims.py` | `test_tier3_claims.py` — only for examples claiming *X beats Y on a measured axis*. The test iterates its own registry, so a lab you do **not** register is silently unchecked rather than failed. See [§7a](#7a-if-your-lab-claims-something-is-better). |
 
 Every row is now guarded. `test_docs_style.py` closed the sidebar gap, which
 nothing in the Docusaurus build warns about, and `test_clawdeck_manifest.py`
