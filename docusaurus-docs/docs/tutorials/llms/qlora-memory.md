@@ -75,21 +75,45 @@ how the frozen base model is stored in GPU memory.
 
 ```mermaid
 flowchart TB
-    START["Same Qwen3-4B model, adapters, data, and training workload"]
+    START["Controlled comparison: Qwen3-4B"]
+    CONFIG["Same adapters, optimizer, data, and 40 optimizer steps per arm"]
+    ZERO["DeepSpeed ZeRO-2 configured for both arms"]
 
-    START --> LBASE["LoRA: frozen bf16 base weights"]
-    START --> QBASE["QLoRA: frozen 4-bit NF4 base weights"]
+    START --> CONFIG
+    CONFIG --> ZERO
 
-    LBASE --> LADAPT["Trainable LoRA adapters"]
-    QBASE --> QADAPT["Trainable LoRA adapters"]
+    subgraph LORA["LoRA: bf16 configuration"]
+        direction TB
+        LB["Frozen base weights: bf16"]
+        LA["Trainable LoRA adapters: rank 8"]
+        LS["Adapter gradients and optimizer states"]
+        LM["LoRA: Peak PyTorch allocation: 8.19 GiB"]
 
-    LADAPT --> LSTATE["Adapter gradients and optimizer states"]
-    QADAPT --> QSTATE["Adapter gradients and optimizer states"]
+        LB --> LA
+        LA --> LS
+        LS --> LM
+    end
 
-    LSTATE --> ZERO["DeepSpeed ZeRO-2"]
-    QSTATE --> ZERO
+    subgraph QLORA["QLoRA: 4-bit configuration"]
+        direction TB
+        QB["Frozen base weights: 4-bit NF4"]
+        QA["Trainable LoRA adapters: rank 8"]
+        QS["Adapter gradients and optimizer states"]
+        QM["QLoRA: Peak PyTorch allocation: 3.94 GiB"]
 
-    ZERO --> RESULT["Optimizer states and gradients are partitioned across ranks in multi-GPU training"]
+        QB --> QA
+        QA --> QS
+        QS --> QM
+    end
+
+    ZERO --> LB
+    ZERO --> QB
+
+    LM --> RESULT["QLoRA: 51.86% lower peak allocated GPU memory"]
+    QM --> RESULT
+
+    NOTE["Five single-GPU runs across RTX 3090 and RTX 4090"]
+    RESULT --> NOTE
 
     classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
     classDef dark   fill:#0a1f33,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -97,12 +121,12 @@ flowchart TB
     classDef bright fill:#1e5f8f,stroke:#63a3d0,stroke-width:1.5px,color:#ffffff
     classDef steel  fill:#28527a,stroke:#6aa2cd,stroke-width:1.5px,color:#ffffff
 
-    class START deep
-    class LBASE,QBASE bright
-    class LADAPT,QADAPT steel
-    class LSTATE,QSTATE base
-    class ZERO dark
-    class RESULT deep
+    class START,NOTE deep
+    class CONFIG,ZERO dark
+    class LB,QB base
+    class LA,QA,LS,QS steel
+    class LM,QM,RESULT bright
+    class LORA,QLORA deep
 ```
 
 **Important:** All five benchmark runs used a single GPU. Consequently,
