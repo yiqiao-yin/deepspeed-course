@@ -73,6 +73,7 @@ TIER3 = {
     "03_llms/03_ocr": "ranks five OCR models by accuracy and tokens",
     "03_llms/11_moe": "claims load balancing makes the model worse",
     "03_llms/12_prefill_decode": "ranks three scheduling policies",
+    "03_llms/13_qlora": "claims NF4 QLoRA reduces peak allocated GPU memory versus bf16 LoRA",
     "04_video_text/05_video_eval": "claims compression costs temporal accuracy",
     "05_video_speech/04_omni_eval": "claims a model does or does not fuse",
     "07_physical_ai/01_obstacle_hopper": "compares a height-blind policy against a seeing one",
@@ -126,7 +127,7 @@ def test_tier3_labs_declare_a_baseline(r: Results) -> None:
         if not readme.exists():
             r.check(False, f"{lab}: README exists")
             continue
-        r.check(bool(BASELINE.search(readme.read_text())),
+        r.check(bool(BASELINE.search(readme.read_text(encoding="utf-8"))),
                 f"{lab}: declares a baseline",
                 f"it {why}, so add a line '**Baseline:** <what>' naming what "
                 f"the comparison is against")
@@ -145,7 +146,7 @@ def test_tier3_labs_declare_a_budget(r: Results) -> None:
         readme = REPO / lab / "README.md"
         if not readme.exists():
             continue
-        r.check(bool(BUDGET.search(readme.read_text())),
+        r.check(bool(BUDGET.search(readme.read_text(encoding="utf-8"))),
                 f"{lab}: declares a budget",
                 "add '**Budget:** <epochs / steps / repeats / seeds>' -- the "
                 "configuration a number came from is part of the number")

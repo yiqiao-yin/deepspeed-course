@@ -19,6 +19,7 @@ import importlib.util
 import pathlib
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _srcload import REPO_ROOT, Results, source_contains  # noqa: E402
@@ -39,7 +40,34 @@ def main() -> int:
 
     r.check(CTL.exists(), "runpod/runpod_ctl.py exists")
     ctl = load_ctl()
+    # ---- Security: GraphQL API keys must not appear in URLs ----------
+    fake_key = "FAKE_TEST_KEY"
+    captured = {}
 
+    class RequestCaptured(Exception):
+        pass
+
+    def capture_request(url, *, data=None, method=None, headers=None):
+        captured["url"] = url
+        captured["authorization"] = (headers or {}).get("Authorization")
+        raise RequestCaptured()
+
+    with patch("urllib.request.Request", side_effect=capture_request):
+        try:
+            ctl._request(
+                ctl.GRAPHQL,
+                fake_key,
+                method="POST",
+                payload={"query": "{ gpuTypes { id } }"}
+            )
+        except RequestCaptured:
+            pass
+
+    r.check(
+        captured.get("url") == ctl.GRAPHQL
+        and captured.get("authorization") == f"Bearer {fake_key}",
+        "GraphQL API key stays in the Authorization header, not the URL"
+    )
     # ---- 1. The example table must match the repository ----------------
     for name, spec in ctl.EXAMPLES.items():
         folder = REPO_ROOT / name
@@ -94,6 +122,20 @@ def main() -> int:
     r.check(ctl.bootstrap("01_basics/01_neuralnet", ctl.EXAMPLES["01_basics/01_neuralnet"],
                           "feature-x").count("-b feature-x") == 1,
             "bootstrap honours --branch")
+    fork_boot = ctl.bootstrap("03_llms/13_qlora", ctl.EXAMPLES["03_llms/13_qlora"],
+                              "feature/qlora-vs-lora",
+                              repo_url="https://github.com/contributor/deepspeed-course")
+    r.check("https://github.com/contributor/deepspeed-course" in fork_boot
+            and "codeload.github.com/contributor/deepspeed-course/" in fork_boot
+            and "-b feature/qlora-vs-lora" in fork_boot,
+            "a contributor fork and branch reach both clone and tarball fallback")
+    try:
+        ctl.bootstrap("03_llms/13_qlora", ctl.EXAMPLES["03_llms/13_qlora"],
+                      "main", repo_url="https://example.org/repo; echo unsafe")
+    except ValueError:
+        r.check(True, "unsafe repository override is rejected")
+    else:
+        r.check(False, "unsafe repository override is rejected")
 
     # ---- 4. Cost guard ----------------------------------------------------
     r.check(source_contains("runpod/runpod_ctl.py", "Refusing to create without --yes"),
@@ -403,6 +445,10 @@ def main() -> int:
     r.check(") &;" not in one,
             "the watchdog does not leave a bare `&` before a `;`",
             "`cmd &; next` is a bash syntax error and kills the whole command")
+    fork_syntax = subprocess.run(["bash", "-n"], input=fork_boot,
+                                  capture_output=True, text=True)
+    r.check(fork_syntax.returncode == 0,
+            "fork's pod start command parses as Bash", fork_syntax.stderr)
 
     return r.finish()
 

@@ -297,8 +297,8 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
         src = s.read_text(errors="ignore")
         rel = s.relative_to(REPO_ROOT)
         r.add(name, "B", f"{s.name}: bash -n parses",
-              subprocess.run(["bash", "-n", str(s)],
-                             capture_output=True).returncode == 0)
+              subprocess.run(["bash", "-n", rel.as_posix()],
+                             capture_output=True, cwd=REPO_ROOT).returncode == 0)
         r.add(name, "B", f"{s.name}: executable bit set",
               os.access(s, os.X_OK), "docs invoke it as ./" + s.name)
         r.add(name, "B", f"{s.name}: --ntasks-per-node=1",

@@ -1,0 +1,56 @@
+# =============================================================================
+# 03_llms/13_qlora as a self-contained uv project.
+#
+#     cd 03_llms/13_qlora
+#     uv sync                    # creates .venv, installs the LOCKED versions
+#     uv run deepspeed --num_gpus=1 train_qlora.py
+#
+# The committed uv.lock is required (CONTRIBUTING.md section 4): it is what
+# makes every reader install the same versions. Without it `uv pip install`
+# resolves to whatever is newest that day, which is how a tutorial that worked
+# in March breaks in September with nobody having touched it.
+#
+# Dependencies are recorded in the committed uv.lock file.
+# After changing dependencies, run `uv lock` and commit the updated lockfile.
+
+# PyTorch uses the explicit CUDA 12.8 (cu128) index configured below.
+# This matches the CUDA version used in the tested RunPod environment.
+# CUDA wheels require compatible NVIDIA drivers. Verify compatibility
+# before attempting to reproduce this experiment on different hardware.
+# =============================================================================
+
+[project]
+name = "deepspeed-course-03-llms-13-qlora"
+version = "0.1.0"
+description = "QLoRA vs LoRA"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.2",
+    "deepspeed>=0.14",
+    "accelerate>=0.30",
+    "bitsandbytes>=0.43",
+    "peft==0.20.0",
+    "transformers==5.16.1",
+]
+
+[project.optional-dependencies]
+# Weights & Biases is optional and is not used by this training script.
+# Readers may add their own experiment tracking if desired.
+# The LoRA vs QLoRA comparison runs without W&B.
+tracking = ["wandb>=0.16"]
+
+[tool.uv]
+# Runnable example, not a distributable library. Without this uv tries to BUILD
+# the folder as a package and `uv sync` fails.
+package = false
+
+# Pin the CUDA build rather than inheriting PyPI's default -- see the header.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

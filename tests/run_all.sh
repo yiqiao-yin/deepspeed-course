@@ -78,6 +78,7 @@ TESTS=(
     tests/test_cath_source.py
     tests/test_ss_derivation.py
     tests/test_kimi_k3_plan.py
+    tests/test_qlora.py
 )
 
 for test in "${TESTS[@]}"; do

@@ -1,0 +1,46 @@
+[
+  {
+    "lora": {
+      "arm": "lora",
+      "representation": "bf16",
+      "zero_stage": 2,
+      "rank": 0,
+      "steps": 40,
+      "training_seconds": 12.732952528982423,
+      "start_allocated_bytes": 0,
+      "loaded_allocated_bytes": 8111015936,
+      "load_peak_allocated_bytes": 8111130624,
+      "peak_allocated_bytes": 8795912704,
+      "first_loss": 5.366782188415527,
+      "last_loss": 0.01122497022151947,
+      "first_window_mean": 4.88054313659668,
+      "last_window_mean": 0.03668159488588572,
+      "logical_parameters": 4038983168,
+      "trainable_parameters": 16515072,
+      "stored_tensor_bytes": 8110996992,
+      "quantized_tensors": 0,
+      "expected_adapter_parameters": 16515072
+    },
+    "qlora": {
+      "arm": "qlora",
+      "representation": "nf4",
+      "zero_stage": 2,
+      "rank": 0,
+      "steps": 40,
+      "training_seconds": 15.18657016090583,
+      "start_allocated_bytes": 0,
+      "loaded_allocated_bytes": 3523096576,
+      "load_peak_allocated_bytes": 4234574848,
+      "peak_allocated_bytes": 4234574848,
+      "first_loss": 5.912984848022461,
+      "last_loss": 0.46333786845207214,
+      "first_window_mean": 5.116921329498291,
+      "last_window_mean": 0.29637926518917085,
+      "logical_parameters": 4038983168,
+      "trainable_parameters": 16515072,
+      "stored_tensor_bytes": 3497302899,
+      "quantized_tensors": 252,
+      "expected_adapter_parameters": 16515072
+    }
+  }
+]

@@ -221,7 +221,7 @@ def test_page_structure(r: Results) -> None:
     no_frontmatter, no_position, orphans = [], [], []
     for p in pages():
         text = p.read_text()
-        rel = str(p.relative_to(DOCS)).replace(".md", "")
+        rel = p.relative_to(DOCS).with_suffix("").as_posix()
         if not text.startswith("---"):
             no_frontmatter.append(rel)
         elif "sidebar_position:" not in text.split("---")[1]:

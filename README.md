@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 72 pages with
+The documentation site is the primary way to read this material: 73 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -226,8 +226,8 @@ deepspeed-course/
 │   ├── 09_multi_agency/         # Multi-agent GRPO (drives TRL directly, no DeepSpeed launcher)
 │   ├── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
 │   ├── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
-│   └── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
-│
+│   ├── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
+│   └── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers
 │   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME
