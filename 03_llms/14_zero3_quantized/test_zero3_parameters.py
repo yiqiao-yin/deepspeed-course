@@ -2,8 +2,11 @@
 
 import torch
 
-from train_zero3 import parameter_stats, parameter_partition_details
-
+from train_zero3 import ( 
+    parameter_stats,
+    parameter_partition_details,
+    classify_partition_state,
+)
 
 class FakeModel:
     """Minimal model exposing named parameters."""
@@ -67,11 +70,63 @@ def test_parameter_details():
 
     print("PASS: Parameter-level diagnostics correctly recorded.")
 
+def test_partition_classification():
+    """Ensure NF4 compression is not mistaken for ZeRO-3 sharding."""
+
+    cases = [
+        (
+            {
+                "has_shard_metadata": True,
+                "local_elements": 25,
+                "ds_numel": 100,
+                "is_quantized": False,
+            },
+            "locally_partitioned",
+        ),
+        (
+            {
+                "has_shard_metadata": True,
+                "local_elements": 100,
+                "ds_numel": 100,
+                "is_quantized": False,
+            },
+            "full_size_deepspeed_managed",
+        ),
+        (
+            {
+                "has_shard_metadata": False,
+                "local_elements": 50,
+                "ds_numel": None,
+                "is_quantized": True,
+            },
+            "quantized_without_shard_metadata",
+        ),
+        (
+            {
+                "has_shard_metadata": False,
+                "local_elements": 100,
+                "ds_numel": None,
+                "is_quantized": False,
+            },
+            "unmanaged_parameter",
+        ),
+    ]
+
+    for row, expected in cases:
+        actual = classify_partition_state(row)
+
+        assert actual == expected, (
+            f"Expected {expected}, got {actual}"
+        )
+
+    print("PASS: Partition-state classification.")
+    print("PASS: NF4 compression is not mistaken for ZeRO-3 sharding.")
 
 if __name__ == "__main__":
     test_unpartitioned()
     test_partitioned()
     test_parameter_details()
+    test_partition_classification()
 
     print("\nALL PARAMETER TESTS PASSED")
     print("NOTE: These are synthetic CPU tests, not GPU measurements.")
