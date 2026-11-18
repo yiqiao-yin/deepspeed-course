@@ -290,6 +290,14 @@ labs:
     gpu: { min_vram_gb: 24, count: 1 }
     run:
       - { label: "Compare (20 steps each)", cmd: "uv run deepspeed --num_gpus=1 train_qlora.py --max-steps 20", primary: true }
+  - id: 03_llms/14_zero3_quantized
+    title: "ZeRO-3: BF16 vs NF4"
+    summary: "Investigate whether NF4 quantization changes ZeRO-3 parameter partitioning across two GPUs."
+    est_minutes: 45
+    gpu: { min_vram_gb: 24, count: 2 }
+    run:
+      - { label: "BF16 baseline (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_zero3.py --arm bf16 --output-dir results/bf16", primary: true }
+      - { label: "NF4 comparison (2 GPUs)", cmd: "uv run deepspeed --num_gpus=2 train_zero3.py --arm nf4 --output-dir results/nf4" }
   # ---------------------------------------------------------------------------
   # 07_physical_ai — learning to act in a simulated world
   # ---------------------------------------------------------------------------
