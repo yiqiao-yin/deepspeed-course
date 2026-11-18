@@ -9,12 +9,18 @@ CPU check:
 Linux, 2 GPUs (one arm per separate launch):
     deepspeed --num_gpus=2 train_zero3.py --arm bf16
     deepspeed --num_gpus=2 train_zero3.py --arm nf4
+
+Each launch reserves a fresh subdirectory under --output-dir, shared by its
+ranks. Use measurements_complete.json to identify runs with all rank reports.
+The manifest records collection completion. Scientific validation is separate.
+A null logical count means the original element count was unavailable.
 """
 
 import argparse
 import json
 import math
 import os
+import tempfile
 from pathlib import Path
 
 MODEL_ID = "Qwen/Qwen3-4B"
@@ -78,36 +84,59 @@ def parameter_partition_details(model):
         shard = getattr(param, "ds_tensor", None)
         shard_elements = int(shard.numel()) if shard is not None else None
         partition_elements = getattr(shard, "ds_numel", None)
-        quant_state = getattr(param, "quant_state", None)
-        if quant_state is None:
-            quant_state = getattr(shard, "quant_state", None)
-        quant_shape = getattr(quant_state, "shape", None)
-        is_quantized = quant_state is not None or type(param).__name__ == "Params4bit"
+        param_quant_state = getattr(param, "quant_state", None)
+        shard_quant_state = getattr(shard, "quant_state", None)
+
+        def quant_metadata(field, fallback=None):
+            value = getattr(param_quant_state, field, None)
+            if value is None:
+                value = getattr(shard_quant_state, field, None)
+            return fallback if value is None else value
+
+        quant_shape = quant_metadata("shape")
+        quant_type = quant_metadata(
+            "quant_type", getattr(param, "quant_type", None) or getattr(shard, "quant_type", None),
+        )
+        bnb_quantized = getattr(param, "bnb_quantized", None)
+        is_quantized = (
+            param_quant_state is not None or shard_quant_state is not None
+            or quant_type in ("nf4", "fp4") or bnb_quantized is True
+            or any(cls.__name__ == "Params4bit" for cls in type(param).__mro__)
+        )
         quant_storage = getattr(param, "quant_storage", None)
+        if quant_storage is None:
+            quant_storage = getattr(shard, "quant_storage", None)
         has_zero_quant_scale = getattr(shard, "ds_quant_scale", None) is not None
 
-        # A Params4bit shape describes the original weights. ZeRO's ds_numel
-        # describes the representation it partitioned, which can already be packed.
-        logical = math.prod(quant_shape) if quant_shape is not None else ds_numel
+        # ZeRO's ds_numel can describe an already packed representation.
+        if is_quantized:
+            logical = math.prod(quant_shape) if quant_shape is not None else None
+        else:
+            logical = ds_numel if ds_id is not None else local
+
         padding_size = getattr(param, "padding_size", None)
         padding = None
         if ds_aligned is not None and ds_numel is not None:
             padding = int(ds_aligned - ds_numel)
         elif callable(padding_size):
             padding = int(padding_size())
+        partition_world_size = getattr(param, "ds_zero_partition_world_size", None)
 
         row = {
-            "name": name, "logical_elements": int(logical) if logical is not None else local,
+            "name": name, "logical_elements": int(logical) if logical is not None else None,
             # These existing fields describe the parameter view, even when gathered.
             "local_elements": local,
             "local_bytes": local * param.element_size(),
             "device": str(param.device), "dtype": str(param.dtype),
             "requires_grad": bool(param.requires_grad),
+            # Quantization metadata or a 4-bit wrapper can precede packing.
             "is_quantized": is_quantized,
-            "quant_type": getattr(quant_state, "quant_type", None) or getattr(param, "quant_type", None),
+            "bnb_quantized": bnb_quantized,
+            "quant_type": quant_type,
             "quant_shape": list(quant_shape) if quant_shape is not None else None,
-            "quant_blocksize": getattr(quant_state, "blocksize", None),
-            "quant_nested": getattr(quant_state, "nested", None),
+            "quant_blocksize": quant_metadata("blocksize", getattr(param, "blocksize", None)),
+            "quant_nested": quant_metadata("nested"),
+            "quant_compress_statistics_configured": getattr(param, "compress_statistics", None),
             "quant_storage_dtype": str(quant_storage) if quant_storage is not None else None,
             "deepspeed_managed": ds_id is not None,
             "has_shard_metadata": ds_id is not None and ds_numel is not None and shard is not None,
@@ -116,6 +145,9 @@ def parameter_partition_details(model):
             "ds_numel": int(ds_numel) if ds_numel is not None else None,
             "ds_numel_aligned": int(ds_aligned) if ds_aligned is not None else None,
             "ds_padding_elements": padding,
+            "ds_partition_world_size": (
+                int(partition_world_size) if partition_world_size is not None else None
+            ),
             "shard_elements": shard_elements,
             "shard_bytes": shard_elements * shard.element_size() if shard is not None else None,
             "shard_device": str(shard.device) if shard is not None else None,
@@ -143,11 +175,39 @@ def classify_partition_state(row):
                 return "incomplete_deepspeed_shard_metadata"
             partition_elements = row["shard_elements"]
 
-        if partition_elements < row["ds_numel"]:
+        full_elements = row["ds_numel"]
+        padding = row["ds_padding_elements"]
+        group_size = row["ds_partition_world_size"]
+        aligned = full_elements + padding if padding is not None else None
+
+        if full_elements < 0 or partition_elements < 0 or (padding is not None and padding < 0):
+            return "unexpected_deepspeed_size"
+        if group_size is not None:
+            if group_size < 1:
+                return "unexpected_deepspeed_size"
+            expected_capacity = (full_elements + group_size - 1) // group_size
+            if partition_elements != expected_capacity or (
+                aligned is not None and aligned != expected_capacity * group_size
+            ):
+                return "unexpected_deepspeed_size"
+        elif aligned is not None:
+            if partition_elements == 0:
+                return "empty_deepspeed_parameter" if aligned == 0 else "unexpected_deepspeed_size"
+            group_size, remainder = divmod(aligned, partition_elements)
+            if group_size < 1 or remainder or padding >= group_size:
+                return "unexpected_deepspeed_size"
+        elif 0 < partition_elements < full_elements:
             return "locally_partitioned"
-        if partition_elements == row["ds_numel"]:
-            return "full_size_deepspeed_managed"
-        return "unexpected_deepspeed_size"
+        elif partition_elements != full_elements:
+            return "unexpected_deepspeed_size"
+
+        if full_elements == 0:
+            return "empty_deepspeed_parameter"
+        if group_size is None:
+            return "incomplete_deepspeed_shard_metadata"
+        if group_size > 1:
+            return "locally_partitioned"
+        return "full_size_deepspeed_managed"
 
     if row["is_quantized"]:
         return "quantized_without_shard_metadata"
@@ -160,8 +220,19 @@ def parameter_stats(model):
     Quantization metadata and allocator overhead are outside these totals.
     """
     details = parameter_partition_details(model)
+    trainable = [row for row in details if row["requires_grad"]]
+    frozen = [row for row in details if not row["requires_grad"]]
+
+    def logical_total(rows):
+        counts = [row["logical_elements"] for row in rows]
+        return None if None in counts else sum(counts)
+
     return {
-        "logical_parameters": sum(r["logical_elements"] for r in details),
+        "logical_parameters": logical_total(details),
+        "known_logical_parameters": sum(
+            row["logical_elements"] for row in details if row["logical_elements"] is not None
+        ),
+        "unknown_logical_parameter_tensors": sum(row["logical_elements"] is None for row in details),
         "local_elements": sum(r["local_elements"] for r in details),
         "local_parameter_bytes": sum(r["local_bytes"] for r in details),
         "shard_elements": sum(r["shard_elements"] for r in details if r["shard_elements"] is not None),
@@ -170,8 +241,8 @@ def parameter_stats(model):
         "partitioned_tensors": sum(r["partition_state"] == "locally_partitioned" for r in details),
         "missing_shard_tensors": sum(r["partition_state"] == "missing_deepspeed_shard" for r in details),
         "quantized_tensors": sum(r["is_quantized"] for r in details),
-        "frozen_parameters": sum(r["logical_elements"] for r in details if not r["requires_grad"]),
-        "trainable_parameters": sum(r["logical_elements"] for r in details if r["requires_grad"]),
+        "frozen_parameters": logical_total(frozen),
+        "trainable_parameters": logical_total(trainable),
         "parameter_details": details,
     }
 
@@ -196,18 +267,41 @@ def load_model(arm, config):
     return model, ds_config
 
 
-def save_rank_results(stats, output_dir="results"):
-    """Write rank-specific JSON; never label it as a validated research result."""
+def create_run_directory(output_dir, arm):
+    """Reserve an isolated results directory on the ranks' shared filesystem."""
     root = Path(output_dir)
     if not root.is_absolute():
         root = LAB_DIR / root
     root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{stats['arm']}_rank{stats['rank']}.json"
-    with path.open("w", encoding="utf-8") as file:
+    return Path(tempfile.mkdtemp(prefix=f"{arm}-", dir=root.resolve()))
+
+
+def save_rank_results(stats, run_dir):
+    """Publish one rank's measurements atomically inside its run directory."""
+    path = run_dir / f"{stats['arm']}_rank{stats['rank']}.json"
+    temporary = path.with_suffix(".json.tmp")
+    with temporary.open("x", encoding="utf-8") as file:
         json.dump(stats, file, indent=2)
         file.write("\n")
-    print(f"Saved {path}", flush=True)
+    temporary.replace(path)
     return path
+
+
+def mark_measurements_complete(run_dir, arm, world_size):
+    """Publish a manifest only after every expected rank file exists."""
+    rank_files = [f"{arm}_rank{rank}.json" for rank in range(world_size)]
+    missing = [name for name in rank_files if not (run_dir / name).is_file()]
+    if missing:
+        raise RuntimeError(f"Cannot mark measurements complete; missing rank files: {missing}")
+    path = run_dir / "measurements_complete.json"
+    temporary = path.with_suffix(".json.tmp")
+    with temporary.open("x", encoding="utf-8") as file:
+        json.dump({
+            "run_id": run_dir.name, "arm": arm, "world_size": world_size, "rank_files": rank_files,
+        }, file, indent=2)
+        file.write("\n")
+    temporary.replace(path)
+
 
 def attach_lora(model, arm):
     """Freeze the base model and attach identical LoRA adapters."""
@@ -260,34 +354,27 @@ def attach_lora(model, arm):
 
     return model
 
+
 def measure_model_loading(arm, config, output_dir):
     """Measure parameter state before and after DeepSpeed engine initialization."""
     import torch
     from importlib.metadata import version
 
     distributed = initialize_distributed()
+    rank = distributed["rank"]
+    run_directory = [str(create_run_directory(output_dir, arm)) if rank == 0 else None]
+    torch.distributed.broadcast_object_list(run_directory, src=0)
+    run_dir = Path(run_directory[0])
+
     device = distributed["local_rank"]
     torch.cuda.synchronize(device)
     torch.cuda.reset_peak_memory_stats(device)
     start_bytes = torch.cuda.memory_allocated(device)
-    
+
     model, hf_ds_config = load_model(arm, config)
-    
-    # Record parameter statistics before attaching LoRA.
-    before_lora = parameter_stats(model)
-
-    # Attach identical LoRA adapters to both experimental arms.
+    before_lora = {"measurement_stage": "after_model_load_before_lora", **parameter_stats(model)}
     model = attach_lora(model, arm)
-
-    # Record parameter statistics after attaching LoRA.
-    after_lora = parameter_stats(model)
-    
-    stats = parameter_stats(model)
-    stats["before_lora"] = before_lora
-    stats["after_lora"] = after_lora
-
-    # Record parameter distribution before engine initilization.
-    before_engine = parameter_stats(model)
+    before_engine = {"measurement_stage": "after_lora_before_engine", **parameter_stats(model)}
 
     # Initialize DeepSpeed ZeRO-3.
     import deepspeed
@@ -307,32 +394,38 @@ def measure_model_loading(arm, config, output_dir):
         model_parameters=trainable_parameters,
         config=config,
     )
-    #Measure parameter distribution after engine initialization.
-    after_engine = parameter_stats(engine.module)
+    after_engine = {
+        "measurement_stage": "after_deepspeed_engine_initialization",
+        **parameter_stats(engine.module),
+    }
 
-    stats["before_engine"] = before_engine
-    stats["after_engine"] = after_engine
-    
     torch.cuda.synchronize(device)
-    stats.update({
+    stats = {
+        "run_id": run_dir.name,
         "arm": arm, "model": MODEL_ID, "zero_stage_configured": 3,
-        "rank": distributed["rank"], "world_size": distributed["world_size"],
+        "rank": rank, "world_size": distributed["world_size"],
         "local_rank": device, "rank_assignments": distributed["rank_assignments"],
         "gpu_name": torch.cuda.get_device_name(device),
-        "measurement_stage": "after_deepspeed_engine_initialization",
-        "verified_post_engine": True,
-        "start_allocated_gpu_bytes": start_bytes,
-        "allocated_gpu_bytes": torch.cuda.memory_allocated(device),
-        "peak_gpu_bytes": torch.cuda.max_memory_allocated(device),
+        "before_lora": before_lora, "before_engine": before_engine, "after_engine": after_engine,
+        "gpu_memory": {
+            "start_measurement_stage": "before_model_load",
+            "end_measurement_stage": "after_deepspeed_engine_initialization",
+            "start_allocated_gpu_bytes": start_bytes,
+            "allocated_gpu_bytes": torch.cuda.memory_allocated(device),
+            "peak_gpu_bytes": torch.cuda.max_memory_allocated(device),
+        },
         "versions": {name: version(name) for name in
                      ("transformers", "deepspeed", "torch", "bitsandbytes", "peft")},
-    })
-    # hf_ds_config must remain alive while model is loaded and inspected.
-    assert hf_ds_config is not None
-    save_rank_results(stats, output_dir=output_dir)
-    torch.distributed.barrier()
+    }
+    # Keep HfDeepSpeedConfig alive until all measurements have been taken.
     del optimizer, engine, model, hf_ds_config
+    path = save_rank_results(stats, run_dir)
+    print(f"Saved {path}", flush=True)
+    torch.distributed.barrier()
     torch.distributed.destroy_process_group()
+    if rank == 0:
+        mark_measurements_complete(run_dir, arm, distributed["world_size"])
+        print(f"All rank measurements saved in {run_dir}", flush=True)
     return stats
 
 

@@ -3,6 +3,7 @@
 import json
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from train_zero3 import parameter_stats
@@ -104,6 +105,7 @@ def _check_packed_nf4(partition_elements, expected_state):
     if partition_elements is not None:
         weight.ds_id = 1
         weight.ds_numel = 50
+        weight.ds_zero_partition_world_size = 50 // partition_elements
         weight.ds_tensor = torch.zeros(partition_elements, dtype=torch.uint8)
         weight.ds_tensor.ds_numel = partition_elements
 
@@ -127,6 +129,7 @@ def test_packed_deepspeed_shard_uses_partition_capacity():
     weight = torch.nn.Parameter(torch.zeros(0))
     weight.ds_id = 1
     weight.ds_numel = 100
+    weight.ds_zero_partition_world_size = 1
     weight.ds_tensor = torch.zeros(50, dtype=torch.uint8)
     weight.ds_tensor.ds_numel = 100
     weight.ds_tensor.ds_quant_scale = torch.ones(1)
@@ -141,13 +144,91 @@ def test_packed_deepspeed_shard_uses_partition_capacity():
     assert stats["partitioned_tensors"] == 0
 
 
-if __name__ == "__main__":
-    test_unpartitioned()
-    test_empty_view()
-    test_gathered_view()
-    test_missing_shard()
-    test_unmanaged_packed_nf4()
-    test_partitioned_packed_nf4()
-    test_full_size_packed_nf4()
-    test_packed_deepspeed_shard_uses_partition_capacity()
-    print("PASS: All synthetic CPU parameter tests passed.")
+@pytest.mark.parametrize(
+    "size, aligned, capacity, group_size, expected",
+    [
+        (1, 2, 1, 2, "locally_partitioned"),
+        (1, None, 1, 8, "locally_partitioned"),
+        (1, 8, 1, None, "locally_partitioned"),
+        (1, None, 1, None, "incomplete_deepspeed_shard_metadata"),
+        (1, 1, 1, 1, "full_size_deepspeed_managed"),
+        (5, 8, 2, 4, "locally_partitioned"),
+        (5, 8, 4, 2, "unexpected_deepspeed_size"),
+        (5, 8, 3, None, "unexpected_deepspeed_size"),
+        (5, 4, 2, None, "unexpected_deepspeed_size"),
+        (0, 0, 0, 4, "empty_deepspeed_parameter"),
+        (0, 1, 0, None, "unexpected_deepspeed_size"),
+    ],
+)
+def test_zero_shard_capacity(size, aligned, capacity, group_size, expected):
+    weight = torch.nn.Parameter(torch.zeros(size))
+    weight.ds_id = 1
+    weight.ds_numel = size
+    weight.ds_numel_aligned = aligned
+    weight.ds_zero_partition_world_size = group_size
+    weight.ds_tensor = torch.zeros(capacity)
+    weight.ds_tensor.ds_numel = capacity
+
+    row, = parameter_stats(FakeModel(weight))["parameter_details"]
+    assert row["partition_state"] == expected
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_nf4_missing_logical_shape(managed):
+    class Params4bit(torch.nn.Parameter):
+        pass
+
+    class CustomWeight(Params4bit):
+        pass
+
+    weight = CustomWeight(torch.zeros(13, dtype=torch.uint8), requires_grad=False)
+    weight.quant_type = "nf4"
+    weight.bnb_quantized = True
+    weight.quant_storage = torch.uint8
+    weight.blocksize = 64
+    weight.compress_statistics = True
+    if managed:
+        weight.ds_id = 1
+        weight.ds_numel = 13
+        weight.ds_zero_partition_world_size = 2
+        weight.ds_tensor = torch.zeros(7, dtype=torch.uint8)
+        weight.ds_tensor.ds_numel = 7
+
+    model = torch.nn.Module()
+    model.register_parameter("weight", weight)
+    model.register_parameter("adapter", torch.nn.Parameter(torch.zeros(5)))
+    stats = parameter_stats(model)
+    row = stats["parameter_details"][0]
+
+    assert row["logical_elements"] is None
+    assert stats["logical_parameters"] is None
+    assert stats["frozen_parameters"] is None
+    assert stats["trainable_parameters"] == stats["known_logical_parameters"] == 5
+    assert stats["unknown_logical_parameter_tensors"] == 1
+    assert row["quant_type"] == "nf4"
+    assert row["quant_shape"] is None
+    assert row["quant_blocksize"] == 64
+    assert row["quant_storage_dtype"] == "torch.uint8"
+    assert row["bnb_quantized"] is True
+    assert row["quant_compress_statistics_configured"] is True
+    assert row["quant_nested"] is None
+    assert row["local_bytes"] == 13
+    assert row["partition_state"] == (
+        "locally_partitioned" if managed else "quantized_without_shard_metadata"
+    )
+
+
+def test_nf4_recovers_shape_from_shard_with_partial_parameter_metadata():
+    weight = torch.nn.Parameter(torch.zeros(0), requires_grad=False)
+    weight.ds_id = 1
+    weight.ds_numel = 13
+    weight.quant_state = SimpleNamespace(quant_type="nf4", nested=False)
+    weight.ds_tensor = torch.zeros(7, dtype=torch.uint8)
+    weight.ds_tensor.ds_numel = 7
+    weight.ds_tensor.quant_state = SimpleNamespace(shape=(5, 5), blocksize=64)
+
+    row, = parameter_stats(FakeModel(weight))["parameter_details"]
+    assert row["logical_elements"] == 25
+    assert row["quant_nested"] is False
+    assert row["quant_blocksize"] == 64
+    assert row["shard_bytes"] == 7
