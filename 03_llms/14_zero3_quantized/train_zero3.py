@@ -228,7 +228,7 @@ def attach_lora(model, arm):
     return model
 
 def measure_model_loading(arm, config, output_dir):
-    """Capture measurements after model load; engine stage is NOT implemented."""
+    """Measure parameter state before and after DeepSpeed engine initialization."""
     import torch
     from importlib.metadata import version
 
@@ -268,7 +268,13 @@ def measure_model_loading(arm, config, output_dir):
             "No trainable LoRA parameters were found."
         )
 
-    # Record parameter distribution after engine initialization.
+    # Initialize the DeepSpeed engine using trainable LoRA parameters.
+    engine, optimizer, _, _ = deepspeed.initialize(
+        model=model,
+        model_parameters=trainable_parameters,
+        config=config,
+    )
+    #Measure parameter distribution after engine initialization.
     after_engine = parameter_stats(engine.module)
 
     stats["before_engine"] = before_engine

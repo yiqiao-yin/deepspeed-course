@@ -215,6 +215,10 @@ EXAMPLES = {
                                          "PARTITIONS the experts across ranks; "
                                          "the routing lesson itself runs on CPU "
                                          "via `uv run moe.py`."),
+    "03_llms/14_zero3_quantized": dict(min_vram=24, gpus=2, disk=80,
+                                       script="train_zero3.py",
+                                       args="--arm bf16 --output-dir results/bf16",
+                                       note="Two GPUs required for ZeRO-3 BF16 versus NF4 partitioning research."),
     "03_llms/13_qlora": dict(min_vram=24, gpus=1, disk=60,
                             script="train_qlora.py",
                             note="LoRA and QLoRA use ZeRO-2; peak VRAM is per GPU."),
@@ -711,6 +715,9 @@ def bootstrap(example: str, spec: dict, branch: str,
     launch = (f"uv run python {spec['script']}" if spec.get("launcher") == "python"
               else f"uv run deepspeed --num_gpus={spec['gpus']} {spec['script']}")
 
+    if spec.get("args"):
+        launch += f" {spec['args']}"
+
     # A dry run proves the pod can reach the code and the stack imports, without
     # paying for a full training job. It still executes the real launcher, but
     # under a timeout, so a genuine crash is still caught.
@@ -742,6 +749,22 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'|| report "[6/6] comparison.json upload FAILED"; '
         'else report "[6/6] comparison.json MISSING"; fi'
     ) if topic and example == "03_llms/13_qlora" else 'true'
+
+    if topic and example == "03_llms/14_zero3_quantized":
+        push_json = (
+            'found=0; '
+            'for file in results/*/*.json; do '
+            '[ -f "$file" ] || continue; '
+            'found=$((found+1)); '
+            f'curl -fsS -m 60 -T "$file" '
+            f'-H "Filename: {example}/$file" '
+            f'{NTFY}/{topic} >/dev/null '
+            '&& report "[6/6] uploaded $file" '
+            '|| report "[6/6] UPLOAD FAILED $file"; '
+            'done; '
+            'if [ "$found" -eq 0 ]; then '
+            'report "[6/6] NO ZeRO-3 JSON results found"; fi'
+        )
 
     # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
     # pod gets shut down, but it dies with your laptop lid. This backstop kills
