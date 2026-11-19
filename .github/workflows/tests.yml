@@ -35,8 +35,7 @@ jobs:
         with:
           enable-cache: true
 
-      # Each test carries PEP 723 inline dependency metadata, so `uv run`
-      # provisions its own environment — nothing to install here.
+      # uv provisions dependencies from inline PEP 723 metadata or `--with`.
       - name: Validate DeepSpeed configs
         run: uv run tests/test_ds_configs.py
 
@@ -63,6 +62,9 @@ jobs:
 
       - name: RunPod tooling (offline logic)
         run: uv run tests/test_runpod_ctl.py
+
+      - name: RunPod ZeRO-3 artifacts (offline logic)
+        run: uv run --with pytest python -m pytest tests/test_runpod_zero3_artifacts.py
 
       - name: Docs style (mermaid house theme, sidebar registration)
         run: uv run tests/test_docs_style.py
