@@ -328,7 +328,14 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
     # positive here until --num_iterations was recognised.
     CAPS = ("max-steps", "max_steps", "--frames", "--slices", "--limit",
             "--questions", "--examples", "--dry-run",
-            "--num_iterations", "--num-iterations", "--n-samples")
+            "--num_iterations", "--num-iterations", "--n-samples",
+            "--plan")
+    # --plan belongs here for the same reason --num_iterations does: a lab whose
+    # subject is INITIALIZATION has no training steps to cap, so demanding
+    # --max-steps asks it to grow a loop it does not have. 03_llms/14_zero3_quantized
+    # measures what deepspeed.initialize does to parameter partitioning and
+    # returns before any training; --plan IS its cheap dry run. Reported as a
+    # false positive on PR #125.
     # Check the script that ACTUALLY RUNS -- the one registered in
     # runpod_ctl.py -- not merely the files that happen to carry a __main__
     # guard. Two real cases this gets wrong otherwise:
