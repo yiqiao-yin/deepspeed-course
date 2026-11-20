@@ -42,6 +42,7 @@ import urllib.request
 import pathlib
 import re
 import shlex
+import subprocess
 import uuid
 
 REST = "https://rest.runpod.io/v1"
@@ -64,6 +65,8 @@ DEFAULT_MAX_HOURS = 6.0  # in-pod watchdog: hard ceiling on a pod's lifetime
 DEFAULT_IMAGE = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 
 # Per-example requirements. min_vram is per GPU, in GB.
+ZERO3_EXAMPLE = "03_llms/14_zero3_quantized"
+
 EXAMPLES = {
     "01_basics/01_neuralnet": dict(min_vram=6, gpus=1, disk=20,
                                script="train_ds_enhanced.py", note="Trivial; any GPU."),
@@ -215,6 +218,10 @@ EXAMPLES = {
                                          "PARTITIONS the experts across ranks; "
                                          "the routing lesson itself runs on CPU "
                                          "via `uv run moe.py`."),
+    ZERO3_EXAMPLE: dict(min_vram=24, gpus=2, disk=80,
+                                       script="train_zero3.py",
+                                       args="--arm bf16",
+                                       note="Two GPUs required for ZeRO-3 BF16 versus NF4 partitioning research."),
     "03_llms/13_qlora": dict(min_vram=24, gpus=1, disk=60,
                             script="train_qlora.py",
                             note="LoRA and QLoRA use ZeRO-2; peak VRAM is per GPU."),
@@ -684,6 +691,48 @@ def cmd_recommend(args):
     return 0
 
 
+def zero3_rank_reports(run_dir, manifest_path):
+    """Validate the manifest and the identity of every expected rank report."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    arm, world_size = manifest["arm"], manifest["world_size"]
+    run_id = manifest["run_id"]
+    if (arm not in ("bf16", "nf4") or run_id != run_dir.name
+            or not run_id.startswith(f"{arm}-") or type(world_size) is not int
+            or world_size < 2):
+        raise ValueError("invalid ZeRO-3 manifest identity")
+    files = [f"{arm}_rank{rank}.json" for rank in range(world_size)]
+    if manifest["rank_files"] != files:
+        raise ValueError("ZeRO-3 manifest does not list the expected rank reports")
+    paths = [run_dir / name for name in files]
+    for rank, path in enumerate(paths):
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if (type(report["rank"]) is not int or type(report["world_size"]) is not int
+                or (report["run_id"], report["arm"], report["world_size"], report["rank"])
+                != (run_id, arm, world_size, rank)):
+            raise ValueError(f"mismatched ZeRO-3 rank report: {path}")
+    return paths
+
+
+def upload_zero3(output_root, upload_url):
+    """Upload artifacts for the one run created inside this launch's root."""
+    try:
+        manifests = list(pathlib.Path(output_root).glob("*/measurements_complete.json"))
+        if len(manifests) != 1:
+            raise ValueError("expected one completed ZeRO-3 run in the launch output directory")
+        manifest, = manifests
+        files = zero3_rank_reports(manifest.parent, manifest)
+        # Publish the manifest only after all rank uploads succeed.
+        for path in [*files, manifest]:
+            subprocess.run([
+                "curl", "-fsS", "-m", "60", "-T", str(path),
+                "-H", f"Filename: {ZERO3_EXAMPLE}/{path}", upload_url,
+            ], stdout=subprocess.DEVNULL, check=True)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
+        print(f"ZeRO-3 artifact collection failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def bootstrap(example: str, spec: dict, branch: str,
               topic: str = "", dry_run: bool = False,
               max_hours: float = DEFAULT_MAX_HOURS,
@@ -710,6 +759,19 @@ def bootstrap(example: str, spec: dict, branch: str,
     # so the harness that verifies examples must run exactly that.
     launch = (f"uv run python {spec['script']}" if spec.get("launcher") == "python"
               else f"uv run deepspeed --num_gpus={spec['gpus']} {spec['script']}")
+
+    if spec.get("args"):
+        launch += f" {spec['args']}"
+
+    zero3 = example == ZERO3_EXAMPLE
+    prepare_output = "true"
+    if zero3:
+        # A fresh output root separates this launch from stale experiment files.
+        prepare_output = (
+            'if ! mkdir -p results || ! output_root=$(mktemp -d results/runpod-XXXXXXXX); '
+            'then report "[6/6] DONE ZeRO-3 rc=1"; exit 1; fi'
+        )
+        launch += ' --output-dir "$output_root"'
 
     # A dry run proves the pod can reach the code and the stack imports, without
     # paying for a full training job. It still executes the real launcher, but
@@ -742,6 +804,17 @@ def bootstrap(example: str, spec: dict, branch: str,
         f'|| report "[6/6] comparison.json upload FAILED"; '
         'else report "[6/6] comparison.json MISSING"; fi'
     ) if topic and example == "03_llms/13_qlora" else 'true'
+
+    if topic and zero3:
+        upload_code = shlex.quote(
+            'import sys; sys.path.insert(0, "../../runpod"); '
+            'from runpod_ctl import upload_zero3; sys.exit(upload_zero3(*sys.argv[1:]))'
+        )
+        push_json = (
+            f'if [ "$rc" -eq 0 ]; then '
+            f'python3 -c {upload_code} "$output_root" {shlex.quote(f"{NTFY}/{topic}")} '
+            '>> /workspace/run.log 2>&1 || rc=1; fi'
+        )
 
     # In-pod watchdog. The local watcher (`--terminate`) is the primary way a
     # pod gets shut down, but it dies with your laptop lid. This backstop kills
@@ -828,15 +901,16 @@ def bootstrap(example: str, spec: dict, branch: str,
         # `rc=$?` reported the exit code of the log-upload curl -- which is
         # essentially always 0. Every run reported success regardless of
         # whether training worked.
+        prepare_output,
         f"({launch}) >> /workspace/run.log 2>&1; rc=$?",
-        # 124 means `timeout` stopped a healthy run at the cap, which is
-        # exactly what --dry-run asks for. Anything else non-zero is real.
-        "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
+        # Other labs accept the dry-run timeout. ZeRO-3 needs a complete
+        # initialization, so its timeout remains a failed experiment.
+        "true" if zero3 else "[ $rc -eq 124 ] && rc=0 && echo '[dry-run] capped at the time limit, which is the intended outcome' >> /workspace/run.log",
         "tail -40 /workspace/run.log",
         # Collect the training log and structured results before pod termination.
-        push_log,
-        push_json,
-        'report "[6/6] DONE rc=$rc — log attached"',
+        push_json if zero3 else push_log,
+        push_log if zero3 else push_json,
+        'report "[6/6] DONE ZeRO-3 rc=$rc"' if zero3 else 'report "[6/6] DONE rc=$rc — log attached"',
     ]
     return "; ".join(steps)
 
@@ -941,6 +1015,8 @@ def cmd_run(args):
     done = False
     try:
         done = collect(topic, True, args.wait_seconds, args.interval)
+    except Zero3CollectionError as exc:
+        print(f"  {exc}")
     except KeyboardInterrupt:
         print("\n  Interrupted.")
     finally:
@@ -968,14 +1044,19 @@ def cmd_run(args):
     return 0 if done else 1
 
 
+class Zero3CollectionError(Exception):
+    """The ZeRO-3 launch finished without a complete set of measurements."""
+
+
 def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
-    """Poll a topic, save artefacts locally, return True once DONE is seen."""
+    """Poll a topic, save artefacts locally, and verify ZeRO-3 completion."""
     out_dir = pathlib.Path(__file__).resolve().parent / "results" / topic
     out_dir.mkdir(parents=True, exist_ok=True)
 
     deadline = time.time() + (wait_seconds if wait else 0)
     seen, attachments, done = set(), {}, False
     consecutive_errors = 0
+    zero3_rc = None
 
     while True:
         url = f"{NTFY}/{urllib.parse.quote(topic)}/json?poll=1"
@@ -1010,6 +1091,8 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
                 print(f"  {msg['message']}")
                 if "DONE" in msg["message"]:
                     done = True
+                if status := re.fullmatch(r"\[6/6\] DONE ZeRO-3 rc=(\d+)", msg["message"]):
+                    zero3_rc = int(status[1])
             att = msg.get("attachment")
             if att and att.get("url"):
                 attachments[att.get("name", "artifact")] = att["url"]
@@ -1018,8 +1101,13 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
             break
         time.sleep(interval)
 
+    downloaded = set()
+    manifests = []
     for name, url in attachments.items():
         target = out_dir / name
+        if name.startswith(f"{ZERO3_EXAMPLE}/") and target.name == "measurements_complete.json":
+            manifests.append(target)
+            target = target.with_suffix(".json.pending")
         # Example names are nested now ("03_llms/01_llm_finetuning"),
         # and the log is named after the example, so the attachment filename
         # contains a "/". Without this the write fails with ENOENT and the log
@@ -1030,9 +1118,25 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
             req = urllib.request.Request(url, headers={"User-Agent": "dsc-runpod-ctl/1.0"})
             with urllib.request.urlopen(req, timeout=120) as resp:
                 target.write_bytes(resp.read())
+            downloaded.add(target)
             print(f"\n  saved {target}  ({target.stat().st_size} bytes)")
         except Exception as exc:
             print(f"  could not download {name}: {exc}")
+
+    if zero3_rc is not None:
+        if zero3_rc:
+            raise Zero3CollectionError(f"ZeRO-3 launch or upload failed (rc={zero3_rc}).")
+        try:
+            manifest, = manifests
+            pending = manifest.with_suffix(".json.pending")
+            if pending not in downloaded:
+                raise ValueError("ZeRO-3 completion manifest was not downloaded")
+            reports = zero3_rank_reports(manifest.parent, pending)
+            if not set(reports).issubset(downloaded):
+                raise ValueError("not all ZeRO-3 rank reports were downloaded")
+            pending.replace(manifest)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise Zero3CollectionError(f"ZeRO-3 artifact collection incomplete: {exc}") from exc
 
     if not seen:
         print("  Nothing published yet — pods take a few minutes to boot and install.")
@@ -1043,14 +1147,19 @@ def collect(topic: str, wait: bool, wait_seconds: int, interval: int) -> bool:
 
 def cmd_fetch(args):
     """Poll the results topic and save everything under runpod/results/<topic>/."""
-    collect(args.topic, args.wait, args.wait_seconds, args.interval)
+    failed = False
+    try:
+        collect(args.topic, args.wait, args.wait_seconds, args.interval)
+    except Zero3CollectionError as exc:
+        print(f"  {exc}")
+        failed = True
     if args.terminate:
         if not args.pod:
             print("\n  --terminate needs --pod <id>. Find it with: pods")
             return 1
         cmd_terminate(argparse.Namespace(
             api_key=getattr(args, "api_key", None), pod_ids=[args.pod], all=False))
-    return 0
+    return int(failed)
 
 
 def cmd_smoke(args):

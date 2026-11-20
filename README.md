@@ -227,7 +227,8 @@ deepspeed-course/
 │   ├── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
 │   ├── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
 │   ├── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
-│   └── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
+│   ├── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
+│   └── 14_zero3_quantized/      # ZeRO-3 parameter partitioning: BF16 vs NF4 (GPU results pending)
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers
 │   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME
