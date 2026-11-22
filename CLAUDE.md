@@ -531,20 +531,42 @@ the **lock**, not the pyproject.
 
 ### Which examples skip the `deepspeed` launcher
 
-Five, and each for a stated reason. Do not "fix" these by adding DeepSpeed —
-using a distributed launcher where there is nothing to distribute is cargo cult.
-They carry `launcher="python"` in `runpod/runpod_ctl.py`:
+**23 of 53**, and the number is no longer the interesting part. This section
+used to list five by name and went stale the moment topics 7 and 8 landed —
+those two sections alone add sixteen. Do not "fix" any of them by adding
+DeepSpeed: using a distributed launcher where there is nothing to distribute
+is cargo cult. They carry `launcher="python"` in `runpod/runpod_ctl.py`.
 
-| Example | Why |
-|---|---|
-| `03_llms/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
-| `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
-| `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
-| `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
-| `05_video_speech/04_omni_eval` | evaluation — modality-ablation `generate()` calls |
+Ask the registry rather than trusting a list:
 
-Every other example uses both `uv` and `deepspeed`. If you add a sixth
-exception, say so explicitly and explain why.
+```bash
+uv run --no-project python -c "
+import importlib.util as u
+s=u.spec_from_file_location('c','runpod/runpod_ctl.py'); m=u.module_from_spec(s)
+s.loader.exec_module(m)
+print(*[k for k,v in m.EXAMPLES.items() if v.get('launcher')=='python'], sep='\\n')"
+```
+
+**The test is whether ZeRO has anything to shard.** ZeRO partitions optimizer
+state, gradients and parameters. A lab with none of the three gains nothing
+from a launcher and pays startup cost and a confused reader for it. Four
+shapes recur:
+
+| shape | why there is nothing to distribute | examples |
+|---|---|---|
+| **inference** | no optimizer, no gradients; work is sequential | `04_video_text/04_streaming_memory`, `05_video_speech/03_duplex_streaming` |
+| **evaluation** | short `generate()` calls against a fixed model | `04_video_text/05_video_eval`, `05_video_speech/04_omni_eval` |
+| **a tiny policy against a simulator** | ~14k parameters; CPU is *measurably* faster, and the bottleneck is physics | most of `07_physical_ai` and `08_aerial_physics` |
+| **a pure algorithm or kernel** | no model state at all | `02_intermediate/06_riemann_scaling` |
+
+One genuine exception to the exception: `03_llms/09_multi_agency` drives TRL's
+`GRPOTrainer` directly, which owns its own distribution.
+
+The inverse mistake is just as real and is documented under
+[the first lab here that needs ZeRO-3](#the-first-lab-here-that-needs-zero-3-and-why-the-others-do-not):
+`07_terrain_vlm`'s LoRA arm fits in 15.3 GB on one card, so **only** its
+full fine-tune uses a launcher. Sharding something that already fits is the
+same cargo cult pointed the other way.
 
 ## What can and cannot be run here
 

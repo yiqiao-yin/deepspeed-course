@@ -351,6 +351,38 @@ def _existed_once(name: str) -> bool:
         return False
 
 
+def test_launcher_exception_count_is_current(r: Results) -> None:
+    """
+    CLAUDE.md and README.md must not misstate how many labs skip the launcher.
+
+    Both said "Five" for months while the real figure reached 23 -- topics 7
+    and 8 alone added sixteen, and nothing noticed because a prose number has
+    no owner. That is the same rot the suite and page counts above already
+    guard against, so it gets the same treatment: the registry is the truth,
+    the docs quote it, and this fails when they disagree.
+
+    Deliberately checks the NUMBER, not the list. Enumerating 23 labs in two
+    documents is what produced the drift in the first place.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "runpod_ctl", REPO_ROOT / "runpod" / "runpod_ctl.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    actual = sum(1 for v in mod.EXAMPLES.values()
+                 if v.get("launcher") == "python")
+    total = len(mod.EXAMPLES)
+
+    for doc in ("CLAUDE.md", "README.md"):
+        text = (REPO_ROOT / doc).read_text()
+        r.check(f"**{actual} of {total}**" in text or f"**{actual} of the {total} examples" in text,
+                f"{doc}'s launcher-exception count is current "
+                f"({actual} of {total})",
+                "runpod_ctl.py is the registry; update the prose to match.")
+
+
 def test_suite_registration_is_complete(r: Results) -> None:
     """
     Every suite on disk must be in CLAUDE.md's count, run_all.sh, AND CI.
@@ -544,6 +576,7 @@ def main() -> int:
     test_example_lines_link_to_the_code(r)
     test_referenced_tests_exist(r)
     test_suite_registration_is_complete(r)
+    test_launcher_exception_count_is_current(r)
     test_published_counts_are_current(r)
     test_readme_folder_tree(r)
     return r.finish()
