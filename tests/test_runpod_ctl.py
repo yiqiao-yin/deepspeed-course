@@ -17,6 +17,7 @@ manually — see runpod/README.md.
 
 import importlib.util
 import pathlib
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -262,9 +263,41 @@ def main() -> int:
         "private key": _re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     }
     skip_dirs = {".git", "node_modules", "__pycache__", "build", ".docusaurus", ".venv"}
+
+    # Ask git what it would never commit, and scan only the rest.
+    #
+    # The claim being tested is "no secret can reach the public repo", and a
+    # gitignored file cannot. Scanning it anyway conflates two different
+    # things: a key in a TRACKED file (a leak, possibly already public) and a
+    # key in a local `.env` (the documented way to hold one). Without this,
+    # anyone who configures a key the supported way turns the whole suite red
+    # -- and a suite that is red for a benign reason is a suite whose next
+    # genuine failure gets scrolled past. The protection is unchanged: drop
+    # `.env` from .gitignore and the file becomes committable, scannable, and
+    # a failure again.
+    try:
+        ignored = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain",
+             "--ignored=matching", "-uall", "-z"],
+            capture_output=True, text=True, timeout=120, check=True).stdout
+        entries = [e[3:] for e in ignored.split("\0") if e[:2] == "!!"]
+        # git COLLAPSES an ignored directory to one entry with a trailing
+        # slash ("build/") rather than listing the files under it, so an exact
+        # set membership test would miss `build/key.py`. Keep files and
+        # directory prefixes apart and test each the right way.
+        git_ignored = {e for e in entries if not e.endswith("/")}
+        ignored_dirs = tuple(e for e in entries if e.endswith("/"))
+    except Exception:
+        # No git, or git failed? Scan everything. Failing CLOSED means a false
+        # alarm; failing open means a silent leak.
+        git_ignored, ignored_dirs = set(), ()
+
     scanned = leaks = 0
     for f in REPO_ROOT.rglob("*"):
         if not f.is_file() or set(f.parts) & skip_dirs:
+            continue
+        rel_s = str(f.relative_to(REPO_ROOT))
+        if rel_s in git_ignored or rel_s.startswith(ignored_dirs):
             continue
         if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".wav", ".ico"}:
             continue
@@ -305,7 +338,9 @@ def main() -> int:
     # `export VAR=<PLACEHOLDER>` is a bash syntax error ('<' is a redirection
     # operator), so a script containing it dies on that line and never reaches
     # training. Seven SLURM scripts shipped that way.
-    import subprocess
+    # (subprocess is imported at module scope. A second `import subprocess`
+    # here would bind the name LOCALLY for this whole function, so the earlier
+    # use in 7c would raise UnboundLocalError -- which it silently did.)
     for sh in sorted(REPO_ROOT.rglob("*.sh")):
         if ".git" in sh.parts or "node_modules" in sh.parts:
             continue
