@@ -44,7 +44,14 @@ import re
 import shlex
 import uuid
 
-REST = "https://rest.runpod.io/v1"
+# RunPod RETIRED rest.runpod.io -- it no longer resolves in public DNS at all
+# (checked against the local resolver, 8.8.8.8 and 1.1.1.1), so every pod
+# create/list/terminate in this file speaks GraphQL. Keep it that way: the
+# REST host is not slow or deprecated, it is GONE, and a call to it fails as a
+# DNS error that reads like the user's network being broken.
+#
+# The trap GraphQL brings with it: errors come back as HTTP **200** with an
+# `errors` array in the body. Always go through _gql(), which checks for them.
 GRAPHQL = "https://api.runpod.io/graphql"
 REPO_URL = "https://github.com/yiqiao-yin/deepspeed-course.git"
 
@@ -111,6 +118,18 @@ EXAMPLES = {
                                            note="GSF / SetRank vs a pointwise "
                                                 "control. Memory is O(list_len^2) "
                                                 "activation, not parameters."),
+    "02_intermediate/06_riemann_scaling": dict(
+        min_vram=16, gpus=1, disk=20,
+        script="benchmark_zeta.py",
+        launcher="python",
+        args="--max-heights 8",
+        note="SEVENTH launcher=python exception: this measures FLOAT "
+             "PRECISION and kernel throughput on one card. There is no "
+             "model, no optimizer and no gradient, so there is nothing "
+             "for DeepSpeed to shard. The interesting axis is fp32 vs "
+             "fp64, not one GPU vs many. Any 16 GB card runs it; the "
+             "lab's point is sharpest on a datacentre card, where fp64 "
+             "is 1/2 rate rather than the 1/64 of a GeForce part."),
     "03_llms/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
                            script="train_ds.py",
                            note="HuggingFace LLM fine-tuning with ZeRO."),
@@ -609,6 +628,46 @@ def _request(url: str, key: str, method: str = "GET", payload=None, timeout: int
         sys.exit(f"Could not reach RunPod: {exc.reason}")
 
 
+def _gql(key: str, query: str, field: str):
+    """
+    Run a GraphQL op and return `data[field]`, exiting loudly on any error.
+
+    This wrapper exists because of a trap that `_request` cannot see. GraphQL
+    reports failures as HTTP **200** with an `errors` array in the body, so a
+    rejected mutation returns successfully at the transport layer. Handing that
+    envelope back to a caller that only checks for exceptions is precisely how
+    a FAILED pod creation reads as a created pod -- the failure mode
+    POSTMORTEMS.md records under "the RunPod harness lies less than it used
+    to". Every GraphQL call in this file goes through here.
+    """
+    out = _request(GRAPHQL, key, "POST", {"query": query})
+    errors = out.get("errors")
+    if errors:
+        msgs = "; ".join(e.get("message", str(e)) for e in errors)
+        low = msgs.lower()
+        if "no instances currently available" in low or "no longer any instances" in low:
+            sys.exit(
+                "\n  RunPod has no capacity for that GPU right now.\n"
+                "  Nothing was created and nothing is billing.\n\n"
+                "  Options:\n"
+                "    - pick another GPU:   gpus --min-vram <N>\n"
+                "    - try community cloud: --cloud COMMUNITY\n"
+                "    - retry shortly; availability changes minute to minute\n")
+        if "unauthor" in low or "invalid api key" in low:
+            sys.exit(f"\n  RunPod rejected the credentials.\n  {msgs}\n"
+                     "  Check RUNPOD_API_KEY at https://console.runpod.io/user/settings\n")
+        sys.exit(f"RunPod GraphQL error: {msgs.replace(key, '[REDACTED]')}")
+    data = out.get("data") or {}
+    if field not in data:
+        sys.exit(f"RunPod GraphQL returned no {field!r}: {str(out)[:300]}")
+    return data[field]
+
+
+def _gql_str(value) -> str:
+    """JSON-quote a Python value for inline embedding in a GraphQL document."""
+    return json.dumps(value)
+
+
 def gpu_catalogue(key: str):
     """GPU types with pricing. Lives in GraphQL; the REST API has no equivalent."""
     query = ("query{ gpuTypes { id displayName memoryInGb secureCloud communityCloud "
@@ -862,22 +921,44 @@ def _create_pod(args):
         print("\n  Refusing to create without --yes. Billing starts immediately.")
         return None
 
-    payload = {
-        "name": args.name,
-        "imageName": args.image,
-        "gpuTypeIds": [args.gpu],
-        "gpuCount": args.count,
-        "containerDiskInGb": args.disk,
-        "volumeInGb": args.volume,
-        "volumeMountPath": "/workspace",
-        "cloudType": args.cloud,
-        "ports": ["22/tcp"],
-        "env": {"HF_HOME": "/workspace/hf_cache"},
-    }
-    if args.start_cmd:
-        payload["dockerStartCmd"] = ["bash", "-lc", args.start_cmd]
+    # GraphQL's shape differs from the retired REST body in four ways that each
+    # fail quietly rather than loudly if you carry the old spelling across:
+    #   gpuTypeIds: [str]  ->  gpuTypeId: str      (singular)
+    #   ports:      [str]  ->  ports: "22/tcp"     (ONE comma-separated string)
+    #   env:        {k: v} ->  env: [{key, value}] (a list of pairs)
+    #   cloudType          ->  an ENUM, so it must NOT be quoted
+    env_pairs = ", ".join(
+        f"{{key: {_gql_str(k)}, value: {_gql_str(v)}}}"
+        for k, v in {"HF_HOME": "/workspace/hf_cache"}.items())
 
-    pod = _request(f"{REST}/pods", key, "POST", payload)
+    fields = [
+        f"name: {_gql_str(args.name)}",
+        f"imageName: {_gql_str(args.image)}",
+        f"gpuTypeId: {_gql_str(args.gpu)}",
+        f"gpuCount: {args.count}",
+        f"containerDiskInGb: {args.disk}",
+        f"volumeInGb: {args.volume}",
+        f"volumeMountPath: {_gql_str('/workspace')}",
+        f"cloudType: {args.cloud}",          # enum -- unquoted on purpose
+        f"ports: {_gql_str('22/tcp')}",
+        f"env: [{env_pairs}]",
+    ]
+    if args.start_cmd:
+        # REST took a list; GraphQL takes one string it will exec under a shell.
+        fields.append(f"dockerArgs: {_gql_str(f'bash -lc {shlex.quote(args.start_cmd)}')}")
+
+    mutation = (
+        "mutation { podFindAndDeployOnDemand(input: {"
+        + ", ".join(fields)
+        + "}) { id name desiredStatus imageName costPerHr machineId } }"
+    )
+    pod = _gql(key, mutation, "podFindAndDeployOnDemand")
+    if not pod:
+        # A null payload with no `errors` array means RunPod accepted the
+        # request and allocated nothing. Treating that as success is how the
+        # harness used to report a pod that never existed.
+        sys.exit("\n  RunPod returned no pod (capacity or an unsatisfiable spec).\n"
+                 "  Nothing was created and nothing is billing.\n")
     pid = pod.get("id", "?")
     print(f"\n  Created pod {pid}  (status {pod.get('desiredStatus')})")
     print(f"  TERMINATE:  uv run runpod/runpod_ctl.py terminate {pid}")
@@ -1122,9 +1203,7 @@ def cmd_smoke(args):
 
 def cmd_pods(args):
     key = api_key(args)
-    pods = _request(f"{REST}/pods", key)
-    if isinstance(pods, dict):
-        pods = pods.get("data", [])
+    pods = list_pods(key)
     if not pods:
         print("\n  No pods. Nothing is billing.")
         return 0
@@ -1159,13 +1238,30 @@ def terminate_with_retry(pod_id: str, key: str) -> bool:
     """
     for attempt in range(1, TERMINATE_RETRIES + 1):
         try:
-            data = json.dumps(None).encode() if False else None
+            # Raw urllib on purpose, NOT _request/_gql: both call sys.exit on
+            # failure, which would kill this retry loop on its first bad
+            # attempt. Money is on the line until this succeeds, so every
+            # error here has to be survivable and retried.
+            # Plain concatenation, not an f-string: GraphQL is mostly braces
+            # and every one would need doubling, which is how the first
+            # version of this line failed to parse.
+            mutation = ("mutation { podTerminate(input: {podId: "
+                        + _gql_str(pod_id) + "}) }")
             req = urllib.request.Request(
-                f"{REST}/pods/{pod_id}", data=data, method="DELETE",
+                GRAPHQL, data=json.dumps({"query": mutation}).encode(),
+                method="POST",
                 headers={"Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json",
                          "User-Agent": "deepspeed-course-runpod-ctl/1.0"})
-            urllib.request.urlopen(req, timeout=30).read()
-            return True
+            body = urllib.request.urlopen(req, timeout=30).read().decode()
+            out = json.loads(body) if body.strip() else {}
+            errors = out.get("errors") or []
+            if not errors:
+                return True
+            msgs = "; ".join(e.get("message", str(e)) for e in errors).lower()
+            if "not found" in msgs or "does not exist" in msgs:
+                return True                 # already gone -- the goal is met
+            print(f"    attempt {attempt}/{TERMINATE_RETRIES}: {msgs[:160]}")
         except urllib.error.HTTPError as exc:
             if exc.code in (404, 410):      # already gone
                 return True
@@ -1178,8 +1274,11 @@ def terminate_with_retry(pod_id: str, key: str) -> bool:
 
 
 def list_pods(key):
-    pods = _request(f"{REST}/pods", key)
-    return pods.get("data", []) if isinstance(pods, dict) else (pods or [])
+    """Every pod on the account. GraphQL nests these under `myself`."""
+    query = ("query { myself { pods { id name desiredStatus costPerHr "
+             "machine { gpuDisplayName } runtime { uptimeInSeconds } } } }")
+    me = _gql(key, query, "myself") or {}
+    return me.get("pods") or []
 
 
 def cmd_terminate(args):
@@ -1193,9 +1292,22 @@ def cmd_terminate(args):
         print(f"  Terminating ALL {len(pod_ids)} pod(s): {', '.join(pod_ids)}")
     if not pod_ids:
         sys.exit("Give pod ids, or --all.")
+    # Route through terminate_with_retry rather than firing one request: this
+    # is the LAST line of defence against a pod billing forever, and it used
+    # to print "terminated <id>" unconditionally -- announcing success it had
+    # not checked. Report per pod and make a failure the exit code.
+    failed = []
     for pid in pod_ids:
-        _request(f"{REST}/pods/{pid}", key, "DELETE")
-        print(f"  terminated {pid}")
+        if terminate_with_retry(pid, key):
+            print(f"  terminated {pid}")
+        else:
+            failed.append(pid)
+            print(f"  FAILED to terminate {pid}")
+
+    if failed:
+        print("\n  *** STILL BILLING: " + ", ".join(failed) + " ***")
+        print("  Terminate by hand NOW at https://console.runpod.io/pods")
+        return 1
     print("\n  Confirm with: uv run runpod/runpod_ctl.py pods")
     return 0
 
