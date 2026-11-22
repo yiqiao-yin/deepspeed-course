@@ -642,7 +642,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 60 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 59 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
@@ -863,9 +863,11 @@ evidence is in `POSTMORTEMS.md`.
   train longer. Calibrate noise **against the model and optimizer the lab
   actually ships**, and publish a range rather than a number.
   → [postmortem](POSTMORTEMS.md#synthetic-data-must-carry-a-signal-and-the-summary-must-not-lie)
-- **A short run must not be reported as a failure.** Clawdeck runs these with
-  `--epochs 1` / `--max-steps 20`. Say the run was capped and what a real one
-  looks like. This has shipped twice, months apart.
+- **A short run must not be reported as a failure.** Any orchestrator may run
+  a lab with `--epochs 1` / `--max-steps 20` — the now-retired Clawdeck did it
+  by default, and a reader doing a cheap dry run does it on purpose. Say the
+  run was capped and what a real one looks like. This has shipped twice,
+  months apart.
 - **Any hyperparameter expressed in epochs is a bug waiting for a short run.**
   A `warmup_epochs` hardcoded to 5 spent a `--epochs 1` run's only epoch at a
   fifth of the target rate: 24.32% → 61.21% once fixed.
@@ -926,7 +928,7 @@ record**, and `tests/test_incident_records.py` fails CI if one does not:
 > **Incident record** · class `silent-wrong` ·
 > introduced [`72bf410`](<repo>/commit/72bf410) ·
 > fixed [`dabdd7b`](<repo>/commit/dabdd7b) ·
-> detector [`tests/test_clawdeck_manifest.py`](<repo>/blob/main/tests/test_clawdeck_manifest.py)
+> detector [`tests/test_runpod_ctl.py`](<repo>/blob/main/tests/test_runpod_ctl.py)
 ```
 
 Seven classes, and the split is the point of keeping them:
@@ -1013,61 +1015,7 @@ The same discipline caught a two-point fit returning a **negative** cost per
 cached token, which a single sample would have published as a confident
 constant.
 
-## The Clawdeck lab manifest
-
-`clawdeck.yaml` at the repo root is the **only** integration point with
-[clawdeck-app.com](https://clawdeck-app.com), which boots a GPU box, clones
-this repo and builds a Lab picker from it. Never put Clawdeck-specific code in
-a training script.
-
-Every directory with a `pyproject.toml` must appear in it, and
-`tests/test_clawdeck_manifest.py` **fails CI** if one does not — because the
-symptom otherwise shows up in a different product with no error on either side.
-That already happened once: Clawdeck hardcoded `01_basic_neuralnet`, this repo
-restructured, and every Clawdeck boot failed its pre-install until a human
-noticed.
-
-The subtle check is `gpu.count`. Where a `ds_config.json` hardcodes
-`train_batch_size`, `micro` and `grad_accum`, it has pinned the GPU count and
-DeepSpeed asserts it at startup. `01_basics/04_rnn` and
-`03_llms/02_trl_sft` both require **2** GPUs and were both registered in
-`EXAMPLES` as needing 1 — fixed, and now cross-checked.
-
-Note that `scripts/check_contract.py` is **advisory and not in CI**, so the
-manifest is guarded by a `tests/` suite instead. Its per-example "registered in
-clawdeck.yaml" note is a convenience for contributors, not the gate.
-
-Two rules exist because Clawdeck reads this file **live from `main`**, cached
-five minutes, with no deploy and no review step — whatever lands is in front of
-learners within minutes:
-
-- **`gpu.count` must be 1, 2, 4 or 8**, with `min_vram_gb` ≤ 180 at counts 1–2
-  and ≤ 80 at 4–8. Clawdeck books an *exact* count from a fixed catalog, so
-  `count: 3` is unbookable and the lab dead-ends as "Needs a different machine".
-  The table in `tests/test_clawdeck_manifest.py` mirrors their catalog; if it
-  changes, that constant is what to edit.
-- **Any run entry without `--num_gpus` is advertised as "Runs now — no GPU
-  needed"** and shown first, even for locked labs. So such an entry must really
-  run on CPU, or carry `needs_gpu: true`. That field covers the five examples
-  that deliberately skip the deepspeed launcher, and Clawdeck reads it as of
-  their v169.
-
-  The check for this is **reachability-based, not string-based**, and that
-  distinction is the whole difficulty. Two guard forms exist here —
-  `require_gpu()` and an inline
-  `if not torch.cuda.is_available() and ALLOW_CPU != "1"` — and mere presence
-  proves nothing, because four scripts put the inline form inside
-  `if args.model:` and default `--model` to `None`. Six manifest entries sit in
-  exactly that position and all six exit 0 on a CPU-only box. `gpu_guards()` in
-  `tests/test_clawdeck_manifest.py` therefore returns each guard with the flags
-  gating it, and treats a guard as reachable when it is unconditional **or** the
-  command passes any gating flag — over-flagging is recoverable with
-  `needs_gpu`, under-flagging ships a lie to a learner.
-
-Clawdeck **fails open**: an unreachable or malformed manifest yields zero labs,
-so the Lab tab disappears and plain compute keeps working. The flip side is that
-a broken manifest looks like *"this course has no labs"* rather than an error —
-which is why the CI gate is the thing making that trade safe.
+## `main` is protected
 
 `main` is **branch-protected**: the `Logic tests (no GPU required)` check is
 required, `enforce_admins` is on, and force-pushes and deletions are blocked. A
@@ -1108,10 +1056,10 @@ generate figures for the book:
 | `make_casp14_figure.py` | the CASP14 panel, from the public archive + RCSB | — |
 
 The two figure scripts carry **PEP 723 inline metadata and no `pyproject.toml`**,
-deliberately. A `pyproject.toml` would oblige an entry in `clawdeck.yaml` (CI
-enforces it), and these are authoring tools rather than labs — a learner should
-never be offered "run the figure generator" as an exercise. `uv run
-scripts/<name>.py` still provisions them.
+deliberately: they are authoring tools rather than labs, and a `pyproject.toml`
+is what marks a directory as a runnable example — a learner should never be
+offered "run the figure generator" as an exercise. `uv run scripts/<name>.py`
+still provisions them.
 
 ## Conventions to preserve
 
