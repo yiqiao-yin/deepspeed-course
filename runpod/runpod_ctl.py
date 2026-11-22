@@ -123,7 +123,7 @@ EXAMPLES = {
         script="benchmark_zeta.py",
         launcher="python",
         args="--max-heights 8",
-        note="SEVENTH launcher=python exception: this measures FLOAT "
+        note="launcher=python: this measures FLOAT "
              "PRECISION and kernel throughput on one card. There is no "
              "model, no optimizer and no gradient, so there is nothing "
              "for DeepSpeed to shard. The interesting axis is fp32 vs "

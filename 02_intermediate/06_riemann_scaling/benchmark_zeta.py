@@ -319,8 +319,17 @@ def main() -> None:
     data["zeros"] = experiment_zeros(heights, device)
 
     print("\n  THROUGHPUT -- same work, three ways\n")
-    print(f"  {'height':>9} {'terms':>8} {'GPU fp64':>11} {'GPU fp32':>11} "
-          f"{'CPU fp64':>11} {'gpu/cpu':>12} {'fp32 gain':>11}")
+    # Label the columns with the device actually used. Under ALLOW_CPU=1
+    # the "accelerator" arm runs on the CPU too, and a column headed
+    # "GPU fp64" over CPU timings is a table that lies about its own
+    # contents -- cheap to get right, and the exact genre of quiet
+    # wrongness this repo keeps finding.
+    dev = "GPU" if device == "cuda" else "CPU*"
+    if device != "cuda":
+        print("  * ALLOW_CPU=1: the 'accelerator' arm is the CPU, so the")
+        print("    ratios below compare the CPU against itself.\n")
+    print(f"  {'height':>9} {'terms':>8} {dev + ' fp64':>11} {dev + ' fp32':>11} "
+          f"{'CPU fp64':>11} {'acc/cpu':>12} {'fp32 gain':>11}")
     data["throughput"] = experiment_throughput(heights, device)
 
     # PRINT it, do not only store it. On an ephemeral GPU pod stdout is the

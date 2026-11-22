@@ -70,6 +70,7 @@ TIER3 = {
     "01_basics/03_convnet_cifar10": "ranks three architectures by accuracy",
     "02_intermediate/03_learning_to_rank": "ranks four objectives by NDCG",
     "02_intermediate/04_groupwise_ranking": "ranks three architectures",
+    "02_intermediate/06_riemann_scaling": "claims the float64 penalty tracks bytes moved, not float64 ALU provisioning",
     "03_llms/03_ocr": "ranks five OCR models by accuracy and tokens",
     "03_llms/11_moe": "claims load balancing makes the model worse",
     "03_llms/12_prefill_decode": "ranks three scheduling policies",

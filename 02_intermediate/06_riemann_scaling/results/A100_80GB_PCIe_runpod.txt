@@ -1,0 +1,120 @@
+=== nvidia-smi ===
+Sun Nov 22 00:49:56 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.112.07             Driver Version: 595.112.07     CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000000:A1:00.0 Off |                    0 |
+| N/A   36C    P0             47W /  300W |       0MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+=== versions ===
+python 3.11.11
+torch 2.8.0.dev20250319+cu128
+cuda True 1
+gpu NVIDIA A100 80GB PCIe
+deepspeed 0.20.0
+=== ds_report ===
+--------------------------------------------------
+DeepSpeed C++/CUDA extension op report
+--------------------------------------------------
+NOTE: Ops not installed will be just-in-time (JIT) compiled at
+      runtime if needed. Op compatibility means that your system
+      meet the required dependencies to JIT install the op.
+--------------------------------------------------
+JIT compiled ops requires ninja
+ninja .................. [92m[OKAY][0m
+--------------------------------------------------
+op name ................ installed .. compatible
+--------------------------------------------------
+[93m [WARNING] [0m async_io requires the dev libaio .so object and headers but these were not found.
+[93m [WARNING] [0m async_io: please install the libaio-dev package with apt
+[93m [WARNING] [0m If libaio is already installed (perhaps from source), try setting the CFLAGS and LDFLAGS environment variables to where it can be found.
+async_io ............... [93m[NO][0m ....... [93m[NO][0m
+fused_adam ............. [93m[NO][0m ....... [92m[OKAY][0m
+cpu_adam ............... [93m[NO][0m ....... [92m[OKAY][0m
+cpu_adagrad ............ [93m[NO][0m ....... [92m[OKAY][0m
+cpu_lion ............... [93m[NO][0m ....... [92m[OKAY][0m
+pin_memory ............. [93m[NO][0m ....... [92m[OKAY][0m
+dc ..................... [93m[NO][0m ....... [92m[OKAY][0m
+[93m [WARNING] [0m Unable to locate CUTLASS. Install nvidia-cutlass, clone CUTLASS next to DeepSpeed, or set CUTLASS_PATH to the CUTLASS checkout.
+evoformer_attn ......... [93m[NO][0m ....... [93m[NO][0m
+fp_quantizer ........... [93m[NO][0m ....... [92m[OKAY][0m
+fused_lamb ............. [93m[NO][0m ....... [92m[OKAY][0m
+fused_lion ............. [93m[NO][0m ....... [92m[OKAY][0m
+[93m [WARNING] [0m gds requires the dev libaio .so object and headers but these were not found.
+[93m [WARNING] [0m gds: please install the libaio-dev package with apt
+[93m [WARNING] [0m If libaio is already installed (perhaps from source), try setting the CFLAGS and LDFLAGS environment variables to where it can be found.
+
+  device: cuda  NVIDIA A100 80GB PCIe
+  torch 2.11.0+cu128   heights: 8
+
+
+  PRECISION REACH -- can the dtype even represent the grid?
+  A float's spacing (ULP) grows with magnitude. Once the ULP
+  exceeds the gap between zeros, distinct grid points collapse
+  onto one value and the zeros become invisible.
+
+     height    terms   zero gap    fp32 ULP  fp32 pts/zero  fp64 pts/zero
+      1e+03       12     1.2393   6.104e-05        20305.0      1.090e+13
+      1e+04       39     0.8523   0.0009766          872.7      4.685e+11
+      1e+05      126     0.6494    0.007812           83.1      4.463e+10
+      1e+06      398     0.5246      0.0625            8.4      4.506e+09  marginal
+      1e+07    1,261     0.4400           1            0.4      2.362e+08  UNREACHABLE
+      1e+08    3,989     0.3789           8            0.0      2.543e+07  UNREACHABLE
+      1e+09   12,615     0.3327          64            0.0      2.791e+06  UNREACHABLE
+      1e+10   39,894     0.2965        1024            0.0      1.555e+05  UNREACHABLE
+
+  PASS: reach table computed. GPU measurements: NOT PERFORMED.
+  Run without --plan on a CUDA machine for zero counts and timings.
+
+  ZERO COUNTS -- float64 is the reference; float32 is the arm
+
+     height    terms  fp64 zeros  fp32 zeros    diff      max|dZ|
+      1e+03       12         416         416      +0    7.830e-03
+      1e+04       39         402         402      +0    9.033e-02
+      1e+05      126         400         480     +80    9.604e-01
+      1e+06      398         399         595    +196    1.407e+01
+      1e+07    1,261         400          90    -310    3.753e+01
+      1e+08    3,989         400           5    -395    5.945e+01
+      1e+09   12,615         401           2    -399    5.860e+01
+      1e+10   39,894         400           0    -400    5.407e+01
+
+  THROUGHPUT -- same work, three ways
+
+     height    terms    GPU fp64    GPU fp32    CPU fp64      gpu/cpu   fp32 gain
+      1e+03       12      0.0007      0.0007      0.5976      855.98x       0.99x
+      1e+04       39      0.0008      0.0007      0.0035        4.21x       1.17x
+      1e+05      126      0.0007      0.0009      0.3008      439.47x       0.77x
+      1e+06      398      0.0008      0.0007      0.1093      134.15x       1.15x
+      1e+07    1,261      0.0012      0.0010      0.2158      172.82x       1.20x
+      1e+08    3,989      0.0026      0.0021      0.5690      218.31x       1.24x
+      1e+09   12,615      0.0069      0.0052      1.3221      192.22x       1.33x
+      1e+10   39,894      0.0225      0.0153      3.6337      161.33x       1.47x
+
+  MATMUL CONTROL -- a FLOP-bound workload on the same card
+
+  The claim "this GPU does fp64 at 1/N of fp32" is a statement
+  about MATMUL. Measuring both in one run is what makes the
+  difference legible rather than arguable.
+
+    matmul fp32           18.293 TFLOP/s   (TF32 allowed: False)
+    matmul fp64           18.282 TFLOP/s
+    fp32/fp64 ratio         1.00x   <- what a FLOP-bound workload pays
+    Z(t) at t=1e+10       1.47x   <- what THIS workload pays
+
+  If the two ratios disagree, the workload is not FLOP-bound.
+
+  wrote results/NVIDIA_A100_80GB_PCIe_20261122T005335Z.json
+

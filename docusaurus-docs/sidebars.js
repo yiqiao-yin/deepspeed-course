@@ -38,6 +38,7 @@ const sidebars = {
             'tutorials/intermediate/learning-to-rank',
             'tutorials/intermediate/groupwise-ranking',
             'tutorials/intermediate/rl-trading',
+            'tutorials/intermediate/riemann-scaling',
           ],
         },
         {

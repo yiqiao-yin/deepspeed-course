@@ -162,6 +162,23 @@ labs:
       - { label: "Property checks (CPU)", cmd: "uv run groupwise.py" }
       - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_groupwise_ranking.py --model all --max-steps 20" }
 
+  - id: 02_intermediate/06_riemann_scaling
+    title: "Riemann zeros: precision as reach"
+    summary: "float32 finds 0 of 400 zeros at t=1e10 — not rounding, it runs out of numbers."
+    est_minutes: 5
+    gpu: { min_vram_gb: 16, count: 1 }
+    run:
+      # The --plan entry carries no --num_gpus, so Clawdeck advertises it
+      # as "Runs now — no GPU needed" and shows it first. That is accurate
+      # here and checked: --plan returns BEFORE require_gpu() is reached,
+      # computes the reach table from pure arithmetic, and exits 0. It is
+      # the only entry below in that position; every other one runs the
+      # CUDA path and is gated by the guard.
+      - { label: "Precision reach table (no GPU)", cmd: "uv run benchmark_zeta.py --plan" }
+      - { label: "Full sweep: t = 1e3 to 1e10", cmd: "uv run benchmark_zeta.py --max-heights 8", primary: true, needs_gpu: true }
+      - { label: "Quick (3 heights)", cmd: "uv run benchmark_zeta.py --max-heights 3", needs_gpu: true }
+      - { label: "Rebuild every figure", cmd: "uv run make_figures.py" }
+
   # ---------------------------------------------------------------------------
   # 03_llms — real models and real downloads. est_minutes excludes those.
   # ---------------------------------------------------------------------------
