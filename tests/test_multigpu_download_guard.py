@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
 """
 Regression test: multi-GPU labs must not download a dataset from every rank.
@@ -61,8 +61,6 @@ watched rejecting bad input is not a checker.
 import ast
 import pathlib
 import sys
-
-import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
@@ -222,16 +220,23 @@ def has_barrier(src: str) -> bool:
 
 
 def multi_gpu_labs() -> list[str]:
-    manifest = yaml.safe_load((REPO / "clawdeck.yaml").read_text())
-    labs = manifest.get("labs", manifest) if isinstance(manifest, dict) else manifest
-    out = []
-    for lab in labs:
-        if not isinstance(lab, dict):
-            continue
-        gpu = lab.get("gpu") or {}
-        if int(gpu.get("count", 1) or 1) > 1:
-            out.append(lab["id"])
-    return out
+    """
+    Which labs declare more than one GPU.
+
+    Read from runpod/runpod_ctl.py's EXAMPLES rather than the old
+    clawdeck.yaml: that manifest was deleted when Clawdeck was
+    decommissioned, and EXAMPLES carries the same `gpus=N` fact for the
+    tooling that is still in use. Same question, surviving source.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "runpod_ctl", REPO / "runpod" / "runpod_ctl.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    return [name for name, spec_ in mod.EXAMPLES.items()
+            if int(spec_.get("gpus", 1) or 1) > 1]
 
 
 def main() -> None:
@@ -241,7 +246,7 @@ def main() -> None:
     print(bar)
 
     labs = multi_gpu_labs()
-    print(f"\n  -- {len(labs)} labs declared multi-GPU in clawdeck.yaml --")
+    print(f"\n  -- {len(labs)} labs declared multi-GPU in runpod_ctl EXAMPLES --")
     for lab in labs:
         print(f"     {lab}")
 

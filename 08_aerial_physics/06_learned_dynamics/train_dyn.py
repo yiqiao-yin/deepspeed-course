@@ -166,7 +166,7 @@ def main() -> int:
     # GATED AT THE CALL SITE, not inside the function.
     #
     # Hiding the size test behind an early return made the guard look
-    # unconditional to tests/test_clawdeck_manifest.py, which reads
+    # unconditional to a static checker, which reads
     # the AST and cannot see into the callee. It flagged the CPU
     # command as reaching a preflight that always fires -- correctly,
     # on the evidence available to it. Writing the condition here
