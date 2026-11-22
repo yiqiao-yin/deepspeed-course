@@ -5,7 +5,7 @@
 
 ### 📖 **[Read the full course → yiqiao-yin.github.io/deepspeed-course](https://yiqiao-yin.github.io/deepspeed-course/)**
 
-The documentation site is the primary way to read this material: 73 pages with
+The documentation site is the primary way to read this material: 74 pages with
 the memory and communication arithmetic derived in full, ~200 cited papers, and
 diagrams. This README covers setup and cluster operations.
 
@@ -119,7 +119,7 @@ on a driver older than CUDA 13 it installs cleanly and then reports
 Each example folder's README has an **Environment & Local Testing** section with
 its exact dependencies, GPU requirement, and download size.
 
-**23 of the 53 examples deliberately skip the `deepspeed` launcher** — using a
+**24 of the 54 examples deliberately skip the `deepspeed` launcher** — using a
 distributed launcher where there is nothing to distribute is cargo cult. The
 test is whether ZeRO has anything to shard: it partitions optimizer state,
 gradients and parameters, and a lab with none of the three gains nothing.
@@ -216,7 +216,8 @@ deepspeed-course/
 │   ├── 02_rnn_stock_data/       # Time-series forecasting, and why most models lose to persistence
 │   ├── 03_learning_to_rank/     # RankNet / LambdaRank / ListNet — ranking lives in the LOSS
 │   ├── 04_groupwise_ranking/    # GSF and SetRank — scoring documents IN CONTEXT
-│   └── 05_rl_trading/           # A 51%-accurate forecast loses money. PPO/GRPO halve the drawdown
+│   ├── 05_rl_trading/           # A 51%-accurate forecast loses money. PPO/GRPO halve the drawdown
+│   └── 06_riemann_scaling/      # float32 finds 0 of 400 zeta zeros at t=1e10 — precision as REACH, not error
 │
 ├── 03_llms/        # Real models and real downloads. 04-07 are one argument about what you can delete from RLHF
 │   ├── 01_llm_finetuning/       # LLM fine-tuning with ZeRO — the starting point

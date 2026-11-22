@@ -118,6 +118,18 @@ EXAMPLES = {
                                            note="GSF / SetRank vs a pointwise "
                                                 "control. Memory is O(list_len^2) "
                                                 "activation, not parameters."),
+    "02_intermediate/06_riemann_scaling": dict(
+        min_vram=16, gpus=1, disk=20,
+        script="benchmark_zeta.py",
+        launcher="python",
+        args="--max-heights 8",
+        note="launcher=python: this measures FLOAT "
+             "PRECISION and kernel throughput on one card. There is no "
+             "model, no optimizer and no gradient, so there is nothing "
+             "for DeepSpeed to shard. The interesting axis is fp32 vs "
+             "fp64, not one GPU vs many. Any 16 GB card runs it; the "
+             "lab's point is sharpest on a datacentre card, where fp64 "
+             "is 1/2 rate rather than the 1/64 of a GeForce part."),
     "03_llms/01_llm_finetuning": dict(min_vram=24, gpus=2, disk=80,
                            script="train_ds.py",
                            note="HuggingFace LLM fine-tuning with ZeRO."),

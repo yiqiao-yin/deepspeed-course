@@ -531,7 +531,7 @@ the **lock**, not the pyproject.
 
 ### Which examples skip the `deepspeed` launcher
 
-**23 of 53**, and the number is no longer the interesting part. This section
+**24 of 54**, and the number is no longer the interesting part. This section
 used to list five by name and went stale the moment topics 7 and 8 landed —
 those two sections alone add sixteen. Do not "fix" any of them by adding
 DeepSpeed: using a distributed launcher where there is nothing to distribute
@@ -642,7 +642,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 59 suites, no GPU, no downloads
+./tests/run_all.sh                 # all 60 suites, no GPU, no downloads
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
