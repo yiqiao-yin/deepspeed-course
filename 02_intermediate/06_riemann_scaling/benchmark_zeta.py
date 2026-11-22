@@ -229,21 +229,60 @@ def matmul_reference(device) -> dict | None:
     if device != "cuda":
         return None
 
-    def bench(dtype, n=3072, iters=20):
+    def bench(dtype, n=3072, iters=20, repeats=3):
+        """
+        Best-of-N TFLOP/s. One timed call is a sample, not a measurement.
+
+        The repeats are not ceremony. A single pass measured this card's fp32
+        matmul at 5.4, 11.1 and 12.1 TFLOP/s on three consecutive runs -- a
+        2.2x swing from clock and thermal state on a laptop GPU -- while fp64
+        held at 0.366 either way. Taking a single sample of each therefore
+        made the fp32/fp64 RATIO wander between 15x and 33x while neither
+        absolute moved much, which is the same trap `12_prefill_decode`
+        documents: quote the absolutes, and take the minimum time (the run
+        least polluted by other load) rather than a mean.
+        """
         a = torch.randn(n, n, device="cuda", dtype=dtype)
         b = torch.randn(n, n, device="cuda", dtype=dtype)
-        for _ in range(3):
+        for _ in range(3):                      # warm up clocks and autotune
             a @ b
         torch.cuda.synchronize()
-        start = time.perf_counter()
-        for _ in range(iters):
-            a @ b
-        torch.cuda.synchronize()
-        return 2 * n ** 3 / ((time.perf_counter() - start) / iters) / 1e12
+        best = float("inf")
+        for _ in range(repeats):
+            start = time.perf_counter()
+            for _ in range(iters):
+                a @ b
+            torch.cuda.synchronize()
+            best = min(best, (time.perf_counter() - start) / iters)
+        return 2 * n ** 3 / best / 1e12
+
+    # TF32 must be reported, because on an Ampere-or-later card torch may
+    # satisfy a float32 matmul with TENSOR CORES at TF32 precision -- a
+    # 10-bit mantissa, not float32's 24. The tensor passed in is float32 and
+    # the result comes back float32, so nothing in the call signature reveals
+    # it, and the measured "fp32" throughput can be several times real fp32.
+    # Publishing that ratio as an fp32:fp64 comparison would be measuring two
+    # different precisions and naming only one of them. Measured, not
+    # assumed: torch's default has changed across versions.
+    tf32 = bool(getattr(torch.backends.cuda.matmul, "allow_tf32", False))
 
     f32, f64 = bench(torch.float32), bench(torch.float64)
+
+    # Re-measure with TF32 forced off, so the honest fp32 number exists
+    # whatever the default happened to be.
+    f32_strict = None
+    if tf32:
+        try:
+            torch.backends.cuda.matmul.allow_tf32 = False
+            f32_strict = bench(torch.float32)
+        finally:
+            torch.backends.cuda.matmul.allow_tf32 = True
+
     return {"matmul_fp32_tflops": f32, "matmul_fp64_tflops": f64,
-            "matmul_fp32_over_fp64": f32 / f64}
+            "matmul_fp32_over_fp64": f32 / f64,
+            "tf32_allowed": tf32,
+            "matmul_fp32_strict_tflops": f32_strict,
+            "matmul_fp32_strict_over_fp64": (f32_strict / f64) if f32_strict else None}
 
 
 def main() -> None:
@@ -284,7 +323,33 @@ def main() -> None:
           f"{'CPU fp64':>11} {'gpu/cpu':>12} {'fp32 gain':>11}")
     data["throughput"] = experiment_throughput(heights, device)
 
-    data["matmul_reference"] = matmul_reference(device)
+    # PRINT it, do not only store it. On an ephemeral GPU pod stdout is the
+    # only channel that survives: the RunPod harness collects the log and the
+    # machine is destroyed, so `results/*.json` dies with it. The first run of
+    # this benchmark computed the matmul control -- the FLOP-bound reference
+    # the whole bandwidth argument rests on -- wrote it to JSON, and lost it.
+    data["matmul_reference"] = mm = matmul_reference(device)
+    if mm:
+        print("\n  MATMUL CONTROL -- a FLOP-bound workload on the same card\n")
+        print("  The claim \"this GPU does fp64 at 1/N of fp32\" is a statement")
+        print("  about MATMUL. Measuring both in one run is what makes the")
+        print("  difference legible rather than arguable.\n")
+        print(f"    matmul fp32        {mm['matmul_fp32_tflops']:9.3f} TFLOP/s"
+              f"   (TF32 allowed: {mm['tf32_allowed']})")
+        if mm.get("matmul_fp32_strict_tflops"):
+            print(f"    matmul fp32 STRICT {mm['matmul_fp32_strict_tflops']:9.3f}"
+                  " TFLOP/s   (TF32 off -- the honest fp32)")
+        print(f"    matmul fp64        {mm['matmul_fp64_tflops']:9.3f} TFLOP/s")
+        ratio = mm.get("matmul_fp32_strict_over_fp64") or mm["matmul_fp32_over_fp64"]
+        print(f"    fp32/fp64 ratio    {ratio:9.2f}x"
+              "   <- what a FLOP-bound workload pays")
+        zt = [r for r in data["throughput"] if r.get("float32_speedup_on_gpu")]
+        if zt:
+            print(f"    Z(t) at t={zt[-1]['height']:.0e}  "
+                  f"{zt[-1]['float32_speedup_on_gpu']:9.2f}x"
+                  "   <- what THIS workload pays")
+            print("\n  If the two ratios disagree, the workload is not"
+                  " FLOP-bound.")
     data["environment"] = {
         "device": device,
         "gpu": torch.cuda.get_device_name(0) if device == "cuda" else None,
