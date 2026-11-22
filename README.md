@@ -119,17 +119,21 @@ on a driver older than CUDA 13 it installs cleanly and then reports
 Each example folder's README has an **Environment & Local Testing** section with
 its exact dependencies, GPU requirement, and download size.
 
-**Five examples deliberately skip the `deepspeed` launcher**, each for a stated
-reason — using a distributed launcher where there is nothing to distribute is
-cargo cult:
+**23 of the 53 examples deliberately skip the `deepspeed` launcher** — using a
+distributed launcher where there is nothing to distribute is cargo cult. The
+test is whether ZeRO has anything to shard: it partitions optimizer state,
+gradients and parameters, and a lab with none of the three gains nothing.
 
-| Example | Why |
-|---|---|
-| `03_llms/09_multi_agency` | drives TRL's `GRPOTrainer` directly |
-| `04_video_text/04_streaming_memory` | streaming *inference* — sequential, no optimizer |
-| `04_video_text/05_video_eval` | evaluation — short `generate()` calls |
-| `05_video_speech/03_duplex_streaming` | duplex inference — slices arrive in order |
-| `05_video_speech/04_omni_eval` | evaluation — modality-ablation `generate()` calls |
+| shape | why | examples |
+|---|---|---|
+| **inference** | no optimizer, no gradients, and the work is sequential | `04_video_text/04_streaming_memory`, `05_video_speech/03_duplex_streaming` |
+| **evaluation** | short `generate()` calls against a fixed model | `04_video_text/05_video_eval`, `05_video_speech/04_omni_eval` |
+| **a tiny policy against a simulator** | ~14k parameters — CPU is *measurably* faster, and physics is the bottleneck | most of `07_physical_ai` and `08_aerial_physics` |
+| **a pure algorithm** | no model state at all | `02_intermediate/06_riemann_scaling` |
+
+`03_llms/09_multi_agency` is the odd one out: it drives TRL's `GRPOTrainer`,
+which handles its own distribution. The authoritative list is
+`launcher="python"` in `runpod/runpod_ctl.py`.
 
 ### What runs locally, and what does not
 
