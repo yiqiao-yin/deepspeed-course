@@ -39,11 +39,10 @@ Why this is a script and not a lab
 -----------------------------------
 It writes documentation assets. It trains nothing, needs no GPU, and must not
 be bookable -- so it lives in `scripts/` with PEP 723 inline dependencies
-rather than in a topic folder. That placement is load-bearing: **every
-directory with a `pyproject.toml` must appear in `clawdeck.yaml`**, enforced
-by `tests/test_clawdeck_manifest.py`, so a new project folder here would
-either fail CI or put a figure-generator in front of learners as a rentable
-GPU lab. `scripts/` has no `pyproject.toml` and is exactly where
+rather than in a topic folder. That placement is load-bearing: **a
+`pyproject.toml` is what marks a directory as a runnable example**, so a
+new project folder here would put a figure generator in front of learners
+as a rentable GPU lab. `scripts/` has no `pyproject.toml` and is exactly where
 `audit_readmes.py` and `check_contract.py` already live.
 
 It **reads** one lab -- `trunk-refinement` imports `EvoformerStack` from

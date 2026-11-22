@@ -32,9 +32,9 @@ Why this is a script and not a lab
 -----------------------------------
 It writes a documentation asset. It trains nothing and must not be bookable,
 so it lives in `scripts/` with PEP 723 inline dependencies and no
-`pyproject.toml` -- every directory with one of those must be registered in
-`clawdeck.yaml`, and a figure generator has no business being a rentable GPU
-lab. Same placement and same reasoning as `make_protein_animations.py`.
+`pyproject.toml` -- a directory with one of those reads as a runnable
+example, and a figure generator has no business being a rentable GPU lab.
+Same placement and same reasoning as `make_protein_animations.py`.
 
 On the GDT numbers
 ------------------

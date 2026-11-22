@@ -319,12 +319,36 @@ def test_referenced_tests_exist(r: Results) -> None:
             continue
         for m in re.findall(r"tests/(test_\w+\.py)",
                             p.read_text(errors="ignore")):
-            if m not in have and m not in PLACEHOLDERS:
+            if m not in have and m not in PLACEHOLDERS and not _existed_once(m):
                 bad.append(f"{p.relative_to(REPO_ROOT)} -> tests/{m}")
 
     r.check(not bad,
             "every referenced tests/test_*.py exists",
             "; ".join(sorted(set(bad))[:5]))
+
+
+def _existed_once(name: str) -> bool:
+    """
+    True if tests/<name> is a RETIRED suite rather than a bad reference.
+
+    POSTMORTEMS.md records history, and a detector can be legitimately
+    deleted without the incident becoming untrue -- test_clawdeck_manifest.py
+    went when Clawdeck was decommissioned, and three records cite it. The
+    options were to falsify the record, keep dead code, or notice that a
+    removed file is not a missing one.
+
+    Git decides: a path that ever existed is a retired suite; a path that
+    never existed is a typo and still fails. The check keeps its teeth.
+    """
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "log", "--oneline", "-1", "--all",
+             "--", f"tests/{name}"],
+            text=True, stderr=subprocess.DEVNULL, timeout=60)
+        return bool(out.strip())
+    except Exception:
+        return False
 
 
 def test_suite_registration_is_complete(r: Results) -> None:
