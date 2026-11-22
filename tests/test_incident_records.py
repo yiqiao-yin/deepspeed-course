@@ -98,13 +98,33 @@ def test_references_resolve(r: Results, have_history: bool) -> None:
                 except subprocess.CalledProcessError:
                     bad_sha.append(sha)
         if row["detector"] and not (REPO / row["detector"]).exists():
-            bad_det.append(row["detector"])
+            # A detector can be legitimately DELETED without the incident
+            # becoming untrue -- tests/test_clawdeck_manifest.py went when
+            # Clawdeck was decommissioned, and three records cite it. The
+            # honest options were to falsify history, keep dead code, or
+            # recognise that a removed file is not a missing one.
+            #
+            # So fall back to git: a path that ever existed is a real
+            # detector that has since been retired; a path that never
+            # existed is a typo or an invention, and still fails. The check
+            # keeps its teeth -- it just stops conflating two different
+            # things.
+            retired = False
+            if have_history:
+                try:
+                    retired = bool(git("log", "--oneline", "-1", "--all",
+                                       "--", row["detector"]).strip())
+                except subprocess.CalledProcessError:
+                    retired = False
+            if not retired:
+                bad_det.append(row["detector"])
 
     if have_history:
         r.check(not bad_sha, "every referenced commit exists in this repo",
                 f"unresolvable: {bad_sha}")
-    r.check(not bad_det, "every referenced detector exists on disk",
-            f"missing: {bad_det}")
+    r.check(not bad_det,
+            "every referenced detector exists on disk, or provably did once",
+            f"never existed: {bad_det}")
 
 
 def test_no_incident_is_fixed_before_it_exists(r: Results,

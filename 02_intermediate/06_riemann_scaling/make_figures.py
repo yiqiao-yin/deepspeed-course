@@ -22,11 +22,7 @@ Four figures and one animation:
     scaling.png      cost per evaluation, and where the GPU starts to pay
     fp32_drowns.gif  Z(t) in both precisions as t climbs
 
-Run on the CPU; it draws, it does not measure. Carries PEP 723 inline
-metadata and no pyproject of its own, deliberately: it is an authoring tool
-rather than a lab, and a pyproject.toml would oblige an entry in
-clawdeck.yaml, which would offer a learner "run the figure generator" as an
-exercise. See CLAUDE.md on scripts/.
+Run on the CPU; it draws, it does not measure.
 
 The measured numbers live in MEASURED below, each tagged with the card it
 came from. A number and the configuration it was measured in are one

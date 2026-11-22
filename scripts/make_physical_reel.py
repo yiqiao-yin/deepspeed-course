@@ -10,8 +10,8 @@ The seven-lab reel for the Physical AI overview page.
     uv run scripts/make_physical_reel.py --seconds 3
 
 An AUTHORING TOOL, not a lab: it carries PEP 723 inline metadata and
-deliberately no `pyproject.toml`, because a pyproject would oblige an
-entry in `clawdeck.yaml` (CI enforces it) and a learner should never
+deliberately no `pyproject.toml`, because a `pyproject.toml` is what
+marks a directory as a runnable example, and a learner should never
 be offered "run the figure generator" as an exercise.
 
 WHAT IT BUILDS
