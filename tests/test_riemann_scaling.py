@@ -180,7 +180,46 @@ def main() -> int:
     r.check(count_sign_changes(torch.tensor([1.0, 0.0, -1.0])) == 0,
             "count_sign_changes: an exact zero is not double-counted")
 
-    # ---- 8. README numbers must match the code ----------------------------
+    # ---- 8. the explicit formula must actually converge --------------------
+    # The animation's whole claim is that each zero adds one wave and the
+    # prime staircase emerges. That is exactly the kind of thing that can
+    # look right and be wrong: a plausible curve drawn near a staircase
+    # proves nothing. So assert the PROPERTY -- more zeros, less error --
+    # and then check that it fails for zeros that are not the real ones.
+    from zeta_core import find_zeros, psi_exact, psi_from_zeros
+
+    xs = np.linspace(2.0, 40.0, 600)
+    exact = psi_exact(xs, 40.0)
+    ts = find_zeros(40, t_max=160.0)
+
+    def rms(n, zeros=None):
+        z = (ts if zeros is None else zeros)[:n]
+        return float(np.sqrt(np.mean((psi_from_zeros(xs, z) - exact) ** 2)))
+
+    e0, e10, e40 = rms(0), rms(10), rms(40)
+    r.check(e40 < e10 < e0,
+            f"adding zeros monotonically rebuilds the primes "
+            f"({e0:.3f} -> {e10:.3f} -> {e40:.3f})",
+            "Each zero contributes one wave; more waves must fit better.")
+
+    # The counterexample. Detune every zero by 0.5 -- still 40 waves, still
+    # the right formula, still a curve that hugs the staircase by eye -- and
+    # the fit must NOT improve. Without this, the check above would pass for
+    # any set of numbers that merely looks like zeros.
+    detuned = ts + 0.5
+    e40_bad = rms(40, detuned)
+    r.check(e40_bad > e40,
+            f"detuned zeros rebuild the primes WORSE ({e40_bad:.3f} vs "
+            f"{e40:.3f})",
+            "If wrong zeros fit as well, the figure proves nothing.")
+
+    # And our zeros are the real ones, to the order this Z supports.
+    ref = np.array([float(mpmath.zetazero(n + 1).imag) for n in range(5)])
+    r.check(np.abs(ts[:5] - ref).max() < 1e-2,
+            f"found zeros match mpmath.zetazero "
+            f"(worst {np.abs(ts[:5] - ref).max():.1e})")
+
+    # ---- 9. README numbers must match the code ----------------------------
     # A published claim and the configuration it was measured in are one
     # indivisible fact. These pin the prose to something recomputable.
     readme = (LAB / "README.md").read_text()
