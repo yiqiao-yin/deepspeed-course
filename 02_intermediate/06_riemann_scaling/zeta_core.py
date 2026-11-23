@@ -138,3 +138,93 @@ def resolvable(t: float, dtype: torch.dtype) -> float:
     as_np = {torch.float32: np.float32, torch.float64: np.float64}[dtype]
     ulp = float(np.spacing(as_np(t)))
     return mean_zero_spacing(t) / ulp
+
+
+# ---------------------------------------------------------------------------
+# The explicit formula.
+#
+# Everything above answers "where are the zeros". This answers "why does
+# anyone want them", and it is pure mathematics -- no GPU, no drawing. It
+# lives here rather than in make_figures.py so the tests can exercise it
+# without importing matplotlib, and so the figure script stays a figure
+# script.
+# ---------------------------------------------------------------------------
+import numpy as np
+
+def find_zeros(n_want: int, t_max: float = 460.0, step: float = 0.02):
+    """
+    The first `n_want` zero heights, found with THIS LAB's own Z(t).
+
+    Sign change, then bisection -- the same "evaluate on a grid and look for
+    crossings" the whole lab is built on, which is the point of using our Z
+    here rather than importing a table. Both the scan and the bisection are
+    vectorised: one call for the entire grid, then one call per bisection
+    step for ALL brackets at once, rather than 200 x 50 single-point calls.
+    """
+    grid = np.arange(10.0, t_max, step)
+    z = z_values(grid, torch.float64, "cpu").numpy()
+    idx = np.nonzero(z[:-1] * z[1:] < 0)[0][:n_want]
+
+    lo, hi = grid[idx], grid[idx + 1]
+    f_lo = z[idx]
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        f_mid = z_values(mid, torch.float64, "cpu").numpy()
+        left = f_lo * f_mid < 0
+        hi = np.where(left, mid, hi)
+        lo = np.where(left, lo, mid)
+        f_lo = np.where(left, f_lo, f_mid)
+    return 0.5 * (lo + hi)
+
+
+def psi_exact(xs, x_max):
+    """
+    The prime staircase, weighted: psi(x) = sum of log p over prime POWERS
+    p^k <= x.
+
+    Why psi and not pi(x): same information, far tidier formula. Counting
+    each prime as 1 gives an explicit formula cluttered with Mobius terms;
+    counting it as log p gives the clean one used below. The staircase still
+    jumps at exactly the primes (and their powers) -- only the step heights
+    differ.
+    """
+    sieve = np.ones(int(x_max) + 1, bool)
+    sieve[:2] = False
+    for i in range(2, int(x_max ** 0.5) + 1):
+        if sieve[i]:
+            sieve[i * i::i] = False
+
+    jumps = []
+    for p in np.nonzero(sieve)[0]:
+        q = int(p)
+        while q <= x_max:
+            jumps.append((q, math.log(int(p))))
+            q *= int(p)
+
+    out = np.zeros_like(xs)
+    for pos, amt in sorted(jumps):
+        out[xs >= pos] += amt
+    return out
+
+
+def psi_from_zeros(xs, ts):
+    """
+    Riemann's explicit formula -- an EQUALITY, not an approximation:
+
+        psi(x) = x - SUM x^rho/rho - log(2pi) - (1/2)log(1 - x^-2)
+                      rho
+
+    Each zero rho = 1/2 + i*t contributes one WAVE. Its real part sets the
+    amplitude (x^(1/2), i.e. sqrt(x)) and its imaginary part the frequency.
+    Zeros are conjugate pairs, so a pair contributes 2*Re(x^rho/rho) and the
+    result is real.
+
+    This is why the zeros matter at all: they are not a curiosity about a
+    complex function, they are the frequencies of the primes. Truncating the
+    sum is the only approximation here.
+    """
+    out = xs - math.log(TAU) - 0.5 * np.log1p(-xs ** -2.0)
+    if len(ts):
+        rho = 0.5 + 1j * np.asarray(ts)
+        out = out - 2.0 * np.real(np.exp(rho * np.log(xs)[:, None]) / rho).sum(axis=1)
+    return out

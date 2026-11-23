@@ -90,6 +90,73 @@ mismatch is the whole lab.
 
 ---
 
+## Why anyone cares about these zeros
+
+:::warning This neither proves nor verifies the Riemann Hypothesis
+RH has been open since 1859 and is a $1M Millennium Prize problem. Finding
+zeros on the line is **evidence**, and no finite amount of it settles a claim
+about infinitely many. Counting sign changes also only finds zeros that are
+*on* the line — showing none hide *off* it needs extra machinery (Turing's
+method) that this lab does not implement. Zero-finding is used here as a
+**workload**, to measure what precision costs.
+:::
+
+Start with the thing the zeros are actually about: **how many primes are
+below x**. Plotted, that's a staircase — flat, then a jump at every prime.
+Gauss noticed primes near x thin out like 1/ln x, which gives a smooth
+prediction. The Prime Number Theorem (proved, 1896) says the staircase and
+the smooth curve agree in the long run.
+
+So: a smooth prediction, a jagged reality, and a gap between them.
+
+**Riemann's leap was that the gap is not noise.** There is an *exact*
+formula, and every zero of the zeta function contributes exactly **one wave**
+to it:
+
+```
+  the primes  =  smooth curve  −  Σ (one wave per zero)
+```
+
+Write a zero as ρ = σ + i·t. Its real part σ sets the wave's **amplitude**;
+its imaginary part t sets the **frequency**. Every zero is known to have σ
+strictly between 0 and 1, and **RH is the claim that every σ is exactly ½**.
+
+That makes RH the *optimistic* statement, which is the opposite of how it is
+usually paraphrased. If every σ is ½, every wave is about √x tall and the
+error in the prime count is as small as it could possibly be. A single zero
+at σ = 0.9 would produce one wave of size x⁰·⁹ that drowns all the others —
+primes would be **less** regular than we hope, not more.
+
+So the zeros are the frequencies of the primes. Here is that claim run
+backwards: take the zeros this lab's own `Z(t)` finds, feed them into the
+formula, and watch the smooth line grow steps until it *is* the prime
+staircase.
+
+[▶ Watch the primes appear out of the zeros (GIF, 165 KB)](/img/riemann/primes_from_zeros.gif)
+
+```
+  0 waves     a straight line          RMS gap 1.181
+  34 waves    steps forming            RMS gap 0.547
+  200 waves   every step in place      RMS gap 0.287
+```
+
+Build it yourself — no GPU, a few seconds:
+
+```bash
+uv run make_figures.py --only primes
+```
+
+The figure uses ψ(x), which counts each prime as **log p** rather than 1.
+Same information, far tidier formula: counting each prime as 1 drags Möbius
+terms into the explicit formula, and the staircase still jumps at exactly the
+primes.
+
+**This is also the honest answer to "why a GPU".** Nothing above needs one.
+The GPU earns its place in Finding 3, which is a claim *about GPUs* — and
+that one cannot be measured without them.
+
+---
+
 ## Finding 1 — float32 goes blind, it does not get noisy
 
 :::tip In plain words

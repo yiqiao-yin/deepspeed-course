@@ -14,13 +14,14 @@ animation would fail on import -- which is exactly how it first failed.
 `uv run` here resolves against the lab's own pyproject, which already
 declares torch, matplotlib, numpy and pillow.
 
-Four figures and one animation:
+Four figures and two animations:
 
-    reach.png        ULP against zero spacing -- where float32 runs out
-    zeros.png        zeros found: float64 reference against the float32 arm
-    penalty.png      THE HEADLINE: fp64 penalty, matmul vs this workload
-    scaling.png      cost per evaluation, and where the GPU starts to pay
-    fp32_drowns.gif  Z(t) in both precisions as t climbs
+    reach.png              ULP against zero spacing -- where float32 runs out
+    zeros.png              zeros found: float64 reference vs the float32 arm
+    penalty.png            THE HEADLINE: fp64 penalty, matmul vs this workload
+    scaling.png            cost per evaluation, and the penalty against height
+    fp32_drowns.gif        Z(t) in both precisions as t climbs
+    primes_from_zeros.gif  the zeros rebuilding the prime staircase
 
 Run on the CPU; it draws, it does not measure.
 
@@ -42,6 +43,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import LogLocator
+
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from zeta_core import find_zeros, psi_exact, psi_from_zeros  # noqa: E402
 
 HERE = pathlib.Path(__file__).parent
 FIGS = HERE / "figures"
@@ -301,6 +306,72 @@ def fig_scaling():
     _save(fig, "scaling.png")
 
 
+def fig_primes():
+    """
+    Watch the primes appear out of the zeros.
+
+    This figure exists because of a question a reader actually asked: does
+    computing zeros PROVE the Riemann Hypothesis, and does RH say primes are
+    unpredictable? No, and no -- RH is the OPTIMISTIC claim, that the error
+    in the prime count is as small as it could be. The fastest way to make
+    that concrete is to show the zeros rebuilding the prime staircase, one
+    wave at a time.
+
+    Nothing here is about GPUs, and it is the cheapest figure in the lab.
+    It earns its place by making the workload mean something.
+    """
+    from PIL import Image
+
+    X_MAX = 60.0
+    xs = np.linspace(2.0, X_MAX, 1600)
+    exact = psi_exact(xs, X_MAX)
+
+    print("    finding zeros with the lab's own Z(t) ...")
+    ts = find_zeros(200)
+
+    # Check them against mpmath before drawing anything with them. A figure
+    # built on wrong inputs is still a tidy figure, which is the problem.
+    try:
+        import mpmath
+        mpmath.mp.dps = 20
+        ref = np.array([float(mpmath.zetazero(n + 1).imag) for n in range(5)])
+        err = np.abs(ts[:5] - ref).max()
+        print(f"    first 5 zeros agree with mpmath to {err:.1e} "
+              f"(C0 truncation order at low t)")
+    except ImportError:
+        print("    (mpmath not installed -- zeros unverified)")
+
+    counts = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200]
+    images = []
+    for n in counts:
+        approx = psi_from_zeros(xs, ts[:n])
+        rms = float(np.sqrt(np.mean((approx - exact) ** 2)))
+
+        fig, ax = plt.subplots(figsize=(8.4, 4.8))
+        ax.plot(xs, exact, color=FG, lw=2.4, label=r"the primes: $\psi(x)$")
+        ax.plot(xs, approx, color=C32, lw=1.9,
+                label=f"smooth curve + {n} wave{'' if n == 1 else 's'}")
+        ax.set_ylim(-4, X_MAX + 6)
+        _style(ax, "Every zero is one wave. Add enough and the primes appear.",
+               "$x$", r"$\psi(x)$")
+        ax.legend(loc="upper left", fontsize=10, framealpha=0.92)
+        ax.text(0.985, 0.06,
+                f"{n} of the first 200 zeros        RMS gap {rms:.3f}",
+                transform=ax.transAxes, ha="right", fontsize=9.5, color=MUTED)
+
+        tmp = FIGS / "_pframe.png"
+        FIGS.mkdir(exist_ok=True)
+        fig.savefig(tmp, bbox_inches="tight", pad_inches=0.25)
+        plt.close(fig)
+        images.append(Image.open(tmp).convert("P", palette=Image.ADAPTIVE).copy())
+
+    out = FIGS / "primes_from_zeros.gif"
+    images[0].save(out, save_all=True, append_images=images[1:],
+                   duration=[900] * (len(images) - 1) + [3600], loop=0)
+    (FIGS / "_pframe.png").unlink(missing_ok=True)
+    print(f"  wrote {out.relative_to(HERE)}  ({len(images)} frames)")
+
+
 def fig_gif():
     """
     Z(t) in both precisions as t climbs. The last frame is the finding.
@@ -355,7 +426,7 @@ def fig_gif():
 
 
 FIGURES = {"reach": fig_reach, "zeros": fig_zeros, "penalty": fig_penalty,
-           "scaling": fig_scaling, "gif": fig_gif}
+           "scaling": fig_scaling, "gif": fig_gif, "primes": fig_primes}
 
 
 def main() -> None:

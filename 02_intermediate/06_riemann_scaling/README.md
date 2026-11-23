@@ -95,6 +95,60 @@ publish zero locations.
 
 ---
 
+## Why anyone cares about these zeros
+
+> **This neither proves nor verifies the Riemann Hypothesis.** RH has been
+> open since 1859 and is a $1M Millennium Prize problem. Finding zeros on
+> the line is *evidence*; no finite amount settles a claim about infinitely
+> many. Counting sign changes also only finds zeros that are **on** the
+> line — showing none hide **off** it needs Turing's method, which this lab
+> does not implement. Zero-finding is a **workload** here, used to measure
+> what precision costs.
+
+The zeros are about **how many primes are below x**. That is a staircase:
+flat, then a jump at every prime. Primes near x thin out like `1/ln x`,
+which gives a smooth prediction, and the Prime Number Theorem (proved,
+1896) says the two agree in the long run.
+
+**Riemann's leap was that the gap between them is not noise.** There is an
+*exact* formula in which every zero contributes exactly one **wave**:
+
+```
+  the primes  =  smooth curve  −  Σ (one wave per zero)
+```
+
+Write a zero as `ρ = σ + i·t`: the real part `σ` sets that wave's
+**amplitude**, the imaginary part `t` its **frequency**. Every zero is known
+to have `0 < σ < 1`, and **RH claims every `σ` is exactly ½**.
+
+So RH is the *optimistic* statement, the opposite of its usual paraphrase.
+All `σ = ½` means every wave is ~`√x` tall and the error in the prime count
+is as small as it could be. One zero at `σ = 0.9` would give a wave of size
+`x^0.9` that drowns the rest — primes would be **less** regular, not more.
+
+Run backwards, that claim is a picture. Take the zeros `zeta_core.py` finds,
+feed them to the formula, watch the smooth line grow steps:
+
+![primes appearing out of the zeros](figures/primes_from_zeros.gif)
+
+| waves | RMS gap to the true staircase |
+|---:|---:|
+| 0 | 1.181 |
+| 34 | 0.547 |
+| 200 | 0.287 |
+
+```bash
+uv run make_figures.py --only primes      # no GPU, a few seconds
+```
+
+Uses `ψ(x)`, which counts each prime as `log p` rather than 1 — same
+information, far tidier formula, and it still jumps at exactly the primes.
+
+**None of this needs a GPU**, and that is the honest framing: the GPU earns
+its place in Finding 3, which is a claim *about GPUs*.
+
+---
+
 ## Finding 1 — float32 does not get noisy, it goes blind
 
 The expectation going in was that float32 would accumulate rounding
@@ -315,7 +369,7 @@ uv run runpod/runpod_ctl.py pods          # confirm nothing is billing
 |---|---|
 | `zeta_core.py` | Z(t), θ(t), spacing, reach — **no experiment logic**, so the benchmark, figures and tests share one implementation |
 | `benchmark_zeta.py` | entry point: reach table, zero counts, timings, matmul control |
-| `make_figures.py` | every figure, from measured numbers |
+| `make_figures.py` | every figure and both animations, from measured numbers |
 | `run_slurm.sh` | SLURM batch script (not `run_deepspeed.sh` — see above) |
 | `results/` | the A100 run log as collected (`.txt`, because the repo gitignores `*.log`) and the local JSON |
 
