@@ -132,7 +132,7 @@ backwards: take the zeros this lab's own `Z(t)` finds, feed them into the
 formula, and watch the smooth line grow steps until it *is* the prime
 staircase.
 
-[▶ Watch the primes appear out of the zeros (GIF, 165 KB)](/img/riemann/primes_from_zeros.gif)
+![The zeros rebuilding the prime staircase, one wave at a time](/img/riemann/primes_from_zeros.gif)
 
 ```
   0 waves     a straight line          RMS gap 1.181
@@ -198,7 +198,7 @@ rounding effect would not reproduce like that; a deterministic limit does.
 The animation is what made the mechanism obvious. In the final frame float32 is
 not a noisy curve — it is a **flat line**:
 
-[▶ Watch float32 drown as t climbs (GIF, 188 KB)](/img/riemann/fp32_drowns.gif)
+![float32 drowning as t climbs — the last frame is a flat line](/img/riemann/fp32_drowns.gif)
 
 ---
 
