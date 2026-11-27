@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run every regression test. Requires only `uv` — each test declares its own
-# dependencies inline (PEP 723), so uv provisions them automatically.
+# dependencies inline (PEP 723) or requests them via `uv run --with`.
 #
 #     ./tests/run_all.sh
 #
@@ -28,6 +28,7 @@ TESTS=(
     tests/test_reward_model.py
     tests/test_video_frames.py
     tests/test_runpod_ctl.py
+    tests/test_runpod_zero3_artifacts.py
     tests/test_docs_style.py
     tests/test_incident_records.py
     tests/test_token_compression.py
@@ -82,10 +83,19 @@ TESTS=(
 )
 
 for test in "${TESTS[@]}"; do
-    if ! uv run "$test"; then
+    command=(uv run "$test")
+    if [[ "$test" == tests/test_runpod_zero3_artifacts.py ]]; then
+        command=(uv run --with pytest python -m pytest "$test")
+    fi
+    if ! "${command[@]}"; then
         FAILED=$((FAILED + 1))
     fi
 done
+
+if ! bash 03_llms/14_zero3_quantized/run_cpu_tests.sh; then
+    echo "ZeRO-3 BF16/NF4 lab regression failed." >&2
+    FAILED=$((FAILED + 1))
+fi
 
 echo
 echo "========================================================================"

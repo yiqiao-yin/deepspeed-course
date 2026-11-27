@@ -119,7 +119,7 @@ on a driver older than CUDA 13 it installs cleanly and then reports
 Each example folder's README has an **Environment & Local Testing** section with
 its exact dependencies, GPU requirement, and download size.
 
-**24 of the 54 examples deliberately skip the `deepspeed` launcher** — using a
+**24 of the 55 examples deliberately skip the `deepspeed` launcher** — using a
 distributed launcher where there is nothing to distribute is cargo cult. The
 test is whether ZeRO has anything to shard: it partitions optimizer state,
 gradients and parameters, and a lab with none of the three gains nothing.
@@ -232,7 +232,8 @@ deepspeed-course/
 │   ├── 10_deepseek_from_scratch/ # Multi-head Latent Attention, built from the paper and measured
 │   ├── 11_moe/                  # Mixture of Experts: routing, load balancing, expert parallelism
 │   ├── 12_prefill_decode/       # Serving: head-of-line blocking, and when chunking LOSES
-│   └── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
+│   ├── 13_qlora/                # NF4 QLoRA vs bf16 LoRA: per-GPU memory under ZeRO-2
+│   └── 14_zero3_quantized/      # ZeRO-3 parameter partitioning: BF16 vs NF4 (GPU results pending)
 ├── 04_video_text/         # Video in, text out
 │   ├── 01_hf_baseline/          # Foundational LLaVA / seq2seq video trainers
 │   ├── 02_qwen25vl/             # Qwen2.5-VL — a model that can represent TIME

@@ -531,7 +531,7 @@ the **lock**, not the pyproject.
 
 ### Which examples skip the `deepspeed` launcher
 
-**24 of 54**, and the number is no longer the interesting part. This section
+**24 of 55**, and the number is no longer the interesting part. This section
 used to list five by name and went stale the moment topics 7 and 8 landed —
 those two sections alone add sixteen. Do not "fix" any of them by adding
 DeepSpeed: using a distributed launcher where there is nothing to distribute
@@ -642,7 +642,7 @@ passed on all of them. Established patterns to copy:
 ### Running the tests
 
 ```bash
-./tests/run_all.sh                 # all 60 suites, no GPU, no downloads
+./tests/run_all.sh                 # 61 suites in tests/ plus the ZeRO-3 lab suites, CPU-only
 uv run tests/test_ds_configs.py    # one suite
 
 # what CI actually runs — run_all.sh alone does not reproduce it
@@ -1122,7 +1122,7 @@ npm run serve      # preview the production build
 There are **two** CI workflows:
 
 - `deploy-docs.yml` — builds and deploys the site. Runs only on pushes touching `docusaurus-docs/**`. `onBrokenLinks`, `onBrokenAnchors` and `onBrokenMarkdownLinks` are all `throw`, so link rot fails the build.
-- `tests.yml` — runs every suite in `tests/` plus a `compileall` over all training scripts, on every push and PR.
+- `tests.yml` — runs every suite in `tests/`, the four ZeRO-3 lab suites, and a `compileall` over all training scripts, on every push and PR.
 
 - Every doc page needs `---\nsidebar_position: N\n---` frontmatter **and** an entry in `sidebars.js` under `tutorialSidebar` — a page missing from `sidebars.js` is orphaned and nothing in the Docusaurus build warns you. `tests/test_docs_style.py` now checks this.
 - KaTeX math (`remark-math` + `rehype-katex`) and Mermaid (`@docusaurus/theme-mermaid`) are enabled; tutorial pages use ```` ```mermaid ```` blocks liberally.
