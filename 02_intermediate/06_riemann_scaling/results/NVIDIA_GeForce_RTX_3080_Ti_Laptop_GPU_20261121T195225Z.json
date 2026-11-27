@@ -1,0 +1,278 @@
+{
+  "reach": [
+    {
+      "height": 1000.0,
+      "terms": 12,
+      "mean_zero_spacing": 1.2393168126993492,
+      "float32": {
+        "ulp": 6.103515625e-05,
+        "points_per_zero": 20304.966659266138
+      },
+      "float64": {
+        "ulp": 1.1368683772161603e-13,
+        "points_per_zero": 10901145968489.805
+      }
+    },
+    {
+      "height": 10000.0,
+      "terms": 39,
+      "mean_zero_spacing": 0.8522504686371577,
+      "float32": {
+        "ulp": 0.0009765625,
+        "points_per_zero": 872.7044798844495
+      },
+      "float64": {
+        "ulp": 1.8189894035458565e-12,
+        "points_per_zero": 468529650022.05005
+      }
+    },
+    {
+      "height": 100000.0,
+      "terms": 126,
+      "mean_zero_spacing": 0.649421589261939,
+      "float32": {
+        "ulp": 0.0078125,
+        "points_per_zero": 83.1259634255282
+      },
+      "float64": {
+        "ulp": 1.4551915228366852e-11,
+        "points_per_zero": 44627911795.14197
+      }
+    },
+    {
+      "height": 1000000.0,
+      "terms": 398,
+      "mean_zero_spacing": 0.5245765210306086,
+      "float32": {
+        "ulp": 0.0625,
+        "points_per_zero": 8.393224336489737
+      },
+      "float64": {
+        "ulp": 1.1641532182693481e-10,
+        "points_per_zero": 4506078004.15184
+      }
+    },
+    {
+      "height": 10000000.0,
+      "terms": 1261,
+      "mean_zero_spacing": 0.4399922361117019,
+      "float32": {
+        "ulp": 1.0,
+        "points_per_zero": 0.4399922361117019
+      },
+      "float64": {
+        "ulp": 1.862645149230957e-09,
+        "points_per_zero": 236219033.07420874
+      }
+    },
+    {
+      "height": 100000000.0,
+      "terms": 3989,
+      "mean_zero_spacing": 0.378897647789709,
+      "float32": {
+        "ulp": 8.0,
+        "points_per_zero": 0.04736220597371363
+      },
+      "float64": {
+        "ulp": 1.4901161193847656e-08,
+        "points_per_zero": 25427390.715439484
+      }
+    },
+    {
+      "height": 1000000000.0,
+      "terms": 12615,
+      "mean_zero_spacing": 0.3327008717438706,
+      "float32": {
+        "ulp": 64.0,
+        "points_per_zero": 0.005198451120997978
+      },
+      "float64": {
+        "ulp": 1.1920928955078125e-07,
+        "points_per_zero": 2790897.1943176067
+      }
+    },
+    {
+      "height": 10000000000.0,
+      "terms": 39894,
+      "mean_zero_spacing": 0.29654488662524964,
+      "float32": {
+        "ulp": 1024.0,
+        "points_per_zero": 0.00028959461584497035
+      },
+      "float64": {
+        "ulp": 1.9073486328125e-06,
+        "points_per_zero": 155474.92551897888
+      }
+    }
+  ],
+  "zeros": [
+    {
+      "height": 1000.0,
+      "terms": 12,
+      "window_zeros_expected": 400,
+      "zeros_float64": 416,
+      "zeros_float32": 416,
+      "difference": 0,
+      "max_abs_deviation": 0.007829565976900543
+    },
+    {
+      "height": 10000.0,
+      "terms": 39,
+      "window_zeros_expected": 400,
+      "zeros_float64": 402,
+      "zeros_float32": 402,
+      "difference": 0,
+      "max_abs_deviation": 0.0903316223816426
+    },
+    {
+      "height": 100000.0,
+      "terms": 126,
+      "window_zeros_expected": 400,
+      "zeros_float64": 400,
+      "zeros_float32": 480,
+      "difference": 80,
+      "max_abs_deviation": 0.9603935290324674
+    },
+    {
+      "height": 1000000.0,
+      "terms": 398,
+      "window_zeros_expected": 400,
+      "zeros_float64": 399,
+      "zeros_float32": 595,
+      "difference": 196,
+      "max_abs_deviation": 14.069520253387731
+    },
+    {
+      "height": 10000000.0,
+      "terms": 1261,
+      "window_zeros_expected": 400,
+      "zeros_float64": 400,
+      "zeros_float32": 90,
+      "difference": -310,
+      "max_abs_deviation": 37.52630856183525
+    },
+    {
+      "height": 100000000.0,
+      "terms": 3989,
+      "window_zeros_expected": 400,
+      "zeros_float64": 400,
+      "zeros_float32": 5,
+      "difference": -395,
+      "max_abs_deviation": 59.44743102285947
+    },
+    {
+      "height": 1000000000.0,
+      "terms": 12615,
+      "window_zeros_expected": 400,
+      "zeros_float64": 401,
+      "zeros_float32": 2,
+      "difference": -399,
+      "max_abs_deviation": 58.60197589172824
+    },
+    {
+      "height": 10000000000.0,
+      "terms": 39894,
+      "window_zeros_expected": 400,
+      "zeros_float64": 400,
+      "zeros_float32": 0,
+      "difference": -400,
+      "max_abs_deviation": 54.068895517069684
+    }
+  ],
+  "throughput": [
+    {
+      "height": 1000.0,
+      "terms": 12,
+      "points": 8000,
+      "gpu_float64_s": 0.0018816270167008042,
+      "gpu_float32_s": 0.0015751400496810675,
+      "cpu_float64_s": 0.005403302959166467,
+      "gpu_over_cpu_float64": 2.8716121267436296,
+      "float32_speedup_on_gpu": 1.1945775977709372
+    },
+    {
+      "height": 10000.0,
+      "terms": 39,
+      "points": 8000,
+      "gpu_float64_s": 0.0017928439192473888,
+      "gpu_float32_s": 0.0018136469880118966,
+      "cpu_float64_s": 0.0015192929422482848,
+      "gpu_over_cpu_float64": 0.8474206404348144,
+      "float32_speedup_on_gpu": 0.988529703463786
+    },
+    {
+      "height": 100000.0,
+      "terms": 126,
+      "points": 8000,
+      "gpu_float64_s": 0.0031905670184642076,
+      "gpu_float32_s": 0.0034054380375891924,
+      "cpu_float64_s": 0.004552425001747906,
+      "gpu_over_cpu_float64": 1.4268388582350588,
+      "float32_speedup_on_gpu": 0.936903559320933
+    },
+    {
+      "height": 1000000.0,
+      "terms": 398,
+      "points": 8000,
+      "gpu_float64_s": 0.0028623889666050673,
+      "gpu_float32_s": 0.0018435859819874167,
+      "cpu_float64_s": 0.016646804055199027,
+      "gpu_over_cpu_float64": 5.815702984260363,
+      "float32_speedup_on_gpu": 1.5526202708047083
+    },
+    {
+      "height": 10000000.0,
+      "terms": 1261,
+      "points": 8000,
+      "gpu_float64_s": 0.004184436053037643,
+      "gpu_float32_s": 0.002572789089754224,
+      "cpu_float64_s": 0.06465424597263336,
+      "gpu_over_cpu_float64": 15.451125349543423,
+      "float32_speedup_on_gpu": 1.626420163899785
+    },
+    {
+      "height": 100000000.0,
+      "terms": 3989,
+      "points": 8000,
+      "gpu_float64_s": 0.010118142003193498,
+      "gpu_float32_s": 0.0050089419819414616,
+      "cpu_float64_s": 0.17987148906104267,
+      "gpu_over_cpu_float64": 17.777126374019208,
+      "float32_speedup_on_gpu": 2.020015811656839
+    },
+    {
+      "height": 1000000000.0,
+      "terms": 12615,
+      "points": 8000,
+      "gpu_float64_s": 0.029170244000852108,
+      "gpu_float32_s": 0.013053342001512647,
+      "cpu_float64_s": 0.531360816094093,
+      "gpu_over_cpu_float64": 18.21585092255557,
+      "float32_speedup_on_gpu": 2.234695451744986
+    },
+    {
+      "height": 10000000000.0,
+      "terms": 39894,
+      "points": 8000,
+      "gpu_float64_s": 0.09690499503631145,
+      "gpu_float32_s": 0.0399613999761641,
+      "cpu_float64_s": 1.6199069619178772,
+      "gpu_over_cpu_float64": 16.71644440321037,
+      "float32_speedup_on_gpu": 2.424964968547465
+    }
+  ],
+  "matmul_reference": {
+    "matmul_fp32_tflops": 6.0448830194113485,
+    "matmul_fp64_tflops": 0.36311279680196523,
+    "matmul_fp32_over_fp64": 16.647397372525297
+  },
+  "environment": {
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 3080 Ti Laptop GPU",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "platform": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "cpu_count": 20,
+    "timestamp_utc": "2026-11-21T19:52:25+00:00"
+  }
+}

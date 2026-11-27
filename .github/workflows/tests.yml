@@ -109,9 +109,6 @@ jobs:
       - name: Qwen3.8 hybrid-attention analysis and LoRA targeting
         run: uv run tests/test_qwen38_arch.py
 
-      - name: Clawdeck lab manifest
-        run: uv run tests/test_clawdeck_manifest.py
-
       - name: Config kwargs match the installed library
         run: uv run tests/test_config_kwargs.py
 
@@ -176,6 +173,9 @@ jobs:
         run: uv run tests/test_teacher_student.py
       - name: "RL trading: no look-ahead, costs bite, universe unbiased"
         run: uv run tests/test_rl_trading.py
+
+      - name: "Riemann scaling: Z(t) matches mpmath, float32 reach runs out"
+        run: uv run tests/test_riemann_scaling.py
 
       - name: "Obstacle hopper: physics is real, GAE limits hold"
         run: uv run tests/test_obstacle_hopper.py

@@ -328,7 +328,14 @@ def check_reader_b(folder: Path, name: str, r: Report) -> None:
     # positive here until --num_iterations was recognised.
     CAPS = ("max-steps", "max_steps", "--frames", "--slices", "--limit",
             "--questions", "--examples", "--dry-run",
-            "--num_iterations", "--num-iterations", "--n-samples")
+            "--num_iterations", "--num-iterations", "--n-samples",
+            "--plan")
+    # --plan belongs here for the same reason --num_iterations does: a lab whose
+    # subject is INITIALIZATION has no training steps to cap, so demanding
+    # --max-steps asks it to grow a loop it does not have. 03_llms/14_zero3_quantized
+    # measures what deepspeed.initialize does to parameter partitioning and
+    # returns before any training; --plan IS its cheap dry run. Reported as a
+    # false positive on PR #125.
     # Check the script that ACTUALLY RUNS -- the one registered in
     # runpod_ctl.py -- not merely the files that happen to carry a __main__
     # guard. Two real cases this gets wrong otherwise:
@@ -438,18 +445,6 @@ def check_reader_c(folder: Path, name: str, r: Report, ctl) -> None:
 def check_assets(folder: Path, name: str, r: Report) -> None:
     """The rest of the asset inventory from CONTRIBUTING.md §4."""
     r.add(name, "assets", "README.md present", (folder / "README.md").is_file())
-
-    # The Clawdeck lab manifest is the only integration point with
-    # clawdeck-app.com, which builds its Lab picker from it. A topic missing
-    # here simply never appears over there, with no error on either side.
-    # tests/test_clawdeck_manifest.py is the hard gate; this is the nudge in
-    # the tool a contributor already runs before opening a PR.
-    manifest = REPO_ROOT / "clawdeck.yaml"
-    if manifest.is_file():
-        r.add(name, "assets", "registered in clawdeck.yaml",
-              f"id: {name}" in manifest.read_text(),
-              "Add a `- id: " + name + "` entry so the topic appears in "
-              "clawdeck-app.com's Lab picker. See CONTRIBUTING.md section 8.")
 
     has_cfg = bool(list(folder.glob("ds_config*.json"))
                    or list(folder.glob("*_config.json")))

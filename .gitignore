@@ -1,6 +1,16 @@
 __pycache__/
 *.py[cod]
 .venv/
+
+# Credentials. NOT covered by `.venv/` above -- that matches the virtualenv
+# directory and nothing else, which is an easy rule to mistake for this one.
+# This repository is PUBLIC and tests/test_runpod_ctl.py scans the tree for
+# live RunPod keys, so a `.env` holding one must never be committable in the
+# first place. Prefer keeping real keys outside the repo entirely
+# (~/.config/runpod/key, mode 600); this is the backstop, not the plan.
+.env
+.env.*
+!.env.example
 docusaurus-docs/package-lock.json
 .ruff_cache/
 docusaurus-docs/build/

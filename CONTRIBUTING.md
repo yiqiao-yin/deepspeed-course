@@ -529,91 +529,32 @@ verifiable, and almost every one is enforced by CI or by a test:
 | **Book page** | `docusaurus-docs/docs/tutorials/…` | `npm run build` |
 | **Sidebar entry** | `docusaurus-docs/sidebars.js` | `test_docs_style.py` — a missing entry silently **orphans** the page, so it is now checked |
 | **Mermaid palette** | any `\`\`\`mermaid` block | `test_docs_style.py` |
-| **Clawdeck lab entry** | `clawdeck.yaml` at the repo root | `test_clawdeck_manifest.py` **fails** without it |
 | **Tier-3 claim** | `**Baseline:**` and `**Budget:**` near the top of the folder README, **and** an entry in `TIER3` in `tests/test_tier3_claims.py` | `test_tier3_claims.py` — only for examples claiming *X beats Y on a measured axis*. The test iterates its own registry, so a lab you do **not** register is silently unchecked rather than failed. See [§7a](#7a-if-your-lab-claims-something-is-better). |
 
 Every row is now guarded. `test_docs_style.py` closed the sidebar gap, which
-nothing in the Docusaurus build warns about, and `test_clawdeck_manifest.py`
-closed the last one — a topic missing from `clawdeck.yaml` is invisible in a
-*different product*, so nothing in this repository would ever have complained.
+nothing in the Docusaurus build warns about — a page missing from
+`sidebars.js` is simply orphaned, with no error anywhere.
 
 `uv run scripts/new_example.py <folder>` writes the four in-folder files and
 prints the `runpod_ctl.py` line for you. The rest is on you.
 
-### `clawdeck.yaml` — the lab manifest
+### Commands must be safe to run unattended
 
-[clawdeck-app.com](https://clawdeck-app.com) boots a disposable GPU box, clones
-this repository, installs `uv`, pre-warms the cache, and shows a **Lab picker**:
-one entry per topic, with buttons that run a command in the pod's terminal.
+Whatever runs your lab — `runpod_ctl.py`, a reader at a terminal, a future
+orchestrator — runs it **unattended while someone watches the output**. Keep
+every published command bounded in time: if a full run is long, offer a
+`--max-steps` or `--epochs 1` variant alongside it. If your example has a
+CPU-runnable core, offer that too; it is the fastest way for someone to see
+what the topic is about.
 
-It builds that picker from `clawdeck.yaml` at the repo root. **That file is the
-only integration point.** No training script contains Clawdeck-specific code,
-and none should — if a folder is renamed, you edit one id here and Clawdeck
-needs no change.
-
-This matters because the failure is silent *in a different repository*.
-Clawdeck previously hardcoded `01_basic_neuralnet`; this repo reorganised into
-`01_basics/…`; every Clawdeck GPU boot then printed "dependency pre-install
-FAILED" until a human noticed. Neither codebase could have caught it.
-
-Add your topic:
-
-```yaml
-  - id: 10_my_topic/01_thing        # path from the repo root; MUST have pyproject.toml
-    title: "Short title"            # <= 40 chars — it renders in a ~320px sidebar
-    summary: "One line, <= 95 chars."
-    est_minutes: 5                  # for the PRIMARY command, excluding downloads
-    gpu: { min_vram_gb: 24, count: 2 }   # omit entirely if CPU is fine
-    run:
-      - { label: "Train", cmd: "uv run deepspeed --num_gpus=2 train_ds.py", primary: true }
-      - { label: "Quick (20 steps)", cmd: "uv run deepspeed --num_gpus=2 train_ds.py --max-steps 20" }
-```
-
-Rules the test enforces, and why each one exists:
-
-| Rule | Why |
-|---|---|
-| every `id` is a real directory with a `pyproject.toml` | Clawdeck runs `uv run` there; without a lock there is nothing to run |
-| **every lab directory on disk appears here** | the one that catches you. Add a topic, forget this file, and it simply never appears in Clawdeck — no error on either side |
-| `default_lab` is one of the ids | it is what gets pre-warmed on **every** boot; a bad value breaks every boot, not one lab |
-| exactly one `primary: true` per lab | the UI has one primary button |
-| every `cmd` starts with `uv run` and names a script that exists | the box has `uv` and your committed lock, so nothing else needs setup |
-| `--num_gpus` matches `gpu.count`, **and** `gpu.count` satisfies the batch invariant | see below — this one has bitten this repo twice |
-
-Two more that exist because Clawdeck is a *live* consumer — it reads this file
-from `main` every five minutes, with no deploy and no review in between:
-
-| Rule | Why |
-|---|---|
-| `gpu.count` ∈ {1, 2, 4, 8}, and `min_vram_gb` ≤ 180 at counts 1–2, ≤ 80 at counts 4–8 | Clawdeck books an **exact** count from a fixed catalog. `count: 3` is a perfectly reasonable thing to write and **cannot be booked** — the lab renders as "Needs a different machine" with nothing to switch to |
-| a run entry with no `--num_gpus` must genuinely run on CPU, or carry `needs_gpu: true` | Clawdeck's rule is literally `is_cpu_only = "--num_gpus" not in cmd`, and those entries are shown **first**, under "Runs now — no GPU needed", drawn even from locked labs. An entry that lands there and then needs a GPU is worse than a locked lab: the learner was told it would work |
-
-`main` is branch-protected and requires the `Logic tests (no GPU required)`
-check, with `enforce_admins` on — so a manifest edit physically cannot reach
-learners without the gate passing, even from an admin's terminal. Open a PR.
-
-`needs_gpu: true` exists for the five examples that deliberately do **not** use
-the deepspeed launcher. Their commands have no `--num_gpus` for Clawdeck to key
-on, and faking a launcher purely to smuggle the signal would be exactly the
-cargo cult this repo warns against. Note that **Clawdeck does not read the field
-yet** — the manifest and the test are correct, the platform needs a one-line
-change to honour it.
-
-That last rule is worth dwelling on. Where a `ds_config.json` hardcodes
-`train_batch_size`, `train_micro_batch_size_per_gpu` and
-`gradient_accumulation_steps`, it has **pinned the GPU count**, and DeepSpeed
-asserts it at startup. `01_basics/04_rnn` (128 = 32 × 2 × **2**) and
-`03_llms/02_trl_sft` (16 = 4 × 2 × **2**) both require two GPUs, and both
-were registered in `EXAMPLES` as needing one — so `runpod_ctl.py run` on either
-would have rented a box and then aborted. The manifest test now cross-checks
-`gpu.count` against the config, so that class of mistake fails CI instead of
-your reader's wallet.
-
-Commands run **unattended, in a terminal a user is watching**. Keep them safe to
-run and bounded in time: if a full run is long, offer a `--max-steps` or
-`--epochs 1` variant alongside it. If your example has a CPU-runnable core,
-offer that too — it is the fastest way for someone to see what the topic is
-about.
+> **A `ds_config.json` with hardcoded batch sizes has pinned the GPU count.**
+> Where it fixes `train_batch_size`, `train_micro_batch_size_per_gpu` and
+> `gradient_accumulation_steps`, DeepSpeed asserts the product at startup.
+> `01_basics/04_rnn` (128 = 32 × 2 × **2**) and `03_llms/02_trl_sft`
+> (16 = 4 × 2 × **2**) both require two GPUs, and both were registered in
+> `EXAMPLES` as needing one — so `runpod_ctl.py run` on either would have
+> rented a box and then aborted. Check your `gpus=` against the config, or it
+> fails at your reader's expense.
 
 ### The batch invariant
 
@@ -820,8 +761,8 @@ comment saying the omission is deliberate**, or the next reader will "fix" it:
 # allocates nothing. This script never touches a GPU.
 ```
 
-If it never trains, it also needs `needs_gpu: true` **omitted** from its
-`clawdeck.yaml` entry — it genuinely runs on CPU, and saying so is the point.
+If it never trains, say so plainly in the README: it genuinely runs on CPU,
+and that is the point rather than a caveat.
 
 ### 🔴 Two ZeRO-3 traps that make your numbers meaningless
 
@@ -1117,7 +1058,7 @@ The layout engine and the base colours are set **globally**, once, in
 #### What you DO declare: the five node classes
 
 Add these `classDef` lines at the bottom of your diagram and assign nodes with
-`class`. Copy the block verbatim — the names are load-bearing across 68 pages:
+`class`. Copy the block verbatim — the names are load-bearing across 69 pages:
 
 ```
 classDef deep   fill:#08182a,stroke:#2d5a86,stroke-width:1.5px,color:#ffffff
@@ -1206,8 +1147,6 @@ Copy this into your PR. The PR template already contains it.
       `**Example:**` line LINKED to a path that exists
 - [ ] The entry point is named `train_*` only if it actually trains; if it
       does not, the missing `require_gpu()` is explained in a comment
-- [ ] Registered in `clawdeck.yaml` (title ≤ 40 chars, summary ≤ 95, one `primary`)
-- [ ] `gpu.count` is 1, 2, 4 or 8 and the shape is bookable; any run entry without `--num_gpus` really runs on CPU (else `needs_gpu: true`)
 - [ ] A logic test exists, registered in **both** `tests/run_all.sh` and the CI workflow
 - [ ] Managed by **`uv`**, trained with **`deepspeed`** (or a stated exception)
 - [ ] No shared logic extracted into a common module
@@ -1250,7 +1189,7 @@ Copy this into your PR. The PR template already contains it.
 - [ ] Test registered in `tests/run_all.sh` **and** `.github/workflows/tests.yml`
 - [ ] `cd docusaurus-docs && npm run build` passes (if docs changed)
 - [ ] Docs page has frontmatter **and** a `sidebars.js` entry
-- [ ] `clawdeck.yaml` entry added; `--num_gpus` matches `gpu.count` and the batch invariant
+- [ ] `--num_gpus` in every published command matches the batch invariant in `ds_config.json`
 - [ ] Expected output is real, or marked "not yet verified on hardware"
 
 ### The one command
