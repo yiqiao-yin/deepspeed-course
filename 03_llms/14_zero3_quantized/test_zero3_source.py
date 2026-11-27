@@ -7,11 +7,12 @@ import inspect
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
+import pytest
 import torch
 
 from transformers import PreTrainedModel
 
-from train_zero3 import MODEL_ID, load_config, load_model
+from train_zero3 import CONTROL_MODEL_ID, MODEL_ID, load_config, load_model
 
 
 def test_zero3_quantization_guard():
@@ -33,8 +34,10 @@ def test_zero3_quantization_guard():
     print("NOTE: No GPU partitioning measurements have been performed.")
 
 
-def test_nf4_loader_uses_rank_device_selection():
-    config = load_config("nf4")
+@pytest.mark.parametrize("arm", ["bf16", "nf4"])
+@pytest.mark.parametrize("model_id", [None, CONTROL_MODEL_ID])
+def test_model_loader_uses_selected_checkpoint_and_rank_device(arm, model_id):
+    config = load_config(arm)
     model = SimpleNamespace(config=SimpleNamespace(use_cache=True))
     calls = Mock()
     calls.from_pretrained.return_value = model
@@ -44,18 +47,22 @@ def test_nf4_loader_uses_rank_device_selection():
         patch("transformers.BitsAndBytesConfig", calls.quant_config),
         patch("transformers.AutoModelForCausalLM.from_pretrained", calls.from_pretrained),
     ):
-        loaded, ds_config = load_model("nf4", config)
+        model_args = (model_id,) if model_id else ()
+        loaded, ds_config = load_model(arm, config, *model_args)
 
     assert calls.mock_calls[0] == call.ds_config(config)
-    calls.quant_config.assert_called_once_with(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-    calls.from_pretrained.assert_called_once_with(
-        MODEL_ID, dtype=torch.bfloat16, quantization_config=calls.quant_config.return_value,
-    )
+    kwargs = {"dtype": torch.bfloat16}
+    if arm == "nf4":
+        calls.quant_config.assert_called_once_with(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        kwargs["quantization_config"] = calls.quant_config.return_value
+    else:
+        calls.quant_config.assert_not_called()
+    calls.from_pretrained.assert_called_once_with(model_id or MODEL_ID, **kwargs)
     assert loaded is model
     assert ds_config is calls.ds_config.return_value
     assert loaded.config.use_cache is False
@@ -63,4 +70,4 @@ def test_nf4_loader_uses_rank_device_selection():
 
 if __name__ == "__main__":
     test_zero3_quantization_guard()
-    test_nf4_loader_uses_rank_device_selection()
+    test_model_loader_uses_selected_checkpoint_and_rank_device("nf4", None)

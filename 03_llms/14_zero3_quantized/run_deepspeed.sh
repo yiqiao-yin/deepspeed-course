@@ -26,14 +26,15 @@ set -euo pipefail
 
 ARM=
 PLAN=false
-for arg in "$@"; do
-    case "$arg" in
+MODEL_ARGS=()
+while (( $# )); do
+    case "$1" in
         bf16|nf4)
             if [[ -n "$ARM" ]]; then
                 echo "Choose one arm: bf16 or nf4." >&2
                 exit 2
             fi
-            ARM="$arg"
+            ARM="$1"
             ;;
         --plan)
             if [[ "$PLAN" == true ]]; then
@@ -42,11 +43,24 @@ for arg in "$@"; do
             fi
             PLAN=true
             ;;
+        --model)
+            if (( ${#MODEL_ARGS[@]} )); then
+                echo "Specify --model only once." >&2
+                exit 2
+            fi
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                echo "--model requires a checkpoint identifier." >&2
+                exit 2
+            fi
+            MODEL_ARGS=(--model "$2")
+            shift
+            ;;
         *)
-            printf 'Unsupported argument: %s\nUsage: %s [bf16|nf4] [--plan]\n' "$arg" "$0" >&2
+            printf 'Unsupported argument: %s\nUsage: %s [bf16|nf4] [--plan] [--model MODEL]\n' "$1" "$0" >&2
             exit 2
             ;;
     esac
+    shift
 done
 ARM="${ARM:-bf16}"
 
@@ -57,8 +71,18 @@ if [[ ! -f train_zero3.py ]]; then
     exit 2
 fi
 
+run_plan() {
+    python3 train_zero3.py --arm "$ARM" --plan "$@"
+}
+
 if [[ "$PLAN" == true ]]; then
-    exec python3 train_zero3.py --arm "$ARM" --plan
+    run_plan "${MODEL_ARGS[@]}"
+    exit 0
+fi
+
+# Validate explicit model selections with the entry point before touching GPUs.
+if (( ${#MODEL_ARGS[@]} )); then
+    run_plan "${MODEL_ARGS[@]}" >/dev/null
 fi
 
 mkdir -p logs results
@@ -76,7 +100,7 @@ echo "=========================================="
 nvidia-smi
 
 uv run --locked deepspeed --num_gpus="${NUM_GPUS}" train_zero3.py \
-    --arm "${ARM}" \
+    --arm "${ARM}" "${MODEL_ARGS[@]}" \
     --output-dir "results/${ARM}"
 
 echo "Experiment complete: ${ARM}"

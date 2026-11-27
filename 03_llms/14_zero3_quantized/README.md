@@ -8,7 +8,7 @@ Does storing Qwen3-4B's frozen base weights in NF4 change which parameters have 
 - **Alternative hypothesis:** The NF4 arm shows a different pattern after initialization, such as packed base weights without primary ZeRO shards. An earlier difference during model loading may disappear after engine initialization. Missing or inconsistent metadata makes the comparison inconclusive for those tensors.
 - **Budget:** One model load, LoRA attachment, and engine initialization per arm per launch, with two ranks and zero optimizer steps.
 
-Both arms use the same Qwen3-4B checkpoint, ZeRO stage 3, BF16 compute, and LoRA adapter configuration. The NF4 arm loads packed 4-bit weights through bitsandbytes with double quantization and applies PEFT's k-bit preparation. The BF16 arm loads unquantized weights. Compare matching named base tensors separately from the adapters and compare the same execution stage on each rank. The comparison covers the two initialization paths as implemented, including NF4-specific preparation. It measures neither training quality nor throughput.
+Within each BF16/NF4 comparison, use the same model ID and resolved checkpoint revision, ZeRO stage 3, BF16 compute, and LoRA adapter configuration. Both paths register the Hugging Face DeepSpeed config before loading. BF16 loads unquantized weights and explicitly freezes the base model. NF4 requests bitsandbytes 4-bit weights with double quantization and BF16 compute, lets the loader select the current rank's CUDA device, and applies PEFT's k-bit preparation. The paths use the same LoRA targets and settings. The locked Transformers source gates its `deepspeed.zero.Init` branch on non-quantized loading. Measure both arms after engine initialization to determine whether the loading difference persists. Compare matching named base tensors separately from the adapters and compare the same execution stage on each rank. The comparison covers the two initialization paths as implemented, including NF4-specific preparation. It measures neither training quality nor throughput.
 
 ## Hardware requirements
 
@@ -18,7 +18,7 @@ The current planning settings are 24 GB VRAM per GPU and 80 GB disk in the RunPo
 
 ## Environment & Local Testing
 
-Run the setup from this lab directory using the committed lockfile. The project uses Python 3.12 and locks PyTorch (CUDA 12.8), DeepSpeed, Transformers, PEFT, bitsandbytes, and their dependencies.
+Run the setup from this lab directory using the committed lockfile. The lab's `.python-version` selects Python 3.12 in uv. The `src/` directory contains a scaffold stub. Launch the experiment through `train_zero3.py`. The project locks PyTorch (CUDA 12.8), DeepSpeed, Transformers, PEFT, bitsandbytes, and their dependencies.
 
 ```bash
 uv sync --locked
@@ -31,6 +31,8 @@ python3 train_zero3.py --arm bf16 --plan
 python3 train_zero3.py --arm nf4 --plan
 ./run_deepspeed.sh bf16 --plan
 ./run_deepspeed.sh nf4 --plan
+./run_deepspeed.sh bf16 --plan --model Qwen/Qwen3-0.6B
+./run_deepspeed.sh nf4 --plan --model Qwen/Qwen3-0.6B
 bash -n run_deepspeed.sh
 ```
 
@@ -40,27 +42,33 @@ Both plans print the model, arm, and ZeRO stage, followed by this observed outpu
 PASS: configuration structure valid. GPU measurements: NOT PERFORMED
 ```
 
-Use the launcher-only suite on a plain CPU host. It stubs GPU-related commands. For the full lab suite, use the locked environment on a compatible Linux host. The tests themselves use CPU tensors, synthetic data, mocked engine calls, and source inspection.
+Run all four lab suites on a Linux CPU host with the same command used in CI. The runner uses the CPU build of the lab’s PyTorch release and the same Transformers version as the lab lock. It checks synthetic tensors, stubbed GPU commands, mocked engine calls, and Transformers source. Use the locked project environment for GPU runs.
 
 ```bash
-uv run --no-project --python 3.12 --with pytest -- pytest -q test_zero3_launcher.py
-uv run --locked --with pytest -- pytest -q
+bash run_cpu_tests.sh
 ```
 
 ## Running it
 
-Before running either arm, record the Git commit, resolved Hugging Face checkpoint revision, hardware and driver, and whether the model and dependencies were already cached. The loader resolves `Qwen/Qwen3-4B` by model ID, so use the same cached checkpoint revision for both arms and retain its identity with the results. Dependency locking covers the Python environment. Match GPU type, rank topology, and launch conditions across arms.
+Before running either arm, record the Git commit, resolved Hugging Face checkpoint revision, hardware and driver, and whether the model and dependencies were already cached. The loader resolves the selected Hugging Face model ID. Resolve and cache one checkpoint revision for each model before the comparison, use that snapshot for both arms, and retain its revision with the results. Each rank report records the selected model ID. Dependency locking covers the Python environment. Match GPU type, rank topology, and launch conditions across arms.
 
 ### Direct Linux launch
 
 From the lab directory, run one arm per launch:
 
 ```bash
-./run_deepspeed.sh bf16
-./run_deepspeed.sh nf4
+# Primary comparison (Qwen/Qwen3-4B is the default)
+./run_deepspeed.sh bf16 --model Qwen/Qwen3-4B
+./run_deepspeed.sh nf4 --model Qwen/Qwen3-4B
+
+# Smaller control (run BF16 first and inspect its partitioning)
+./run_deepspeed.sh bf16 --model Qwen/Qwen3-0.6B
+./run_deepspeed.sh nf4 --model Qwen/Qwen3-0.6B
 ```
 
-The launcher accepts one positional arm, defaults to BF16, and accepts `--plan` in either position. The plan exits before checking for NVIDIA hardware. Invoke it directly on the CPU or login node.
+The launcher defaults to the BF16 arm. It and `train_zero3.py` accept one `--model MODEL` argument, with choices `Qwen/Qwen3-4B` and `Qwen/Qwen3-0.6B`. Invoke `--plan` directly on the CPU or login node. It exits before GPU checks and model loading.
+
+Run the 0.6B BF16 control first. After engine initialization, check each rank for partitioned base tensors, zero tensors classified as missing a DeepSpeed shard, and backing shard capacity consistent with the partition world size after accounting for padding. If the control fails, stop and diagnose the harness before paying for NF4 or 4B. If the control passes, run 0.6B NF4 against the same revision and assess whether partitioning differs. Report matching partitioning as evidence against the hypothesis for that checkpoint. A 0.6B result qualifies the harness on the smaller checkpoint. The Qwen3-4B question requires both arms on Qwen3-4B.
 
 ### CoreWeave SLURM
 
@@ -80,13 +88,13 @@ Errors go to `zero3_<job-id>.err`. An expired or canceled job is incomplete. The
 
 ### RunPod
 
-From the repository root, configure `RUNPOD_API_KEY` in your shell and use the project helper to inspect the resource estimates. The registered automated run selects BF16. The following paid dry-run command uses the fork branch and automatically terminates the pod. Its 300-second launch timeout excludes setup. If initialization times out, the helper reports a failed run.
+From the repository root, configure `RUNPOD_API_KEY` in your shell and use the project helper to inspect the resource estimates. The registered automated run selects BF16. Before using automated provisioning, integrate the upstream RunPod API migration in PR #128 and verify the bootstrap and collector against the resulting branch. The following paid dry-run command uses the fork branch and automatically terminates the pod. Its 300-second launch timeout excludes setup. If initialization times out, the helper reports a failed run.
 
 ```bash
 uv run runpod/runpod_ctl.py recommend 03_llms/14_zero3_quantized
 uv run runpod/runpod_ctl.py run 03_llms/14_zero3_quantized \
   --repo https://github.com/hallleedustin-alt/deepspeed-course \
-  --branch review/pr-125-zero3-corrected \
+  --branch feature/zero3-quantization \
   --dry-run --collect --wait --terminate --yes
 uv run runpod/runpod_ctl.py pods
 ```

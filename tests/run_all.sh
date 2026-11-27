@@ -92,6 +92,11 @@ for test in "${TESTS[@]}"; do
     fi
 done
 
+if ! bash 03_llms/14_zero3_quantized/run_cpu_tests.sh; then
+    echo "ZeRO-3 BF16/NF4 lab regression failed." >&2
+    FAILED=$((FAILED + 1))
+fi
+
 echo
 echo "========================================================================"
 if [ "$FAILED" -eq 0 ]; then

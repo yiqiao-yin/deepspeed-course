@@ -66,6 +66,10 @@ jobs:
       - name: RunPod ZeRO-3 artifacts (offline logic)
         run: uv run --with pytest python -m pytest tests/test_runpod_zero3_artifacts.py
 
+      - name: ZeRO-3 BF16/NF4 lab regression (CPU)
+        working-directory: 03_llms/14_zero3_quantized
+        run: bash run_cpu_tests.sh
+
       - name: Docs style (mermaid house theme, sidebar registration)
         run: uv run tests/test_docs_style.py
 

@@ -11,6 +11,8 @@ import pytest
 
 
 LAB = Path(__file__).resolve().parent
+DEFAULT_MODEL = "Qwen/Qwen3-4B"
+CONTROL_MODEL = "Qwen/Qwen3-0.6B"
 
 
 @pytest.fixture
@@ -47,6 +49,7 @@ def test_plan_runs_before_gpu_checks(launcher, args, arm):
     result = subprocess.run([lab / "run_deepspeed.sh", *args], env=env,
                             cwd=lab.parent, capture_output=True, text=True, check=True)
     assert f"Arm: {arm}" in result.stdout
+    assert f"Model: {DEFAULT_MODEL}" in result.stdout
     assert "GPU measurements: NOT PERFORMED" in result.stdout
     assert not trace.exists()
     assert not (lab / "results").exists()
@@ -57,6 +60,11 @@ def test_plan_runs_before_gpu_checks(launcher, args, arm):
     (("fp16",), "Unsupported argument: fp16"),
     (("bf16", "nf4"), "Choose one arm"),
     (("--plan", "--plan"), "Specify --plan only once"),
+    (("--model",), "--model requires a checkpoint identifier"),
+    (("--model", "--plan"), "--model requires a checkpoint identifier"),
+    (("--model", ""), "--model requires a checkpoint identifier"),
+    (("--model", CONTROL_MODEL, "--model", DEFAULT_MODEL), "Specify --model only once"),
+    (("--model", "unknown/checkpoint"), "invalid choice"),
 ])
 def test_rejects_ambiguous_or_unsupported_arguments(launcher, args, message):
     lab, env, trace = launcher
@@ -68,14 +76,16 @@ def test_rejects_ambiguous_or_unsupported_arguments(launcher, args, message):
 
 
 @pytest.mark.parametrize("args, arm", [((), "bf16"), (("bf16",), "bf16"), (("nf4",), "nf4")])
-def test_gpu_launch_arguments(launcher, args, arm):
+@pytest.mark.parametrize("model", [None, CONTROL_MODEL])
+def test_gpu_launch_arguments(launcher, args, arm, model):
     lab, env, trace = launcher
-    subprocess.run(["bash", lab / "run_deepspeed.sh", *args], env=env, cwd=lab.parent,
+    model_args = ["--model", model] if model else []
+    subprocess.run(["bash", lab / "run_deepspeed.sh", *args, *model_args], env=env, cwd=lab.parent,
                    capture_output=True, text=True, check=True)
     assert [json.loads(line) for line in trace.read_text().splitlines()] == [
         ["nvidia-smi"],
         ["uv", "run", "--locked", "deepspeed", "--num_gpus=2", "train_zero3.py",
-         "--arm", arm, "--output-dir", f"results/{arm}"],
+         "--arm", arm, *model_args, "--output-dir", f"results/{arm}"],
     ]
 
 
@@ -89,3 +99,40 @@ def test_spooled_slurm_script_uses_submission_directory(launcher):
     assert json.loads(trace.read_text().splitlines()[-1])[-4:] == [
         "--arm", "nf4", "--output-dir", "results/nf4",
     ]
+
+
+@pytest.mark.parametrize("arm", ["bf16", "nf4"])
+@pytest.mark.parametrize("via_launcher", [False, True])
+def test_control_model_plan(launcher, arm, via_launcher):
+    lab, env, trace = launcher
+    env["PYTHONPROFILEIMPORTTIME"] = "1"
+    command = [lab / "run_deepspeed.sh", arm] if via_launcher else [
+        sys.executable, lab / "train_zero3.py", "--arm", arm,
+    ]
+    result = subprocess.run(
+        [*command, "--plan", "--model", CONTROL_MODEL], env=env,
+        cwd=lab.parent, capture_output=True, text=True, check=True,
+    )
+    assert f"Model: {CONTROL_MODEL}" in result.stdout
+    assert f"Arm: {arm}" in result.stdout
+    assert "GPU measurements: NOT PERFORMED" in result.stdout
+    assert "import time:" in result.stderr
+    assert not {"torch", "transformers", "deepspeed"} & {
+        line.rsplit("|", 1)[-1].strip() for line in result.stderr.splitlines()
+    }
+    assert not trace.exists()
+    assert not (lab / "results").exists()
+
+
+@pytest.mark.parametrize("model_args, message", [
+    (["--model"], "expected one argument"),
+    (["--model", "unknown/checkpoint"], "invalid choice"),
+    (["--model", CONTROL_MODEL, "--model", DEFAULT_MODEL], "Specify --model only once"),
+])
+def test_entry_point_rejects_invalid_model_selection(model_args, message):
+    result = subprocess.run(
+        [sys.executable, LAB / "train_zero3.py", "--arm", "bf16", *model_args],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert message in result.stderr

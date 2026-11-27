@@ -24,6 +24,7 @@ import tempfile
 from pathlib import Path
 
 MODEL_ID = "Qwen/Qwen3-4B"
+CONTROL_MODEL_ID = "Qwen/Qwen3-0.6B"
 CONFIGS = {"bf16": "ds_config_bf16.json", "nf4": "ds_config_nf4.json"}
 LAB_DIR = Path(__file__).resolve().parent
 
@@ -247,7 +248,7 @@ def parameter_stats(model):
     }
 
 
-def load_model(arm, config):
+def load_model(arm, config, model_id=MODEL_ID):
     """Register ZeRO-3 before model creation; keep HF config alive."""
     import torch
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -262,7 +263,7 @@ def load_model(arm, config):
             bnb_4bit_use_double_quant=True,
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
-    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, **kwargs)
+    model = AutoModelForCausalLM.from_pretrained(model_id, **kwargs)
     model.config.use_cache = False
     return model, ds_config
 
@@ -355,7 +356,7 @@ def attach_lora(model, arm):
     return model
 
 
-def measure_model_loading(arm, config, output_dir):
+def measure_model_loading(arm, config, output_dir, model_id=MODEL_ID):
     """Measure parameter state before and after DeepSpeed engine initialization."""
     import torch
     from importlib.metadata import version
@@ -371,7 +372,7 @@ def measure_model_loading(arm, config, output_dir):
     torch.cuda.reset_peak_memory_stats(device)
     start_bytes = torch.cuda.memory_allocated(device)
 
-    model, hf_ds_config = load_model(arm, config)
+    model, hf_ds_config = load_model(arm, config, model_id)
     before_lora = {"measurement_stage": "after_model_load_before_lora", **parameter_stats(model)}
     model = attach_lora(model, arm)
     before_engine = {"measurement_stage": "after_lora_before_engine", **parameter_stats(model)}
@@ -402,7 +403,7 @@ def measure_model_loading(arm, config, output_dir):
     torch.cuda.synchronize(device)
     stats = {
         "run_id": run_dir.name,
-        "arm": arm, "model": MODEL_ID, "zero_stage_configured": 3,
+        "arm": arm, "model": model_id, "zero_stage_configured": 3,
         "rank": rank, "world_size": distributed["world_size"],
         "local_rank": device, "rank_assignments": distributed["rank_assignments"],
         "gpu_name": torch.cuda.get_device_name(device),
@@ -432,19 +433,24 @@ def measure_model_loading(arm, config, output_dir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm", choices=tuple(CONFIGS), required=True)
+    parser.add_argument("--model", choices=(MODEL_ID, CONTROL_MODEL_ID), action="append",
+                        help=f"Checkpoint identifier (default: {MODEL_ID})")
     parser.add_argument("--plan", action="store_true", help="CPU-only config check")
     parser.add_argument("--output-dir", default="results")
     # DeepSpeed launchers may pass the local rank through CLI rather than env.
     parser.add_argument("--local_rank", "--local-rank", type=int, default=None)
     args = parser.parse_args()
+    if args.model and len(args.model) > 1:
+        parser.error("Specify --model only once.")
+    model_id = args.model[0] if args.model else MODEL_ID
     if args.local_rank is not None:
         os.environ.setdefault("LOCAL_RANK", str(args.local_rank))
     config = load_config(args.arm)
     if args.plan:
-        print(f"Model: {MODEL_ID}\nArm: {args.arm}\nZeRO stage: 3")
+        print(f"Model: {model_id}\nArm: {args.arm}\nZeRO stage: 3")
         print("PASS: configuration structure valid. GPU measurements: NOT PERFORMED")
         return
-    measure_model_loading(args.arm, config, args.output_dir)
+    measure_model_loading(args.arm, config, args.output_dir, model_id)
 
 
 if __name__ == "__main__":

@@ -88,7 +88,10 @@ def test_measurement_stages(monkeypatch, tmp_path, failure):
             assert not (run_dir / "nf4_rank0.json").exists()
         return
 
-    result = experiment.measure_model_loading("nf4", config, tmp_path)
+    model_id = experiment.CONTROL_MODEL_ID
+    result = experiment.measure_model_loading("nf4", config, tmp_path, model_id)
+    experiment.load_model.assert_called_once_with("nf4", config, model_id)
+    assert result["model"] == model_id
     initialize.assert_called_once_with(
         model=with_lora, model_parameters=list(with_lora.parameters()), config=config,
     )
@@ -105,3 +108,19 @@ def test_measurement_stages(monkeypatch, tmp_path, failure):
     assert "verified_post_engine" not in result
     run_dir = tmp_path / result["run_id"]
     assert (run_dir / "measurements_complete.json").is_file()
+    assert json.loads((run_dir / "nf4_rank0.json").read_text())["model"] == model_id
+
+
+@pytest.mark.parametrize("arm", ["bf16", "nf4"])
+@pytest.mark.parametrize("model_args, model_id", [
+    ([], experiment.MODEL_ID),
+    (["--model", experiment.CONTROL_MODEL_ID], experiment.CONTROL_MODEL_ID),
+])
+def test_entry_point_passes_selected_model(monkeypatch, arm, model_args, model_id):
+    monkeypatch.setattr(sys, "argv", ["train_zero3.py", "--arm", arm, *model_args])
+    measure = Mock()
+    monkeypatch.setattr(experiment, "measure_model_loading", measure)
+
+    experiment.main()
+
+    measure.assert_called_once_with(arm, experiment.load_config(arm), "results", model_id)
